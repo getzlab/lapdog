@@ -34,8 +34,22 @@ def capture_stdout(out, err=True):
             sys.stderr = err
         yield
     finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+
+@contextlib.contextmanager
+def capture():
+    try:
+        stdout_buff = StringIO()
+        stderr_buff = StringIO()
         old_stdout = sys.stdout
         old_stderr = sys.stderr
+        sys.stdout = stdout_buff
+        sys.stderr = stderr_buff
+        yield (stdout_buff, stderr_buff)
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
 
 data_path = os.path.join(
     os.path.expanduser('~'),
@@ -252,20 +266,33 @@ def main():
     method_parser.add_argument(
         '-w', '--wdl',
         type=argparse.FileType('r'),
-        help="WDL to upload. The method will be uploaded to the same namespace"
-        " as the given workspace",
+        help="WDL to upload",
         default=None
     )
     method_parser.add_argument(
         '-n', '--method-name',
         help="The name of the uploaded method. This argument is ignored if the"
-        " --wdl argument is not provided",
+        " --wdl argument is not provided. By default, if a method configuration"
+        " is provided, this equals the methodRepoMethod.methodName key."
+        " If no method configuration is provided, this will default to the"
+        " filename (without extensions) of the provided WDL",
+        default=None
+    )
+    method_parser.add_argument(
+        '-a', '--namespace',
+        help="The namespace to upload the method and configuration."
+        " By default, if a method configuration is provided, this equals"
+        " the namespace from the methodRepoMethod.methodNamespace key."
+        " If no method configuration is provided, this will default to the"
+        " same namespace as the current workspace",
         default=None
     )
     method_parser.add_argument(
         '-c', '--config',
         type=argparse.FileType('r'),
-        help="Configuration to upload",
+        help="Configuration to upload. If methodRepoMethod.methodVersion"
+        " is set to 'latest', the version will be set to the latest method snapshot"
+        " including a new upload with the --wdl argument",
         default=None
     )
 
@@ -361,6 +388,7 @@ def main():
 
     config_parser = subparsers.add_parser(
         'configurations',
+        aliases=['configs'],
         help="List all configurations in the workspace",
         description="List all configurations in the workspace",
         parents=[parent]
@@ -381,30 +409,6 @@ def main():
         parents=[parent]
     )
     info_parser.set_defaults(func=cmd_info)
-
-    test_parser = subparsers.add_parser(
-        'test',
-        help="Test run a configuration using local cromwell",
-        description="Test run a configuration using local cromwell",
-        parents=[parent]
-    )
-    test_parser.set_defaults(func=cmd_test)
-    test_parser.add_argument(
-        'config',
-        help="Configuration to run"
-    )
-    test_parser.add_argument(
-        'entity',
-        help="The entity to run on. Entity is assumed to be of the same "
-        "type as the configuration's root entity type. Test cannot run using an"
-        " expression. It can only launch one workflow, which will run locally"
-    )
-    test_parser.add_argument(
-        '-c', '--cromwell',
-        type=argparse.FileType('rb'),
-        help="Path to cromwell. Default: ./cromwell.jar",
-        default='cromwell.jar'
-    )
 
     finish_parser = subparsers.add_parser(
         'finish',
@@ -545,7 +549,8 @@ def cmd_upload(args):
             _ = [callback() for callback in status_bar.iter(pending_uploads)]
         else:
             samples = list(reader)
-        args.workspace.upload_data(samples)
+        # args.workspace.upload_data(samples)
+        args.workspace.upload_samples(pd.DataFrame(samples).set_index('sample_id'), add_participant_samples=True)
     elif args.source.name.endswith('.json'):
         source = json.load(args.source)
         if type(source) == list and type(souce[0]) == dict and 'sample_id' in source[0] and 'participant_id' in source[0]:
@@ -572,7 +577,6 @@ def cmd_upload(args):
                 with open(root+'.lapdog'+ext, 'w') as w:
                     json.dump(source, w, indent='\t')
                 _ = [callback() for callback in status_bar.iter(pending_uploads)]
-            args.workspace.upload_data(source)
         elif type(source) == dict and type(source[[k for k in source][0]]) == list and 'sample_id' in source and 'participant_id' in source:
             if args.files:
                 pending_uploads = []
@@ -598,7 +602,9 @@ def cmd_upload(args):
                 with open(root+'.lapdog'+ext, 'w') as w:
                     json.dump(source, w, indent='\t')
                 _ = [callback() for callback in status_bar.iter(pending_uploads)]
-            args.workspace.upload_data(source, transpose=False)
+        df = pd.DataFrame(source).set_index('sample_id')
+        df.columns = ['participant_id'] + [*(set(df.columns)-{'participant_id'})]
+        args.workspace.upload_samples(df, add_participant_samples=True)
     else:
         sys.exit("Please use a .tsv, .csv, or .json file")
 
@@ -606,17 +612,45 @@ def cmd_method(args):
     if args.wdl is None and args.config is None:
         sys.exit("Must provide either a method or configuration")
 
-    if args.wdl:
-        name = args.method_name if args.method_name is not None else os.path.splitext(os.path.basename(args.wdl.name))[0]
-        dalmatian.update_method(
-            args.workspace.namespace,
-            name,
-            "Runs " + name,
-            args.wdl.name
-        )
-    if args.config:
-        args.workspace.update_configuration(json.load(args.config))
+    if args.config is not None:
+        args.config = json.load(args.config)
+    if args.namespace is None:
+        args.namespace = args.config['methodRepoMethod']['methodNamespace'] if args.config is not None else args.workspace.namespace
+    if args.method_name is None:
+        args.method_name = args.config['methodRepoMethod']['methodName'] if args.config is not None else os.path.splitext(os.path.basename(args.wdl.name))[0]
 
+    version = None
+    if args.wdl is not None:
+        with capture() as (stdout, stderr):
+            dalmatian.update_method(
+                args.namespace,
+                args.method_name,
+                "Runs " + args.method_name,
+                args.wdl.name
+            )
+            stdout.seek(0,0)
+            out_text = stdout.read()
+            stderr.seek(0,0)
+            err_text = stderr.read()
+        print(out_text, end='')
+        print(err_text, end='', file=sys.stderr)
+        result = re.search(r'New SnapshotID: (\d+)', out_text)
+        if result:
+            version = int(result.group(1))
+    if args.config is not None:
+        if args.config['methodRepoMethod']['methodVersion'] == 'latest':
+            print(
+                "Checking most recent version of %s/%s ..." % (
+                    args.config['methodRepoMethod']['methodNamespace'],
+                    args.config['methodRepoMethod']['methodName']
+                )
+            )
+            args.config['methodRepoMethod']['methodVersion'] = version if version is not None else int(dalmatian.get_method_version(
+                args.config['methodRepoMethod']['methodNamespace'],
+                args.config['methodRepoMethod']['methodName']
+            ))
+            print("Detected version", args.config['methodRepoMethod']['methodVersion'])
+        args.workspace.update_configuration(args.config)
 
 def cmd_attrs(args):
 
@@ -668,7 +702,6 @@ def walk_and_upload(bucket, obj):
                 obj[key] = gs_path
     return (obj, output)
 
-
 def cmd_run(args):
     configs = {
         config['name']:config for config in
@@ -685,14 +718,6 @@ def cmd_run(args):
         sys.exit("Configuration '%s' does not exist" % args.config)
     args.config = configs[args.config]
     etype = args.expression[0] if args.expression is not None else args.config['rootEntityType']
-    # entities_df = args.workspace.get_entities(etype)
-    # try:
-    #     entity = entities_df.loc[args.entity]
-    # except KeyError:
-    #     sys.exit("%s '%s' not found in workspace" % (
-    #         etype.title(),
-    #         args.entity
-    #     ))
     response = dalmatian.firecloud.api.get_entity(
         args.workspace.namespace,
         args.workspace.workspace,
@@ -780,16 +805,28 @@ def cmd_run(args):
         if not succeeded:
             sys.exit("The provided workflow ID has failed")
     print("Creating submission")
-    result = args.workspace.create_submission(
-        args.config['namespace'],
-        args.config['name'],
-        args.entity,
-        etype,
-        expression=args.expression[1] if args.expression is not None else None,
-        use_callcache=not args.no_cache
+    with capture() as (stdout, stderr):
+        args.workspace.create_submission(
+            args.config['namespace'],
+            args.config['name'],
+            args.entity,
+            etype,
+            expression=args.expression[1] if args.expression is not None else None,
+            use_callcache=not args.no_cache
+        )
+        stdout.seek(0,0)
+        stdout_text = stdout.read()
+        stderr.seek(0,0)
+        stderr_text = stderr.read()
+    print(stdout_text, end='')
+    print(stderr_text, end='', file=sys.stderr)
+    result = re.search(
+        r'Successfully created submission (.+)\.',
+        stdout_text
     )
     if result is None:
         sys.exit("Failed to create submission")
+    result = result.group(1)
     data = load_data()
     if 'submissions' not in data:
         data['submissions'] = {}
@@ -861,7 +898,7 @@ def cmd_list(args):
 
 def cmd_info(args):
 
-    submissions = args.workspace.get_submission_status()
+    submissions = args.workspace.get_submission_status(filter_active=False)
     bins = {}
     for row in submissions.iterrows():
         entity = row[0]
@@ -882,132 +919,6 @@ def cmd_info(args):
             print('\t'+configuration, len(bins[status][configuration]), 'submission(s):')
             for submission, entity in bins[status][configuration]:
                 print('\t\t'+submission, '(%s)'%entity)
-
-def cmd_test(args):
-    # 1) resolve configuration
-    configs = {
-        config['name']:config for config in
-        dalmatian.firecloud.api.list_workspace_configs(
-            args.workspace.namespace,
-            args.workspace.workspace
-        ).json()
-    }
-    if args.config not in configs:
-        print(
-            "Configurations found in this workspace:",
-            [config for config in configs]
-        )
-        sys.exit("Configuration '%s' does not exist" % args.config)
-    args.config = configs[args.config]
-    # 2) Verify that the given target matches the root entity type (no expressions, 1 workflow only)
-    etype = args.config['rootEntityType']
-    response = dalmatian.firecloud.api.get_entity(
-        args.workspace.namespace,
-        args.workspace.workspace,
-        etype,
-        args.entity
-    )
-    if response.status_code >= 400 and response.status_code <500:
-        sys.exit("%s '%s' not found in workspace" % (
-            etype.title(),
-            args.entity
-        ))
-    elif response.status_code >= 500:
-        sys.exit("Encountered an unexpected error with the firecloud api")
-    # 3) Prepare config template
-    print("Resolving inputs")
-    # tempdir = tempfile.TemporaryDirectory()
-    tempdir = lambda x:None
-    tempdir.name = '.'
-    downloads = []
-    template = dalmatian.firecloud.api.get_workspace_config(
-        args.workspace.namespace,
-        args.workspace.workspace,
-        args.config['namespace'],
-        args.config['name']
-    ).json()['inputs']
-
-    invalid_inputs = dalmatian.firecloud.api.validate_config(
-        args.workspace.namespace,
-        args.workspace.workspace,
-        args.config['namespace'],
-        args.config['name']
-    ).json()['invalidInputs']
-
-    if len(invalid_inputs):
-        print("The following input fields are invalid:", list(invalid_inputs))
-
-    for k in list(template):
-        if k not in invalid_inputs:
-            v = template[k]
-            resolution = dalmatian.firecloud.api.__post(
-                'workspaces/%s/%s/entities/%s/%s/evaluate' % (
-                    args.workspace.namespace,
-                    args.workspace.workspace,
-                    etype,
-                    args.entity
-                ),
-                data=v
-            ).json()
-            do_download = False
-            if len(resolution) and isinstance(resolution[0], str) and resolution[0].startswith('gs://'):
-                print('----')
-                print("Input name:", k)
-                print("Expression: ", v)
-                print("Resolution:", resolution[0], '... (%d items)' % (len(resolution) - 1) if len(resolution)>1 else '')
-                choice = input("Download this input? (Y/N): ").lower()
-                do_download = len(choice) and choice[0] == 'y'
-            for i in range(len(resolution)):
-                if do_download and isinstance(resolution[i], str) and resolution[i].startswith('gs://'):
-                    local_path = os.path.join(tempdir.name, os.path.basename(resolution[i]))
-                    blob = getblob(resolution[i])
-                    blobsize = blob.size
-                    print(
-                        "Downloading",
-                        resolution[i],
-                        (
-                            '(%s)' % byteSize(blobsize)
-                            if blobsize is not None
-                            else ''
-                        )
-                    )
-                    downloads.append(download(blob, local_path))
-                    resolution[i] = local_path
-            if len(resolution) == 1:
-                template[k] = resolution[0]
-            else:
-                template[k] = resolution
-        else:
-            del template[k]
-    if len(downloads):
-        for callback in status_bar.iter(downloads, prepend="Downloading files "):
-            callback()
-    # 4) Download wdl
-    with open(os.path.join(tempdir.name, 'method.wdl'), 'w') as writer:
-        writer.write(dalmatian.get_wdl(
-            args.config['methodRepoMethod']['methodNamespace'],
-            args.config['methodRepoMethod']['methodName']
-        ))
-
-    if len(template):
-        with open(os.path.join(tempdir.name, 'config.json'), 'w') as writer:
-            json.dump(template, writer)
-
-    # 5) Cromwell
-    print("java -jar %s run %s %s" % (
-        args.cromwell.name,
-        os.path.join(tempdir.name, 'method.wdl'),
-        os.path.join(tempdir.name, 'config.json') if len(template) else ''
-    ))
-    subprocess.run(
-        "java -jar %s run %s %s" % (
-            args.cromwell.name,
-            os.path.join(tempdir.name, 'method.wdl'),
-            os.path.join(tempdir.name, 'config.json') if len(template) else ''
-        ),
-        shell=True,
-        executable='/bin/bash'
-    )
 
 
 def build_input_key(template):
@@ -1033,7 +944,7 @@ def cmd_exec(args):
         )
         sys.exit("Configuration '%s' does not exist" % args.config)
     args.config = configs[args.config]
-    # 2) Verify that the given target matches the root entity type (no expressions, 1 workflow only)
+    # 2) Validate entity and interpret workflows
     etype = args.expression[0] if args.expression is not None else args.config['rootEntityType']
     response = dalmatian.firecloud.api.get_entity(
         args.workspace.namespace,
@@ -1142,7 +1053,7 @@ def cmd_exec(args):
                     'zones': args.zone,
                 },
                 'write_to_cache': True,
-                'read_from_cache': True
+                'read_from_cache': True,
             },
             w
         )
@@ -1173,7 +1084,7 @@ def cmd_exec(args):
 
     cmd = (
         'gcloud alpha genomics pipelines run '
-        '--pipeline-file /Users/aarong/Documents/wdl/runners/cromwell_on_google/wdl_runner/wdl_pipeline.yaml '
+        '--pipeline-file {source_dir}/wdl_pipeline.yaml '
         '--zones {zone} '
         '--inputs-from-file WDL={wdl_text} '
         '--inputs-from-file WORKFLOW_INPUTS={workflow_template} '
@@ -1182,12 +1093,10 @@ def cmd_exec(args):
         '--inputs WORKSPACE=gs://{bucket_id}/lapdog-executions/{submission_id}/workspace '
         '--inputs OUTPUTS=gs://{bucket_id}/lapdog-executions/{submission_id}/results '
         '--logging gs://{bucket_id}/lapdog-executions/{submission_id}/logs '
-        # '--inputs WORKSPACE=gs://cga-aarong-resources/lapdog-executions/{submission_id}/{workflow_id}/workspace '
-        # '--inputs OUTPUTS=gs://cga-aarong-resources/lapdog-executions/{submission_id}/{workflow_id}/results '
-        # '--logging gs://cga-aarong-resources/lapdog-executions/{submission_id}/{workflow_id}/logs '
         '--labels lapdog-submission-id={submission_id},lapdog-execution-role=cromwell '
         '--service-account-scopes=https://www.googleapis.com/auth/devstorage.read_write'
     ).format(
+        source_dir=os.path.dirname(__file__),
         zone=args.zone,
         wdl_text=os.path.join(tempdir.name, 'method.wdl'),
         workflow_template=os.path.join(tempdir.name, 'config.json'),
@@ -1215,11 +1124,6 @@ def cmd_exec(args):
         json.dump(data, writer, indent='\t')
 
     print("Done! Use 'lapdog finish %s' to upload the results after the job finishes" %submission_id)
-
-#if wdl runner works, just spin up a runner instance and submit the job
-#otherwise:
-#for submission expression, assume 1+ workflows will be created
-# evaluate {expression}.{root_entity_type}_id to create workflows
 
 def get_operation_status(opid):
     return yaml.load(
@@ -1267,12 +1171,15 @@ def cmd_finish(args):
                 submission['namespace'],
                 submission['workspace']
             )
-            workflow_metadata = json.loads(getblob(
-                'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
-                    bucket_id=ws.get_bucket_id(),
-                    submission_id=args.submission
-                )
-            ).download_as_string())
+            try:
+                workflow_metadata = json.loads(getblob(
+                    'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
+                        bucket_id=ws.get_bucket_id(),
+                        submission_id=args.submission
+                    )
+                ).download_as_string())
+            except:
+                sys.exit("Unable to locate tracking file for this submission. It may have been aborted")
             mtypes = {
                 'n1-standard-%d'%(2**i): (0.0475*(2**i), 0.01*(2**i)) for i in range(7)
             }
@@ -1280,7 +1187,11 @@ def cmd_finish(args):
                 'n1-highmem-%d'%(2**i): (.0592*(2**i), .0125*(2**i)) for i in range(1,7)
             })
             mtypes.update({
-                'n1-highcpu-%d'%(2**i):(.03545*(2**i), .0075*(2**1)) for i in range(1,7)
+                'n1-highcpu-%d'%(2**i): (.03545*(2**i), .0075*(2**1)) for i in range(1,7)
+            })
+            mtypes.update({
+                'f1-micro': (0.0076, 0.0035),
+                'g1-small': (0.0257, 0.007)
             })
             cost = 0
             maxTime = 0
@@ -1302,7 +1213,6 @@ def cmd_finish(args):
             print("Estimated Cost: $%0.2f" %cost)
         return
     if args.abort:
-        # print('Aborting cromwell instance', status['metadata']['runtimeMetadata']['computeEngine']['instanceName'])
         result = abort_operation(submission['operation'])
         #If we can successfully place lapdog-submission-id and lapdog-execution-role labels
         #on worker VMs, then we can run:
@@ -1310,7 +1220,7 @@ def cmd_finish(args):
         # gcloud compute instances list --filter="label:lapdog-execution-role=worker AND label:lapdod-submission-id={submission_id}" \
         # | awk 'NR>1{print $1}'
         # )
-        #Alternatively, have cromwell_driver write a list of workflow ids to gs://.../workspace/workflows.json
+        #Alternatively, have cromwell_driver write a list of workflow ids to gs://.../workspace/workflow_ids.json
         #["id",...]
         #Then abort by getting instances with --filter="label:cromwell-workflow-id=cromwell-{workflow_id}"
         if result.returncode and not ('done' in status and status['done']):
@@ -1327,19 +1237,20 @@ def cmd_finish(args):
         output_template = dalmatian.firecloud.api.get_workspace_config(
             submission['namespace'],
             submission['workspace'],
-            submission['namespace'],
+            'aarong',
             submission['config']
         ).json()['outputs']
 
-        print("Output template:", output_template)
         output_data = {}
-        workflow_metadata = json.loads(getblob(
-            'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
-                bucket_id=ws.get_bucket_id(),
-                submission_id=args.submission
-            )
-        ).download_as_string())
-        # print("WORKFLOW META:", workflow_metadata)
+        try:
+            workflow_metadata = json.loads(getblob(
+                'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
+                    bucket_id=ws.get_bucket_id(),
+                    submission_id=args.submission
+                )
+            ).download_as_string())
+        except:
+            sys.exit("Unable to locate tracking file for this submission. It may have been aborted")
 
         workflow_metadata = {
             build_input_key(meta['workflow_metadata']['inputs']):meta
@@ -1361,7 +1272,6 @@ def cmd_finish(args):
                     k = output_template[k]
                     if k.startswith('this.'):
                         entity_data[k[5:]] = v
-                # print("Output mapping:", entity_data)
                 with capture_stdout(StringIO()):
                     ws.update_entity_attributes(
                         submission['workflow_entity_type'],
