@@ -1,0 +1,70 @@
+swagger: '2.0'
+info:
+  title: Lapdog
+  version: 1.0.0
+produces:
+  - application/json
+paths:
+  /api/v1/status:
+    get:
+      operationId: controllers.status
+      summary: Returns firecloud status
+      responses:
+        default:
+          description: Error
+        200:
+          description: A Status Object representing the current Firecloud status
+          schema:
+            $ref: "#/definitions/Status"
+  /api/v1/workspaces:
+    get:
+      operationId: controllers.list_workspaces
+      summary: Returns a list of workspaces
+      responses:
+        default:
+          description: Error
+        200:
+          description: A list of workspace summaries
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/WorkspaceSummary"
+definitions:
+  Status:
+    type: object
+    properties:
+      health:
+        type: string
+        description: Ok if the overal health of firecloud is ok
+      failed:
+        type: boolean
+        description: Boolean if either firecloud request failed
+      systems:
+        type: object
+        description: A mapping of system names to boolean system status
+  WorkspaceSummary:
+    type: object
+    properties:
+      accessLevel:
+        type: string
+        description: Your permissions to the workspace
+      owners:
+        type: array
+        description: List of email addresses of workspace Owners
+        items:
+          type: string
+      public:
+        type: boolean
+        description: True if the workspace is public
+      namespace:
+        type: string
+        description: Workspace namespace
+      name:
+        type: string
+        description: Workspace name
+      bucket:
+        type: string
+        description: Google bucket for the workspace
+      id:
+        type: string
+        description: Workspace ID

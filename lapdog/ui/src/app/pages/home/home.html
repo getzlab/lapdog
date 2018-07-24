@@ -1,0 +1,48 @@
+<div class="container">
+  <div class="row">
+    <div class="col s6">
+      <h3>Workspaces</h3>
+    </div>
+    <div class="col s6 offset s6">
+      <h3>Firecloud Status</h3>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col s12 divider">
+
+    </div>
+  </div>
+  <div class="row">
+    <div class="col s6">
+      <div class="collection">
+        <a class="collection-item"><i class="material-icons">add_box</i> Create new Workspace</a>
+        <div *ngIf="!workspaces" class="collection-item">
+          <div class="progress">
+            <div class="indeterminate"></div>
+          </div>
+        </div>
+        <a [routerLink]="'/workspaces/'+workspace.namespace+'/'+workspace.name" class="collection-item" *ngFor="let workspace of workspaces">{{workspace.namespace}}/{{workspace.name}}
+        </a>
+      </div>
+    </div>
+    <div class="col s6 offset s6">
+      <table>
+        <thead>
+          <tr>
+            <th>System</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr *ngFor="let system of systems">
+            <td>{{system.system}}</td>
+            <td [attr.class]="system.status ? 'green-text' : 'red-text'">
+              {{system.status ? "Online" : "Offline"}}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

@@ -16,6 +16,8 @@ from hashlib import md5
 import base64
 import yaml
 from io import StringIO
+from . import adapters
+from .adapters import getblob, get_operation_status
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -89,14 +91,6 @@ def upload(bucket, path, source):
     # print("Commencing upload:", source)
     blob.upload_from_filename(source)
 
-def getblob(gs_path):
-    bucket_id = gs_path[5:].split('/')[0]
-    bucket_path = '/'.join(gs_path[5:].split('/')[1:])
-    return storage.Blob(
-        bucket_path,
-        storage.Client().get_bucket(bucket_id)
-    )
-
 class BucketUploader(object):
     def __init__(self, bucket, prefix, key):
         self.bucket = bucket
@@ -127,39 +121,6 @@ class BucketUploader(object):
             return row
 
         return df.apply(scan_row, axis='columns'), uploads
-
-def get_operation_status(opid):
-    return yaml.load(
-        StringIO(
-            subprocess.run(
-                'gcloud alpha genomics operations describe %s' % (
-                    opid
-                ),
-                shell=True,
-                executable='/bin/bash',
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            ).stdout.decode()
-        )
-    )
-
-def abort_operation(opid):
-    return subprocess.run(
-        'yes | gcloud alpha genomics operations cancel %s' % (
-            opid
-        ),
-        shell=True,
-        executable='/bin/bash',
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-
-def get_submission(sid):
-    if submission_id.startswith('lapdog/'):
-        ws, ns, sid = base64.b64decode(submission_id.encode()).decode().split('/')
-        return WorkspaceManager(ws, ns).get_submission(sid)
-    raise TypeError("Global get_submission can only operate on lapdog global ids")
-
 
 def complete_execution(self, submission_id):
     """
@@ -285,7 +246,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         if config_name not in configs:
             raise KeyError('Configuration "%s" not found in this workspace' % config_name)
         config = configs[config_name]
-        if (expression is not None) ^ (etype is not None):
+        if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             raise ValueError("expression and etype must BOTH be None or a string value")
         if etype is None:
             etype = config['rootEntityType']
@@ -344,6 +305,17 @@ class WorkspaceManager(dog.WorkspaceManager):
         with dalmatian_api():
             return super().get_submission(submission_id)
 
+    def get_adapter(self, submission_id):
+        """
+        Returns a submission adapter for a lapdog submission
+        """
+        return adapters.SubmissionAdapter(os.path.join(
+            'gs://'+self.get_bucket_id(),
+            'lapdog-executions',
+            submission_id,
+            'submission.json'
+        ))
+
     def list_submissions(self, config=None):
         """
         Lists submissions in the workspace
@@ -367,7 +339,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         if config_name not in configs:
             raise KeyError('Configuration "%s" not found in this workspace' % config_name)
         config = configs[config_name]
-        if (expression is not None) ^ (etype is not None):
+        if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             raise ValueError("expression and etype must BOTH be None or a string value")
         if etype is None:
             etype = config['rootEntityType']
