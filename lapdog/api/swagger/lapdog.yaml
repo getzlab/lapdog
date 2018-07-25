@@ -29,6 +29,25 @@ paths:
             type: array
             items:
               $ref: "#/definitions/WorkspaceSummary"
+  # /api/v1/workspaces/{namespace}/{name}:
+  #   get:
+  #     parameters:
+  #       -
+  #         in: path
+  #         name: namespace
+  #         required: true
+  #         schema:
+  #           type: string
+  #         description: The workspace's namespace
+  #       -
+  #         in: path
+  #         name: name
+  #         required: true
+  #         schema:
+  #           type: string
+  #         description: The workspace's name
+  #     operationId: controllers.workspace
+  #     summary: returns a workspace
 definitions:
   Status:
     type: object
