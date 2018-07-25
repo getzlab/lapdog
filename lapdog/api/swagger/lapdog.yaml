@@ -29,25 +29,173 @@ paths:
             type: array
             items:
               $ref: "#/definitions/WorkspaceSummary"
-  # /api/v1/workspaces/{namespace}/{name}:
-  #   get:
-  #     parameters:
-  #       -
-  #         in: path
-  #         name: namespace
-  #         required: true
-  #         schema:
-  #           type: string
-  #         description: The workspace's namespace
-  #       -
-  #         in: path
-  #         name: name
-  #         required: true
-  #         schema:
-  #           type: string
-  #         description: The workspace's name
-  #     operationId: controllers.workspace
-  #     summary: returns a workspace
+  /api/v1/workspaces/{namespace}/{name}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+      operationId: controllers.workspace
+      summary: returns a workspace
+      responses:
+        default:
+          description: Error
+        200:
+          description: A list of workspace summaries
+          schema:
+            type: object
+  /api/v1/service-account:
+    get:
+      operationId: controllers.service_account
+      summary: Returns the active service account
+      responses:
+        default:
+          description: Error
+        200:
+          description: The active service account
+          schema:
+            type: string
+  /api/v1/workspaces/{namespace}/{name}/acl:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+      operationId: controllers.service_acl
+      summary: Checks ACL and returns whether or not the active service account is on the workspace
+      responses:
+        default:
+          description: Error
+        200:
+          description: Returns if the service accout has WRITER access
+          schema:
+            $ref: "#/definitions/ACL_Update"
+    post:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+      operationId: controllers.set_acl
+      summary: Ensures the current service account is added to the firecloud workspace
+      responses:
+        default:
+          description: Error
+        200:
+          description: A list of workspace summaries
+          schema:
+            $ref: "#/definitions/ACL_Update"
+  /api/v1/workspaces/{namespace}/{name}/entities:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+      operationId: controllers.get_entities
+      summary: Returns a list of entity types
+      responses:
+        default:
+          description: Error
+        200:
+          description: A list of entities in the workspace
+          schema:
+            type: array
+            items:
+              type: object
+  /api/v1/workspaces/{namespace}/{name}/cache/{etype}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: path
+          name: etype
+          required: true
+          type: string
+          description: The entity type
+      summary: Gets the cache state of a given entity type
+      operationId: controllers.get_cache
+      responses:
+        default:
+          description: Error
+        200:
+          description: Cache state
+          schema:
+            type: string
+    put:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: path
+          name: etype
+          required: true
+          type: string
+          description: The entity type
+      summary: Synchronizes the cache
+      operationId: controllers.sync_cache
+      responses:
+        default:
+          description: Error
+        200:
+          description: Cache state
+          schema:
+            type: string
 definitions:
   Status:
     type: object
@@ -87,3 +235,52 @@ definitions:
       id:
         type: string
         description: Workspace ID
+  ACL:
+    type: object
+    properties:
+      failed:
+        type: boolean
+        description: Indicates if the Firecloud API failed during the processing of this request
+      service_account:
+        type: boolean
+        description: Indicates if the active service account has access to the workspace
+      accounts:
+        type: array
+        description: A list of accounts with access to the workspace
+        items:
+          type: object
+          properties:
+            email:
+              type: string
+              description: The account email
+            access:
+              type: string
+              description: The access level
+            compute:
+              type: boolean
+              description: Indicates if the account has compute permissions
+            share:
+              type: boolean
+              description: Indicates if the account has share permissions
+  ACL_Update:
+    type: object
+    properties:
+      failed:
+        type: boolean
+        description: Indicates if the ACL update failed
+      share:
+        type: boolean
+        description: Indicates if the user account has share access
+      service_account:
+        type: boolean
+        description: Indicates if the active service account has write access to the workspace
+      reason:
+        type: string
+        description: Reason the ACL update failed
+        enum:
+          - gcloud # Unable to read current service account
+          - acl-read # unable to read current ACL state
+          - firecloud # firecloud api failure
+          - permissions # insufficient permissions to update acl
+          - account # service account not registered
+          - success # ACL set
