@@ -41,7 +41,13 @@ new Vue({
   el: '#app',
   render: h => h(App),
   mounted: () => {
-    window.$('.sidenav').sidenav()
+    window.$('.sidenav').sidenav();
+    window.$('.modal').modal({
+      onOpenEnd() {
+        window.$('select').formSelect();
+      }
+    });
+    // window.$('select').formSelect();
   },
   router,
   // Slideout

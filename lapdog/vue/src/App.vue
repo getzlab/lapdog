@@ -1,5 +1,40 @@
 <template>
   <div id="app">
+    <div class="modal" id="create-workspace-modal">
+      <div class="modal-content">
+        <div class="container form-container">
+          <h4>Create Workspace</h4>
+          <div class="row">
+            <div class="input-field col s6">
+              <input type="text" id="create-namespace" v-model="create_namespace">
+              <label for="create-namespace">Namespace</label>
+            </div>
+            <div class="input-field col s6">
+              <input type="text" id="create-workspace" v-model="create_workspace">
+              <label for="create-nworkspace">Workspace</label>
+            </div>
+          </div>
+          <div class="row">
+            <div class="input-field col s12">
+             <select id="clone-select" v-model="parent_workspace" class="browser-default">
+               <option value="" selected>Create empty workspace</option>
+               <option v-for="workspace in filtered_workspaces" v-bind:value="workspace.namespace+'/'+workspace.name">
+                 {{workspace.namespace+'/'+workspace.name}}
+               </option>
+             </select>
+           </div>
+          </div>
+          <div v-if="create_failed" class="row">
+            <div class="col s12 red-text">
+              <strong>{{create_failed}}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a class="btn-flat" v-on:click="create_new_workspace">Create Workspace</a>
+      </div>
+    </div>
     <header>
       <div class="sidenav" id="slide-out" style="width: 50% !important;">
         <div class="user-view center-align">
@@ -7,7 +42,7 @@
         </div>
         <div class="container">
           <div class="collection">
-            <a class="collection-item blue-text text-darken-4"><i class="material-icons">add_box</i> Create new Workspace</a>
+            <a href="#create-workspace-modal" class="collection-item blue-text text-darken-4 modal-trigger"><i class="material-icons">add_box</i> Create new Workspace</a>
           </div>
           <div class="divider">
           </div>
@@ -30,14 +65,34 @@
           </div>
         </div>
       </div>
-      <nav class="blue darken-2">
-        <div class="nav-wrapper">
-          <!-- <form>
-            <div class="input-field">
-              <input type="text" id="submission-search">
-              <label for="submission-search">Search Submissions</label>
+      <div class="navbar-fixed">
+        <nav class="blue darken-2">
+          <div class="nav-wrapper">
+            <div class="row">
+              <div class="col s2">
+                <ul class="left">
+                  <li>
+                    <a data-target="slide-out" class="sidenav-trigger show-on-large"><i class="material-icons">menu</i></a>
+                  </li>
+                </ul>
+              </div>
+              <div class="col s6 offset-s1">
+                <form>
+                  <div class="input-field">
+                    <input type="text" id="submission-search" class="white" placeholder="Search Submissions"/>
+                    <!-- <label for="submission-search">search</label> -->
+                  </div>
+                </form>
+              </div>
+              <div class="col s3">
+                <router-link href="#" class="brand-logo right link" :to="'/'">Lapdog</router-link>
+              </div>
             </div>
-          </form> -->
+          </div>
+        </nav>
+      </div>
+      <!-- <nav class="blue darken-2">
+        <div class="nav-wrapper">
           <router-link href="#" class="brand-logo right link" :to="'/'">Lapdog</router-link>
           <ul class="left">
             <li>
@@ -45,39 +100,7 @@
             </li>
           </ul>
         </div>
-      </nav>
-      <!-- <div class="navbar-fixed">
-        <nav class="blue darken-2">
-          <div class="nav-wrapper">
-            <div class="row">
-              <form>
-                <div class="input-field">
-                  <input type="text" id="submission-search">
-                  <label for="submission-search">Search Submissions</label>
-                </div>
-              </form>
-              <div class="col s2">
-                <ul class="">
-                  <li>
-                    <a data-target="slide-out" class="sidenav-trigger show-on-large"><i class="material-icons">menu</i></a>
-                  </li>
-                </ul>
-              </div>
-              <div class="col s1 offset-s9">
-                <router-link href="#" class="brand-logolink" :to="'/'">Lapdog</router-link>
-              </div>
-            </div>
-          </div>
-        </nav>
-      </div> -->
-      <!-- <ul id="slide-out" class="sidenav">
-        <li><div class="user-view">
-          <h3>Workspaces</h3>
-        </div></li>
-        <li><i class="material-icons">add_box</i> Create new Workspace</li>
-      </ul> -->
-
-      <!-- <a data-target="slide-out" class="sidenav-trigger left">Menu</a> -->
+      </nav> -->
     </header>
     <main>
       <aside class="sidebar">
@@ -98,10 +121,6 @@
     </footer>
   </div>
 </template>
-
-<!-- <script type="text/javascript">
-  console.log(window.$)
-</script> -->
 
 <style lang="css">
    /* label focus color */
@@ -127,7 +146,11 @@ export default {
     return {
       workspaces: null,
       acct: null,
-      search: ''
+      search: '',
+      create_namespace: '',
+      create_workspace: '',
+      parent_workspace: '',
+      create_failed: null
     }
   },
 
@@ -140,15 +163,49 @@ export default {
   },
 
   created() {
-    this.getStatus();
+    this.getWorkspaces();
     this.getServiceAccount();
   },
 
   methods: {
-    getStatus() {
+    create_new_workspace(event) {
+      let url = 'http://localhost:4201/api/v1/workspaces/'+this.create_namespace+'/'+this.create_workspace;
+      if (this.parent_workspace.length > 1 && this.parent_workspace.includes('/')) {
+        url += '?parent='+encodeURIComponent(this.parent_workspace);
+      }
+      axios.post(url)
+        .then(response => {
+          if (response.data.failed) {
+            this.create_failed = response.data.reason
+          }
+          else {
+            window.$('.modal').modal('close');
+            this.$router.push({
+              name: 'workspace',
+              params: {
+                namespace: this.create_namespace,
+                workspace: this.create_workspace
+              }
+            });
+            this.create_namespace='';
+            this.create_workspace='';
+            this.parent_workspace='';
+            this.create_failed=null;
+            window.$('.sidenav').sidenav('close');
+
+          }
+        })
+        .catch(response => {
+          console.error("FAIL");
+          console.error(response);
+        })
+    },
+
+    getWorkspaces() {
       axios.get('http://localhost:4201/api/v1/workspaces')
         .then(response => {
           this.workspaces = response.data;
+          // window.$('select').formSelect();
           console.log(this.workspaces[0])
         })
         .catch(error => {

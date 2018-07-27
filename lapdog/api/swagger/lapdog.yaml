@@ -50,7 +50,37 @@ paths:
         default:
           description: Error
         200:
-          description: A list of workspace summaries
+          description: A detailed summary of the workspace
+          schema:
+            type: object
+    post:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: query
+          name: parent
+          required: false
+          type: string
+          description: The parent workspace (in url encoded namespace/name format)
+          default: ''
+      operationId: controllers.create_workspace
+      summary: Creates a new workspace and returns success or failure
+      responses:
+        default:
+          description: Error
+        200:
+          description: A success of failure object
           schema:
             type: object
   /api/v1/service-account:
@@ -111,7 +141,33 @@ paths:
           description: A list of workspace summaries
           schema:
             $ref: "#/definitions/ACL_Update"
-  /api/v1/workspaces/{namespace}/{name}/entities:
+  # /api/v1/workspaces/{namespace}/{name}/entities:
+  #   get:
+  #     parameters:
+  #       -
+  #         in: path
+  #         name: namespace
+  #         required: true
+  #         type: string
+  #         description: The workspaces namespace
+  #       -
+  #         in: path
+  #         name: name
+  #         required: true
+  #         type: string
+  #         description: The workspaces name
+  #     operationId: controllers.get_entities
+  #     summary: Returns a list of entity types
+  #     responses:
+  #       default:
+  #         description: Error
+  #       200:
+  #         description: A list of entities in the workspace
+  #         schema:
+  #           type: array
+  #           items:
+  #             type: object
+  /api/v1/workspaces/{namespace}/{name}/cache:
     get:
       parameters:
         -
@@ -126,39 +182,7 @@ paths:
           required: true
           type: string
           description: The workspaces name
-      operationId: controllers.get_entities
-      summary: Returns a list of entity types
-      responses:
-        default:
-          description: Error
-        200:
-          description: A list of entities in the workspace
-          schema:
-            type: array
-            items:
-              type: object
-  /api/v1/workspaces/{namespace}/{name}/cache/{etype}:
-    get:
-      parameters:
-        -
-          in: path
-          name: namespace
-          required: true
-          type: string
-          description: The workspaces namespace
-        -
-          in: path
-          name: name
-          required: true
-          type: string
-          description: The workspaces name
-        -
-          in: path
-          name: etype
-          required: true
-          type: string
-          description: The entity type
-      summary: Gets the cache state of a given entity type
+      summary: Gets the cache state of a given workspace
       operationId: controllers.get_cache
       responses:
         default:
@@ -181,13 +205,7 @@ paths:
           required: true
           type: string
           description: The workspaces name
-        -
-          in: path
-          name: etype
-          required: true
-          type: string
-          description: The entity type
-      summary: Synchronizes the cache
+      summary: Synchronizes the workspace cache
       operationId: controllers.sync_cache
       responses:
         default:

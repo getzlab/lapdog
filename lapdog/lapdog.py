@@ -18,13 +18,12 @@ import yaml
 from io import StringIO
 from . import adapters
 from .adapters import getblob, get_operation_status
+from .operations import APIException, Operator, capture
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
-lapdog_submission_pattern = re.compile(r'.+/lapdog-executions/([0-9a-f]{32})/submission.json')
-
-class APIException(ValueError):
-    pass
+lapdog_submission_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/submission.json')
+creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
 
 @contextlib.contextmanager
 def dalmatian_api():
@@ -52,26 +51,6 @@ def dump_if_file(obj):
             tmp.write(data)
             tmp.flush()
             yield tmp.name
-
-@contextlib.contextmanager
-def capture():
-    try:
-        stdout_buff = StringIO()
-        stderr_buff = StringIO()
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        sys.stdout = stdout_buff
-        sys.stderr = stderr_buff
-        yield (stdout_buff, stderr_buff)
-    finally:
-        sys.stdout = old_stdout
-        stdout_buff.seek(0,0)
-        print(stdout_buff.read(), end='')
-        stdout_buff.seek(0,0)
-        sys.stderr = old_stderr
-        stderr_buff.seek(0,0)
-        print(stderr_buff.read(), end='', file=sys.stderr)
-        stderr_buff.seek(0,0)
 
 def check_api(result):
     if result.status_code >= 400:
@@ -150,10 +129,65 @@ class WorkspaceManager(dog.WorkspaceManager):
             workspace,
             timezone
         )
+        self.operator = Operator(self)
+
+    def _prepare(self):
+        self.get_samples()
+        self.get_sample_sets()
+        self.get_participants()
+        self.operator.get_wdl('aarong', 'combine-samples')
+        self.operator.get_config_detail('aarong', 'combine-samples')
+        repr(self.operator.entity_types)
+        self.list_configs()
+        self.operator.live = False
+
+    @property
+    def pending_operations(self):
+        return len(self.operator.pending)
+
+    @property
+    def live(self):
+        return self.operator.live
+
+    def sync(self):
+        is_live, exceptions = self.operator.go_live()
+        if len(exceptions):
+            print("There were", len(exceptions), "exceptions while attempting to sync with firecloud")
+        return is_live, exceptions
 
     def get_bucket_id(self):
         with dalmatian_api():
             return super().get_bucket_id()
+
+    def create_workspace(self, parent=None):
+        with capture() as (stdout, stderr):
+            with dalmatian_api():
+                super().create_workspace(parent)
+            stdout.seek(0,0)
+            stderr.seek(0,0)
+            text = stdout.read() + stderr.read()
+        return bool(creation_success_pattern.search(text))
+
+    def upload_entities(self, etype, df, index=True):
+        self.operator.update_entities_df(etype, df)
+
+    def get_samples(self):
+        return self.operator.get_entities_df('sample')
+
+    def get_participants(self):
+        return self.operator.get_entities_df('participant')
+
+    def get_pairs(self):
+        return self.operator.get_entities_df('pair')
+
+    def get_sample_sets(self):
+        return self.operator.get_entities_df('sample_set')
+
+    def get_participant_sets(self):
+        return self.operator.get_entities_df('participant_set')
+
+    def get_pair_sets(self):
+        return self.operator.get_entities_df('pair_set')
 
     def prepare_sample_df(self, df):
         """
@@ -167,6 +201,9 @@ class WorkspaceManager(dog.WorkspaceManager):
         ).upload_df(df)
         _ = [callback() for callback in status_bar.iter([*uploads.values()])]
         return df
+
+    def upload_entities(self, etype, df, index=True):
+        return self.operator.update_entities_df(etype, df, index)
 
     def update_configuration(self, config, wdl=None, name=None, namespace=None):
         """
@@ -188,13 +225,12 @@ class WorkspaceManager(dog.WorkspaceManager):
         if wdl is not None:
             with dump_if_file(wdl) as wdl_path:
                 with capture() as (stdout, stderr):
-                    with dalmatian_api():
-                        dog.update_method(
-                            config['methodRepoMethod']['methodNamespace'],
-                            config['methodRepoMethod']['methodName'],
-                            "Runs " + config['methodRepoMethod']['methodName'],
-                            wdl_path
-                        )
+                    self.operator.upload_wdl(
+                        config['methodRepoMethod']['methodNamespace'],
+                        config['methodRepoMethod']['methodName'],
+                        "Runs " + config['methodRepoMethod']['methodName'],
+                        wdl_path
+                    )
                     stdout.seek(0,0)
                     out_text = stdout.read()
             result = re.search(r'New SnapshotID: (\d+)', out_text)
@@ -208,8 +244,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                         config['methodRepoMethod']['methodName']
                     ))
             config['methodRepoMethod']['methodVersion'] = version
-        with dalmatian_api():
-            return super().upload_configuration(config)
+        return self.operator.add_config(config)
 
     def update_attributes(self, **attrs):
         """
@@ -231,9 +266,11 @@ class WorkspaceManager(dog.WorkspaceManager):
                 attrs[k] = path
                 uploads.append(callback)
         _ = [callback() for callback in status_bar.iter([*uploads.values()])]
-        with dalmatian_api():
-            super().update_attributes(attrs)
+        self.operator.update_attributes(attrs)
         return attrs
+
+    def get_attributes(self):
+        return self.operator.attributes
 
     def create_submission(self, config_name, entity, expression=None, etype=None, use_cache=True):
         """
@@ -305,6 +342,9 @@ class WorkspaceManager(dog.WorkspaceManager):
         with dalmatian_api():
             return super().get_submission(submission_id)
 
+    def list_configs(self):
+        return self.operator.configs
+
     def get_adapter(self, submission_id):
         """
         Returns a submission adapter for a lapdog submission
@@ -323,7 +363,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         with dalmatian_api():
             results = super().list_submissions(config)
         for path in storage.Client().get_bucket(self.get_bucket_id()).list_blobs(prefix='lapdog-executions'):
-            result = lapdog_submission_pattern.match(path)
+            result = lapdog_submission_pattern.match(path.name)
             if result:
                 results.append(self.get_submission(result.group(1)))
         return results
@@ -332,10 +372,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Validates config parameters then executes a job directly on GCP
         """
-        with dalmatian_api():
-            configs = {
-                cfg['name']:cfg for cfg in self.list_configs()
-            }
+        configs = self.operator.configs
         if config_name not in configs:
             raise KeyError('Configuration "%s" not found in this workspace' % config_name)
         config = configs[config_name]
@@ -343,48 +380,35 @@ class WorkspaceManager(dog.WorkspaceManager):
             raise ValueError("expression and etype must BOTH be None or a string value")
         if etype is None:
             etype = config['rootEntityType']
-        response = dog.firecloud.api.get_entity(
-            self.namespace,
-            self.workspace,
-            etype,
-            entity
-        )
-        if response.status_code >= 400 and response.status_code < 500:
+        entities = self.operator.get_entities_df(etype)
+        if entity not in entities.index:
             raise TypeError("No such %s '%s' in this workspace. Check your entity and entity type" % (
                 etype,
                 entity
             ))
-        elif response.status_code >= 500:
-            raise APIException("The Firecloud API has returned status %d : %s" % (response.status_code, response.text))
 
-        workflow_entities = check_api(getattr(dog.firecloud.api, '__post')(
-            'workspaces/%s/%s/entities/%s/%s/evaluate' % (
-                self.namespace,
-                self.workspace,
-                etype,
-                entity
-            ),
-            data=(
-                expression if expression is not None else 'this'
-            )+'.%s_id' % config['rootEntityType']
-        )).json()
+        workflow_entities = self.operator.evaluate_expression(
+            etype,
+            entity,
+            (expression if expression is not None else 'this')+'.%s_id' % config['rootEntityType']
+        )
 
-        template = check_api(dog.firecloud.api.get_workspace_config(
-            self.namespace,
-            self.workspace,
+        template = self.operator.get_config_detail(
             config['namespace'],
             config['name']
-        )).json()['inputs']
+        )['inputs']
 
-        invalid_inputs = check_api(dog.firecloud.api.validate_config(
-            self.namespace,
-            self.workspace,
+        invalid_inputs = self.operator.validate_config(
             config['namespace'],
             config['name']
-        )).json()['invalidInputs']
+        )
+        invalid_inputs = {**invalid_inputs['invalidInputs'], **{k:'N/A' for k in invalid_inputs['missingInputs']}}
 
         if len(invalid_inputs):
-            raise ValueError("The following inputs are invalid on this configuation: %s" % repr(list(invalid_inputs)))
+            if not force:
+                raise ValueError("The following inputs are invalid on this configuation: %s" % repr(list(invalid_inputs)))
+            else:
+                print("The following inputs are invalid on this configuation: %s" % repr(list(invalid_inputs)), file=sys.stderr)
 
         submission_id = md5((str(time.time()) + config['name'] + entity).encode()).hexdigest()
         global_id = 'lapdog/'+base64.b64encode(
@@ -401,7 +425,8 @@ class WorkspaceManager(dog.WorkspaceManager):
             try:
                 input()
             except KeyboardInterrupt:
-                sys.exit("Aborted")
+                print("Aborted", file=sys.stderr)
+                return
 
         submission_data = {
             'workspace':self.workspace,
@@ -424,15 +449,11 @@ class WorkspaceManager(dog.WorkspaceManager):
         def prepare_workflow(workflow_entity):
             wf_template = {}
             for k,v in template.items():
-                resolution = check_api(getattr(dog.firecloud.api, '__post')(
-                    'workspaces/%s/%s/entities/%s/%s/evaluate' % (
-                        self.namespace,
-                        self.workspace,
-                        config['rootEntityType'],
-                        workflow_entity
-                    ),
-                    data=v
-                )).json()
+                resolution = self.operator.evaluate_expression(
+                    config['rootEntityType'],
+                    workflow_entity,
+                    v
+                )
                 if len(resolution) == 1:
                     wf_template[k] = resolution[0]
                 else:
@@ -442,7 +463,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         tempdir = tempfile.TemporaryDirectory()
         with open(os.path.join(tempdir.name, 'method.wdl'),'w') as w:
             with dalmatian_api():
-                w.write(dog.get_wdl(
+                w.write(self.operator.get_wdl(
                     config['methodRepoMethod']['methodNamespace'],
                     config['methodRepoMethod']['methodName']
                 ))

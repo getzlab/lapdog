@@ -9,6 +9,7 @@ from flask import current_app
 import random
 import pandas as pd
 import lapdog
+import json
 
 def readvar(obj, *args):
     current = obj
@@ -77,6 +78,7 @@ def list_workspaces():
 @cached(120)
 def workspace(namespace, name):
     response = fc.get_workspace(namespace, name)
+    ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
     return response.json(), response.status_code
 
 @cached(60)
@@ -246,35 +248,60 @@ def get_entities(namespace, name):
         ], key=lambda x:x['type'])
     }, 200
 
-def get_cache(namespace, name, etype):
-    result = readvar(current_app.config, 'storage', 'cache', namespace, name, 'entities_dirty', etype)
+def get_cache(namespace, name):
+    result = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
     if result is None:
         return 'not-loaded'
-    return 'up-to-date' if result else 'outdated'
+    return 'up-to-date' if result.live else 'outdated'
 
-def sync_cache(namespace, name, etype):
-    ws = lapdog.WorkspaceManager(namespace, name)
-    getter = getattr(
-        ws,
-        'get_'+etype+'s'
-    )
-    if readvar(current_app.config, 'storage', 'cache') is None:
-        current_app.config['storage']['cache'] = {}
-    if readvar(current_app.config, 'storage', 'cache', namespace) is None:
-        current_app.config['storage']['cache'][namespace] = {}
-    if readvar(current_app.config, 'storage', 'cache', namespace, name) is None:
-        current_app.config['storage']['cache'][namespace][name] = {}
-    if readvar(current_app.config, 'storage', 'cache', namespace, name, 'entities_dirty') is None:
-        current_app.config['storage']['cache'][namespace][name]['entities_dirty'] = {}
-    current_app.config['storage']['cache'][namespace][name]['entities_dirty'][etype] = True
-    if readvar(current_app.config, 'storage', 'cache', namespace, name, 'entities') is None:
-        current_app.config['storage']['cache'][namespace][name]['entities'] = {}
-    if readvar(current_app.config, 'storage', 'cache', namespace, name, 'entities', etype) is None:
-        current_app.config['storage']['cache'][namespace][name]['entities'] = getter()
+def sync_cache(namespace, name):
+    ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
+    if ws is None:
+        ws = lapdog.WorkspaceManager(namespace, name)
+        if readvar(current_app.config, 'storage', 'cache') is None:
+            current_app.config['storage']['cache'] = {}
+        if readvar(current_app.config, 'storage', 'cache', namespace) is None:
+            current_app.config['storage']['cache'][namespace] = {}
+        if readvar(current_app.config, 'storage', 'cache', namespace, name) is None:
+            current_app.config['storage']['cache'][namespace][name] = {}
+        if readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager') is None:
+            current_app.config['storage']['cache'][namespace][name]['manager'] = ws
+        ws.get_attributes()
+        for etype in ws.operator.entity_types:
+            ws.operator.get_entities_df(etype)
+        for config, data in ws.list_configs().items():
+            ws.operator.get_config_detail(data['namespace'], data['name'])
+            try:
+                ws.operator.get_wdl(
+                    data['methodRepoMethod']['methodNamespace'],
+                    data['methodRepoMethod']['methodName'],
+                    data['methodRepoMethod']['methodVersion']
+                )
+            except NameError:
+                # WDL Doesnt exist
+                pass
     else:
-        getattr(
-            ws,
-            'update_'+etype+'s'
-        )(current_app.config['storage']['cache'][namespace][name]['entities']['etype'])
-        current_app.config['storage']['cache'][namespace][name]['entities'] = getter()
-    return 'up-to-date'
+        ws.sync()
+    return 'up-to-date' if ws.live else ('outdated' if len(ws.operator.cache) else 'not-loaded')
+
+def create_workspace(namespace, name, parent):
+    ws = lapdog.WorkspaceManager(namespace, name)
+    parent = None if '/' not in parent else lapdog.WorkspaceManager(parent)
+    with lapdog.capture() as (stdout, stderr):
+        result = ws.create_workspace(parent)
+        stdout.seek(0,0)
+        stderr.seek(0,0)
+        text = stdout.read() + stderr.read()
+    try:
+        text = json.loads(text.strip())['message']
+    except:
+        print("Failed to decode json:", text)
+    if not result:
+        return {
+            'failed': True,
+            'reason': text
+        }, 200
+    return {
+        'failed': False,
+        'reason': 'success'
+    }

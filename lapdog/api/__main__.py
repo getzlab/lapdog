@@ -1,5 +1,8 @@
 import connexion
 import os
+import sys
+import subprocess
+import argparse
 from flask_cors import CORS
 
 swagger_dir = os.path.join(
@@ -7,12 +10,30 @@ swagger_dir = os.path.join(
     'swagger'
 )
 
-def run():
+vue_dir = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    'vue'
+)
+
+def run(args):
     app = connexion.App('lapdog-api', specification_dir=swagger_dir)
     app.add_api('lapdog.yaml')
     CORS(app.app, origins=r'.*')
     app.app.config['storage'] = {}
+    if args.vue:
+        subprocess.Popen(
+            'npm run dev',
+            shell=True,
+            executable='/bin/bash',
+            preexec_fn=lambda :os.chdir(vue_dir)
+        )
     app.run(port=4201)
 
 if __name__ == '__main__':
-    run()
+    parser = argparse.ArgumentParser('lapdog-ui')
+    parser.add_argument(
+        '-v', '--vue',
+        action='store_true',
+        help="Launch the vue UI"
+    )
+    run(parser.parse_args())
