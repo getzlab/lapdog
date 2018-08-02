@@ -214,7 +214,159 @@ paths:
           description: Cache state
           schema:
             type: string
+  /api/v1/workspaces/{namespace}/{name}/configs:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+      summary: Lists the method configs available in the workspace
+      operationId: controllers.get_configs
+      responses:
+        default:
+          description: Error
+        200:
+          description: Configs
+          schema:
+            type: array
+            items:
+              type: object
+  /api/v1/submissions/decode:
+    get:
+      parameters:
+        -
+          in: query
+          name: submission_id
+          required: true
+          type: string
+          description: A global lapdog submission id
+      summary: Decodes a global id into namespace, workspace, and local_id components
+      operationId: controllers.decode_submission
+      responses:
+        default:
+          description: Error
+        200:
+          description: Submission id components
+          schema:
+            type: object
+            properties:
+              namespace:
+                type: string
+                description: Namespace of the submission
+              workspace:
+                type: string
+                description: Workspace of the submission
+              id:
+                type: string
+                description: Local submission id
+  /api/v1/submissions/expanded/{namespace}/{name}/{id}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+      summary: Gets submission metadata
+      operationId: controllers.get_submission
+      responses:
+        default:
+          description: Error
+        200:
+          description: Submission id components
+          schema:
+            type: object
+  /api/v1/workspaces/{namespace}/{name}/preflight:
+    post:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: query
+          name: config
+          required: true
+          type: string
+          description: The config name
+        -
+          in: query
+          name: entity
+          required: true
+          type: string
+          description: The workflow entity
+        -
+          in: query
+          name: expression
+          required: false
+          type: string
+          description: The entity expression (optional)
+          default: ""
+        -
+          in: query
+          name: etype
+          required: false
+          type: string
+          description: The entity type (optional)
+          default: ""
+      summary: Checks if the provided inputs are valid to execute
+      operationId: controllers.preflight
+      responses:
+        default:
+          description: Error
+        200:
+          description: A preflight response
+          schema:
+            $ref: "#/definitions/Preflight"
 definitions:
+  Preflight:
+    type: object
+    properties:
+      failed:
+        type: boolean
+        description: A boolean if the operation was able to complete
+      ok:
+        type: boolean
+        description: A boolean if the inputs validated
+      message:
+        type: string
+        description: A failure or success message
+      workflows:
+        type: integer
+        description: The number of workflows that will launch
+      invalid_inputs:
+        type: string
+        description: A list of invalid inputs to the execution
   Status:
     type: object
     properties:

@@ -77,9 +77,9 @@
                 </ul>
               </div>
               <div class="col s6 offset-s1">
-                <form>
+                <form v-on:submit.prevent="get_submission">
                   <div class="input-field">
-                    <input type="text" id="submission-search" class="white" placeholder="Search Submissions"/>
+                    <input type="text" id="submission-search" class="white" placeholder=" Search Submissions" v-model="submission"/>
                     <!-- <label for="submission-search">search</label> -->
                   </div>
                 </form>
@@ -147,6 +147,7 @@ export default {
       workspaces: null,
       acct: null,
       search: '',
+      submission: '',
       create_namespace: '',
       create_workspace: '',
       parent_workspace: '',
@@ -210,6 +211,25 @@ export default {
         })
         .catch(error => {
           console.error("FAIL!")
+        })
+    },
+    get_submission() {
+      axios.get('http://localhost:4201/api/v1/submissions/decode?submission_id='+encodeURIComponent(this.submission))
+        .then(response => {
+          console.log("Decoded submission");
+          this.submission = '';
+          this.$router.push({
+            name: 'submission',
+            params: {
+              namespace: response.data.namespace,
+              workspace: response.data.workspace,
+              submission_id: response.data.id
+            }
+          });
+        })
+        .catch(response => {
+          console.error("FAIL");
+          console.error(response);
         })
     },
     getServiceAccount() {

@@ -1,45 +1,50 @@
 <template lang="html">
   <div id="workspace">
-    <!-- <div class="modal" id="submission-modal">
+    <div class="modal" id="submission-modal">
       <div class="modal-content">
         <div class="container form-container">
           <h4>Execute Workflows</h4>
           <div class="row">
             <div class="input-field col s12">
-              <select class="browser-default" id="config-select">
+              <select class="browser-default" id="config-select" v-model="submission_config" v-on:input="preflight(self_ref)">
                 <option value="" selected disabled>Choose a method</option>
-                <option v-for="config in method_configs" v-bind:value="config.namespace+'/'+config.name">
-                  config.name
+                <option v-for="config in method_configs" v-bind:value="config.name" :key="config.name">
+                  {{config.name}}
                 </option>
               </select>
             </div>
           </div>
           <div class="row">
-            <div class="input-field col s6">
-              <select class="browser-default" id="config-select">
+            <div class="input-field col s6 inline">
+              <select class="browser-default" id="etype-select" v-model="submission_etype" v-on:input="preflight(self_ref)">
                 <option value="" selected disabled>Choose an entity type</option>
-                <option v-for="etype in entity_types" v-bind:value="etype">
-                  etype
+                <option v-for="etype in entity_types" v-bind:value="etype.type" >
+                  {{etype.type}}
                 </option>
               </select>
             </div>
             <div class="input-field col s6">
-              <input type="text" id="entity-input" required/>
-              <label>Workflow Entity</label>
+              <input type="text" id="entity-input" required v-model="entity_field" v-on:input="preflight(self_ref)"/>
+              <label style="z-index: -1;">Workflow Entity</label>
             </div>
           </div>
           <div class="row">
             <div class="input-field col s12">
-              <input type="text" id="expression-input"/>
-              <label>Entity Expression (optional)</label>
+              <input type="text" id="expression-input" v-model="submission_expression" v-bind:disabled="extract_etype(submission_config) == submission_etype" v-on:input="preflight(self_ref)"/>
+              <label style="z-index: -1;">Entity Expression (optional)</label>
+            </div>
+          </div>
+          <div v-if="submission_message != ''" class="row">
+            <div class="col s12" v-bind:class="submit_okay ? 'green-text' : 'red-text'">
+              {{(submit_okay ? "" : "Error: ") + submission_message}}
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <a class="btn-flat" v-on:click="submit_workflow">Run</a>
+        <a class="btn-flat" v-bind:class="submit_okay ? '' : 'disabled'" v-on:click="submit_workflow">Run</a>
       </div>
-    </div> -->
+    </div>
     <h4>{{namespace}}/{{workspace}}</h4>
     <div class="divider">
 
@@ -126,7 +131,7 @@
           {{ws.accessLevel}}
         </div>
         <div class="col s2">
-          Workspace Cache State
+          Workspace Cache State:
         </div>
         <div class="col s2">
           <span v-if="!cache_state" class="amber-text text-darken-4">
@@ -156,6 +161,9 @@
         <div class="col s4">
           {{ws.owners.join(', ')}}
         </div>
+        <div class="col s6">
+          <a href="#submission-modal" class='btn blue modal-trigger' >Execute new job</a>
+        </div>
       </div>
       <div class="row">
         <div class="col s2">
@@ -171,6 +179,7 @@
 
 <script>
   import axios from'axios'
+  import _ from 'lodash'
   export default {
     props: ['namespace', 'workspace'],
     data() {
@@ -178,19 +187,96 @@
         ws: null,
         acl: null,
         acl_update: null,
-        cache_state: null
+        cache_state: null,
+        method_configs:null,
+        entity_types: null,
+        entity_field: "",
+        submission_config: "",
+        submission_etype: "",
+        submission_expression: "",
+        submission_message: "",
+        expr_disabled: false,
+        submit_okay: false,
+        // entities: null
       }
     },
     created() {
       this.getWorkspace(this.namespace, this.workspace);
       this.get_acl(this.namespace, this.workspace);
+      // window.$('.modal').modal();
+      // this.get_configs();
+      // this.get_entities(this.namespace, this.workspace);
+    },
+    computed: {
+      self_ref() {
+        return this;
+      }
     },
     methods: {
+      preflight: _.debounce((_this) => {
+        if (_this.submission_config == "" || _this.submission_etype == "" || _this.entity_field == "") return;
+        console.log("Executing preflight");
+        console.log(_this);
+        let query = 'http://localhost:4201/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+"/preflight?";
+        query += "config="+encodeURIComponent(_this.submission_config);
+        query += "&entity="+encodeURIComponent(_this.entity_field);
+        if (_this.submission_expression != "") query += "&expression="+encodeURIComponent(_this.submission_expression);
+        if (_this.submission_etype != "") query += "&etype="+encodeURIComponent(_this.submission_etype);
+        axios.post(query)
+          .then(response => {
+            console.log("Preflight returned");
+            console.log(response);
+            let result = response.data;
+            _this.submit_okay = result.ok && !result.failed;
+            if (_this.submit_okay) _this.submission_message = "Ready to submit " + result.workflows + " workflow(s)";
+            else _this.submission_message = result.message;
+          })
+          .catch(response => {
+            console.error("FAILED");
+            console.error(response)
+          })
+      }, 1000),
+      submit_workflow() {
+        alert('submit');
+      },
+      update_expr_mode() {
+        this.expr_disabled = this.extract_etype(this.submission_config) == this.submission_etype;
+        console.log(this.expr_disabled);
+      },
+      etype_crosscheck(cfg) {
+        if(this.ws) {
+          for(let config in this.ws.configs)
+          {
+            if(cfg == (config.namespace+'/'+config.name)) {
+              console.log("Etype crosscheck: " +this.submission_etype == config.rootEntityType);
+              return this.submission_etype == config.rootEntityType;
+            }
+          }
+        }
+        return false
+      },
+      extract_etype(cfg) {
+        if(this.ws) {
+          for(let config in this.ws.configs)
+          {
+            if(cfg == (this.ws.configs[config].name)) {
+              return this.ws.configs[config].rootEntityType;
+            }
+          }
+        }
+        return false
+      },
+      validate_entity() {
+        return this.entity_field == 'h' ? 'valid' : 'invalid';
+      },
       getWorkspace(namespace, workspace) {
         axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
             console.log(response.data);
-            this.ws = response.data
+            this.ws = response.data;
+            this.entity_types = response.data.entities;
+            this.method_configs = response.data.configs;
+            window.$('.modal').modal();
             axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
               .then(response => {
                 console.log(response.data);
@@ -220,20 +306,20 @@
           })
       },
 
-      get_entities(namespace, workspace) {
-        axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/entities')
-          .then(response => {
-            this.entities = response.data;
-            for(let etype in this.entities.entity_types)
-            {
-              // this.get_cache_state(this.entities.entity_types[etype].type);
-            }
-          })
-          .catch(error => {
-            console.error("FAIL")
-            console.error(response)
-          })
-      },
+      // get_entities(namespace, workspace) {
+      //   axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/entities')
+      //     .then(response => {
+      //       this.entities = response.data.entity_types;
+      //       for(let etype in this.entities.entity_types)
+      //       {
+      //         // this.get_cache_state(this.entities.entity_types[etype].type);
+      //       }
+      //     })
+      //     .catch(error => {
+      //       console.error("FAIL")
+      //       console.error(response)
+      //     })
+      // },
       sync_cache() {
         this.cache_state = 'sync';
         axios.put('http://localhost:4201/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache')
@@ -244,6 +330,19 @@
           .catch(error => {
             console.error("FAIL")
             console.error(response)
+          })
+      },
+      get_configs() {
+        axios.get('http://localhost:4201/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/configs')
+          .then(response => {
+            console.log(response.data);
+            this.method_configs = response.data;
+            window.$('.modal').modal();
+            // this.$forceUpdate();
+          })
+          .catch(error => {
+            console.error("FAIL");
+            console.error(error)
           })
       }
       // get_cache_state(etype) {
@@ -264,9 +363,14 @@
       this.acl = null;
       this.acl_update = null;
       this.entities = null;
+      this.method_configs = null;
+      this.submit_okay = false;
+      this.submission_message = "";
+      this.entity_field = "";
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
-      next()
+      // this.get_configs();
+      next();
     }
   }
 </script>

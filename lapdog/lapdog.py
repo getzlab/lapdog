@@ -101,14 +101,23 @@ class BucketUploader(object):
 
         return df.apply(scan_row, axis='columns'), uploads
 
-def complete_execution(self, submission_id):
+def complete_execution(submission_id):
     """
     Checks a GCP job status and returns results to firecloud, if possible
     """
     if submission_id.startswith('lapdog/'):
-        ws, ns, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
-        return WorkspaceManager(ws, ns).complete_execution(sid)
+        ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+        return WorkspaceManager(ns, ws).complete_execution(sid)
     raise TypeError("Global complete_execution can only operate on lapdog global ids")
+
+def get_submission(submission_id):
+    """
+    Gets submission metadata from a lapdog or firecloud submission
+    """
+    if submission_id.startswith('lapdog/'):
+        ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+        return WorkspaceManager(ns, ws).get_submission(sid)
+    raise TypeError("Global get_submission can only operate on lapdog global ids")
 
 class WorkspaceManager(dog.WorkspaceManager):
     def __init__(self, reference, workspace=None, timezone='America/New_York'):
@@ -130,16 +139,6 @@ class WorkspaceManager(dog.WorkspaceManager):
             timezone
         )
         self.operator = Operator(self)
-
-    def _prepare(self):
-        self.get_samples()
-        self.get_sample_sets()
-        self.get_participants()
-        self.operator.get_wdl('aarong', 'combine-samples')
-        self.operator.get_config_detail('aarong', 'combine-samples')
-        repr(self.operator.entity_types)
-        self.list_configs()
-        self.operator.live = False
 
     @property
     def pending_operations(self):
@@ -326,8 +325,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         Gets submission metadata from a lapdog or firecloud submission
         """
         if submission_id.startswith('lapdog/'):
-            ws, ns, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
-            return WorkspaceManager(ws, ns).get_submission(sid)
+            ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+            return WorkspaceManager(ns, ws).get_submission(sid)
         elif lapdog_id_pattern.match(submission_id):
             try:
                 return json.loads(getblob(os.path.join(
@@ -367,6 +366,45 @@ class WorkspaceManager(dog.WorkspaceManager):
             if result:
                 results.append(self.get_submission(result.group(1)))
         return results
+
+    def execute_preflight(self, config_name, entity, expression=None, etype=None):
+        """
+        Verifies execution configuration
+        """
+        configs = self.operator.configs
+        if config_name not in configs:
+            return False, 'Configuration "%s" not found in this workspace' % config_name
+        config = configs[config_name]
+        if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
+            return False, "expression and etype must BOTH be None or a string value"
+        if etype is None:
+            etype = config['rootEntityType']
+        entities = self.operator.get_entities_df(etype)
+        if entity not in entities.index:
+            return False, "No such %s '%s' in this workspace. Check your entity and entity type" % (
+                etype,
+                entity
+            )
+
+        workflow_entities = self.operator.evaluate_expression(
+            etype,
+            entity,
+            (expression if expression is not None else 'this')+'.%s_id' % config['rootEntityType']
+        )
+
+        template = self.operator.get_config_detail(
+            config['namespace'],
+            config['name']
+        )['inputs']
+
+        invalid_inputs = self.operator.validate_config(
+            config['namespace'],
+            config['name']
+        )
+        invalid_inputs = {**invalid_inputs['invalidInputs'], **{k:'N/A' for k in invalid_inputs['missingInputs']}}
+
+        return True, config, entity, etype, workflow_entities, template, invalid_inputs
+
 
     def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False):
         """
@@ -432,6 +470,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             'workspace':self.workspace,
             'namespace':self.namespace,
             'identifier':global_id,
+            'submission_id': submission_id,
             'methodConfigurationName':config['name'],
             'methodConfigurationNamespace':config['namespace'],
             'status': 'lapdog',
@@ -549,8 +588,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         Checks a GCP job status and returns results to firecloud, if possible
         """
         if submission_id.startswith('lapdog/'):
-            ws, ns, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
-            return WorkspaceManager(ws, ns).complete_execution(sid)
+            ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+            return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
             try:
                 submission = json.loads(getblob(os.path.join(

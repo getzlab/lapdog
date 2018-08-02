@@ -45,6 +45,7 @@ class Operator(object):
         self.dirty = set()
         self.live = True
         self.last_result = None
+        self._webcache_ = False
 
     def go_offline(self):
         self.live = False
@@ -179,6 +180,8 @@ class Operator(object):
             key += '.%d'%version
         if self.live:
             try:
+                if version is None:
+                    version = dog.get_method_version(namespace, name)
                 response = api.get_repository_method(namespace, name, version)
                 if response.status_code == 404:
                     raise NameError("No such wdl {}/{}@{}".format(namespace, name, version))
@@ -186,6 +189,8 @@ class Operator(object):
                 if response is not None:
                     self.cache[key] = response['payload']
             except KeyError:
+                self.go_offline()
+            except AssertionError:
                 self.go_offline()
         if key in self.cache and self.cache[key] is not None:
             return self.cache[key]

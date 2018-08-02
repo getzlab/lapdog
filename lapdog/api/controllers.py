@@ -10,6 +10,7 @@ import random
 import pandas as pd
 import lapdog
 import json
+import base64
 
 def readvar(obj, *args):
     current = obj
@@ -45,6 +46,20 @@ def cached(timeout):
 
     return wrapper
 
+def get_workspace_object(namespace, name):
+    ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
+    if ws is None:
+        ws = lapdog.WorkspaceManager(namespace, name)
+        if readvar(current_app.config, 'storage', 'cache') is None:
+            current_app.config['storage']['cache'] = {}
+        if readvar(current_app.config, 'storage', 'cache', namespace) is None:
+            current_app.config['storage']['cache'][namespace] = {}
+        if readvar(current_app.config, 'storage', 'cache', namespace, name) is None:
+            current_app.config['storage']['cache'][namespace][name] = {}
+        if readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager') is None:
+            current_app.config['storage']['cache'][namespace][name]['manager'] = ws
+    return ws
+
 @cached(30)
 def status():
     obj = {
@@ -78,8 +93,14 @@ def list_workspaces():
 @cached(120)
 def workspace(namespace, name):
     response = fc.get_workspace(namespace, name)
-    ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
-    return response.json(), response.status_code
+    ws = get_workspace_object(namespace, name)
+    data = response.json()
+    data['entities'] = [
+        {**v, **{'type':k}}
+        for k,v in ws.operator.entity_types.items()
+    ]
+    data['configs'] = get_configs(namespace, name)
+    return data, response.status_code
 
 @cached(60)
 def service_account():
@@ -243,46 +264,40 @@ def get_entities(namespace, name):
                 'attributes': val['attributeNames'],
                 'n': val['count'],
                 'id': val['idName'],
-                'cache': get_cache(namespace, name, key)
+                # 'cache': get_cache(namespace, name, key)
             } for key, val in result.json().items()
         ], key=lambda x:x['type'])
     }, 200
 
 def get_cache(namespace, name):
-    result = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
-    if result is None:
-        return 'not-loaded'
-    return 'up-to-date' if result.live else 'outdated'
+    ws = get_workspace_object(namespace, name)
+    if ws.operator._webcache_:
+        if ws.live and not (len(ws.operator.dirty) or len(ws.operator.pending)):
+            return 'up-to-date'
+        return 'outdated'
+    return 'not-loaded'
 
 def sync_cache(namespace, name):
-    ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
-    if ws is None:
-        ws = lapdog.WorkspaceManager(namespace, name)
-        if readvar(current_app.config, 'storage', 'cache') is None:
-            current_app.config['storage']['cache'] = {}
-        if readvar(current_app.config, 'storage', 'cache', namespace) is None:
-            current_app.config['storage']['cache'][namespace] = {}
-        if readvar(current_app.config, 'storage', 'cache', namespace, name) is None:
-            current_app.config['storage']['cache'][namespace][name] = {}
-        if readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager') is None:
-            current_app.config['storage']['cache'][namespace][name]['manager'] = ws
-        ws.get_attributes()
-        for etype in ws.operator.entity_types:
-            ws.operator.get_entities_df(etype)
-        for config, data in ws.list_configs().items():
-            ws.operator.get_config_detail(data['namespace'], data['name'])
-            try:
-                ws.operator.get_wdl(
-                    data['methodRepoMethod']['methodNamespace'],
-                    data['methodRepoMethod']['methodName'],
-                    data['methodRepoMethod']['methodVersion']
-                )
-            except NameError:
-                # WDL Doesnt exist
-                pass
-    else:
+    ws = get_workspace_object(namespace, name)
+    was_live = ws.live
+    ws.get_attributes()
+    for etype in ws.operator.entity_types:
+        ws.operator.get_entities_df(etype)
+    for config, data in ws.list_configs().items():
+        ws.operator.get_config_detail(data['namespace'], data['name'])
+        try:
+            ws.operator.get_wdl(
+                data['methodRepoMethod']['methodNamespace'],
+                data['methodRepoMethod']['methodName'],
+                data['methodRepoMethod']['methodVersion']
+            )
+        except NameError:
+            # WDL Doesnt exist
+            pass
+    if was_live:
         ws.sync()
-    return 'up-to-date' if ws.live else ('outdated' if len(ws.operator.cache) else 'not-loaded')
+    ws.operator._webcache_ = True
+    return get_cache(namespace, name)
 
 def create_workspace(namespace, name, parent):
     ws = lapdog.WorkspaceManager(namespace, name)
@@ -305,3 +320,60 @@ def create_workspace(namespace, name, parent):
         'failed': False,
         'reason': 'success'
     }
+
+@cached(60)
+def get_configs(namespace, name):
+    ws = get_workspace_object(namespace, name)
+    return [*ws.list_configs().values()]
+
+def preflight(namespace, name, config, entity, expression="", etype=""):
+    ws = get_workspace_object(namespace, name)
+    try:
+        result = ws.execute_preflight(
+            config,
+            entity,
+            expression if expression != "" else None,
+            etype if etype != "" else None
+        )
+        if result[0]:
+            _okay, _config, _entity, _etype, _workflow_entities, _template, _invalid_inputs = result
+            return {
+                'failed': False,
+                'ok': _okay,
+                'message': 'Okay',
+                'workflows': len(_workflow_entities),
+                'invalid_inputs': ', '.join(
+                    value for value in _invalid_inputs
+                )
+            }, 200
+        return {
+            'failed': False,
+            'ok': False,
+            'message': result[1],
+            'workflows': 0,
+            'invalid_inputs': 'None'
+        }, 200
+    except:
+        print(sys.exc_info())
+        return {
+            'failed': True,
+            'ok': False,
+            'message': "Failure: "+repr(sys.exc_info()),
+            'workflows': 0,
+            'invalid_inputs': 'None'
+        }, 200
+
+def decode_submission(submission_id):
+    if submission_id.startswith('lapdog/'):
+        ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+        return {
+            'namespace': ns,
+            'workspace': ws,
+            'id': sid
+        }, 200
+    return "Not a valid submission id", 404
+
+
+def get_submission(namespace, name, id):
+    ws = get_workspace_object(namespace, name)
+    return ws.get_submission(id), 200
