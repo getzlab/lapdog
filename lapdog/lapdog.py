@@ -168,6 +168,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         return bool(creation_success_pattern.search(text))
 
     def upload_entities(self, etype, df, index=True):
+        #FIXME: This includes entity rewrites
         self.operator.update_entities_df(etype, df)
 
     def get_samples(self):
@@ -188,18 +189,62 @@ class WorkspaceManager(dog.WorkspaceManager):
     def get_pair_sets(self):
         return self.operator.get_entities_df('pair_set')
 
+    def prepare_entity_df(self, etype, df):
+        """
+        Takes a dataframe of entity attributes.
+        Uploads attributes which reference valid filepaths
+        Returns a dataframe suitiable to upload
+        """
+        df, uploads = BucketUploader(
+            storage.Client().get_bucket(self.get_bucket_id()),
+            etype+'s',
+            None
+        ).upload_df(df)
+        if len(uploads):
+            _ = [callback() for callback in status_bar.iter(uploads)]
+        return df
+
     def prepare_sample_df(self, df):
         """
         Takes a dataframe of sample attributes
         Uploads filepaths and returns a modified dataframe
         """
-        df, uploads = BucketUploader(
-            storage.Client().get_bucket(self.get_bucket_id()),
-            'samples',
-            None
-        ).upload_df(df)
-        _ = [callback() for callback in status_bar.iter([*uploads.values()])]
-        return df
+        return self.prepare_entity_df('sample', df)
+
+    def prepare_pair_df(self, df):
+        """
+        Takes a dataframe of pair attributes
+        Uploads filepaths and returns a modified dataframe
+        """
+        return self.prepare_entity_df('pair', df)
+
+    def prepare_participant_df(self, df):
+        """
+        Takes a dataframe of sample attributes
+        Uploads filepaths and returns a modified dataframe
+        """
+        return self.prepare_entity_df('participant', df)
+
+    def prepare_sample_set_df(self, df):
+        """
+        Takes a dataframe of sample_set attributes
+        Uploads filepaths and returns a modified dataframe
+        """
+        return self.prepare_entity_df('sample_set', df)
+
+    def prepare_pair_set_df(self, df):
+        """
+        Takes a dataframe of pair_set attributes
+        Uploads filepaths and returns a modified dataframe
+        """
+        return self.prepare_entity_df('pair_set', df)
+
+    def prepare_participant_set_df(self, df):
+        """
+        Takes a dataframe of participant_set attributes
+        Uploads filepaths and returns a modified dataframe
+        """
+        return self.prepare_entity_df('participant_set', df)
 
     def upload_entities(self, etype, df, index=True):
         return self.operator.update_entities_df(etype, df, index)
@@ -245,11 +290,14 @@ class WorkspaceManager(dog.WorkspaceManager):
             config['methodRepoMethod']['methodVersion'] = version
         return self.operator.add_config(config)
 
-    def update_attributes(self, **attrs):
+    def update_attributes(self, attr_dict=None, **attrs):
         """
         Updates workspace attributes using the keyword arguments to this function
         Any values which reference valid filepaths will be uploaded to the workspace
         """
+        if attr_dict is None:
+            attr_dict = {}
+        attr_dict.update(attrs)
         uploader = BucketUploader(
             storage.Client().get_bucket(self.get_bucket_id()),
             'workspace',
@@ -264,7 +312,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                 )
                 attrs[k] = path
                 uploads.append(callback)
-        _ = [callback() for callback in status_bar.iter([*uploads.values()])]
+        if len(uploads):
+            _ = [callback() for callback in status_bar.iter(uploads)]
         self.operator.update_attributes(attrs)
         return attrs
 
@@ -275,6 +324,9 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Validates config parameters then creates a submission in Firecloud
         """
+        if not self.live:
+            print("The workspace is currently in offline mode. Please call WorkspaceManager.sync() to reconnect to firecloud", file=sys.stderr)
+            return
         with dalmatian_api():
             configs = {
                 cfg['name']:cfg for cfg in self.list_configs()
@@ -371,7 +423,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Verifies execution configuration
         """
-        configs = self.operator.configs
+        configs = {config['name']:config for config in self.list_configs()}
         if config_name not in configs:
             return False, 'Configuration "%s" not found in this workspace' % config_name
         config = configs[config_name]
@@ -410,7 +462,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Validates config parameters then executes a job directly on GCP
         """
-        configs = self.operator.configs
+        configs = {config['name']:config for config in self.list_configs()}
         if config_name not in configs:
             raise KeyError('Configuration "%s" not found in this workspace' % config_name)
         config = configs[config_name]

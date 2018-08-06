@@ -214,6 +214,7 @@
     },
     methods: {
       preflight: _.debounce((_this) => {
+        _this.submission_message = "Validating inputs...";
         if (_this.submission_config == "" || _this.submission_etype == "" || _this.entity_field == "") return;
         console.log("Executing preflight");
         console.log(_this);
@@ -237,7 +238,32 @@
           })
       }, 1000),
       submit_workflow() {
-        alert('submit');
+        let query = 'http://localhost:4201/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
+        query += "config="+encodeURIComponent(this.submission_config);
+        query += "&entity="+encodeURIComponent(this.entity_field);
+        axios.post(query)
+          .then(response => {
+            console.log("Execution returned");
+            console.log(response);
+            let result = response.data;
+            if (result.ok && !result.failed) {
+              this.$router.push({
+                name: 'submission',
+                params: {
+                  namespace: this.namespace,
+                  workspace: this.workspace,
+                  submission_id: response.data.local_id
+                }
+              });
+            }
+            else {
+              alert("Execute failed: "+response.data.message);
+            }
+          })
+          .catch(response => {
+            console.error("FAILED");
+            console.error(response)
+          })
       },
       update_expr_mode() {
         this.expr_disabled = this.extract_etype(this.submission_config) == this.submission_etype;

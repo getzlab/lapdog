@@ -348,7 +348,75 @@ paths:
           description: A preflight response
           schema:
             $ref: "#/definitions/Preflight"
+  /api/v1/workspaces/{namespace}/{name}/execute:
+    post:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: query
+          name: config
+          required: true
+          type: string
+          description: The config name
+        -
+          in: query
+          name: entity
+          required: true
+          type: string
+          description: The workflow entity
+        -
+          in: query
+          name: expression
+          required: false
+          type: string
+          description: The entity expression (optional)
+          default: ""
+        -
+          in: query
+          name: etype
+          required: false
+          type: string
+          description: The entity type (optional)
+          default: ""
+      summary: Checks if the provided inputs are valid to execute
+      operationId: controllers.execute
+      responses:
+        default:
+          description: Error
+        200:
+          description: Submission ID for the new execution
+          schema:
+            $ref: "#/definitions/Preflight"
 definitions:
+  Submission:
+    type: object
+    properties:
+      failed:
+        type: boolean
+        description: A boolean if the operation was able to complete
+      ok:
+        type: boolean
+        description: A boolean if the inputs validated
+      global_id:
+        type: string
+        description: The global lapdog ID for the submission
+      local_id:
+        type: string
+        description: The submission ID local to this workspace
+      operation_id:
+        type: string
+        description: The genomics operation ID for the submission
   Preflight:
     type: object
     properties:

@@ -283,13 +283,13 @@ def sync_cache(namespace, name):
     ws.get_attributes()
     for etype in ws.operator.entity_types:
         ws.operator.get_entities_df(etype)
-    for config, data in ws.list_configs().items():
-        ws.operator.get_config_detail(data['namespace'], data['name'])
+    for config in ws.list_configs():
+        ws.operator.get_config_detail(config['namespace'], config['name'])
         try:
             ws.operator.get_wdl(
-                data['methodRepoMethod']['methodNamespace'],
-                data['methodRepoMethod']['methodName'],
-                data['methodRepoMethod']['methodVersion']
+                config['methodRepoMethod']['methodNamespace'],
+                config['methodRepoMethod']['methodName'],
+                config['methodRepoMethod']['methodVersion']
             )
         except NameError:
             # WDL Doesnt exist
@@ -324,7 +324,7 @@ def create_workspace(namespace, name, parent):
 @cached(60)
 def get_configs(namespace, name):
     ws = get_workspace_object(namespace, name)
-    return [*ws.list_configs().values()]
+    return ws.list_configs()
 
 def preflight(namespace, name, config, entity, expression="", etype=""):
     ws = get_workspace_object(namespace, name)
@@ -361,6 +361,31 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
             'message': "Failure: "+repr(sys.exc_info()),
             'workflows': 0,
             'invalid_inputs': 'None'
+        }, 200
+
+def execute(namespace, name, config, entity, expression="", etype=""):
+    ws = get_workspace_object(namespace, name)
+    try:
+        global_id, local_id, operation_id = ws.execute(
+            config,
+            entity,
+            expression if expression != "" else None,
+            etype if etype != "" else None,
+            force=True
+        )
+        return {
+            'failed': False,
+            'ok': True,
+            'global_id': global_id,
+            'local_id': local_id,
+            'operation_id': operation_id
+        }, 200
+    except:
+        print(sys.exc_info())
+        return {
+            'failed': True,
+            'ok': False,
+            'message': "Failure: "+repr(sys.exc_info()),
         }, 200
 
 def decode_submission(submission_id):

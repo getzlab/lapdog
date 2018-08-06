@@ -67,7 +67,7 @@ class Operator(object):
                     if isinstance(response, Response) and response.status_code >=400:
                         raise APIException('API Failure: (%d) %s' % (response.status_code, response.text))
             except Exception as e:
-                failures.apend((key, setter, getter))
+                failures.append((key, setter, getter))
                 exceptions.append(e)
             else:
                 try:
@@ -83,7 +83,7 @@ class Operator(object):
                             if key in self.dirty:
                                 self.dirty.remove(key)
                 except Exception as e:
-                    failures.apend((key, None, getter))
+                    failures.append((key, None, getter))
                     exceptions.append(e)
         self.pending = [item for item in failures]
         self.live = not len(self.pending)
@@ -118,10 +118,7 @@ class Operator(object):
                 )
             )
             if result is not None:
-                self.cache['configs'] = {
-                    config['name']:config
-                    for config in result
-                }
+                self.cache['configs'] = [item for item in result]
         if 'configs' in self.cache and self.cache['configs'] is not None:
             return self.cache['configs']
         self.fail()
@@ -280,6 +277,8 @@ class Operator(object):
                 self.cache[key] = df
             except AssertionError:
                 self.go_offline()
+            except TypeError:
+                self.go_offline()
         if key in self.cache and self.cache[key] is not None:
             return self.cache[key]
         self.fail()
@@ -372,18 +371,18 @@ class Operator(object):
             self.dirty.add('attributes')
         if self.live:
             try:
-                dog.WorkspaceManager.update_attributes(self.workspace, **attrs)
+                dog.WorkspaceManager.update_attributes(self.workspace, attrs)
             except AssertionError:
                 self.go_offline()
                 self.pending.append((
                     'attributes',
-                    partial(dog.WorkspaceManager.update_attributes, self.workspace, **attrs),
+                    partial(dog.WorkspaceManager.update_attributes, self.workspace, attrs),
                     partial(dog.WorkspaceManager.get_attributes, self.workspace)
                 ))
         else:
             self.pending.append((
                 'attributes',
-                partial(dog.WorkspaceManager.update_attributes, self.workspace, **attrs),
+                partial(dog.WorkspaceManager.update_attributes, self.workspace, attrs),
                 partial(dog.WorkspaceManager.get_attributes, self.workspace)
             ))
         if self.live:
