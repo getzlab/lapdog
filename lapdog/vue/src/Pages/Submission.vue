@@ -31,7 +31,23 @@
       </div>
     </div>
     <div class="row">
-      
+      <div class="col s2">
+        Status:
+      </div>
+      <div class="col s10 red-text">
+        Stand-in [Running/Finished]
+      </div>
+    </div>
+    <div class="row">
+      <div class="col s2">
+        Workflows:
+      </div>
+      <div class="col s10" v-if="submission">
+        {{submission.workflows.length}}
+      </div>
+    </div>
+    <div class="row">
+
     </div>
     <h4>Workflows</h4>
     <div class="row" v-if="submission">

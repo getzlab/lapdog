@@ -393,6 +393,7 @@
       this.submit_okay = false;
       this.submission_message = "";
       this.entity_field = "";
+      this.submission_expression = "";
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();

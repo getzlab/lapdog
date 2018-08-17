@@ -21,7 +21,7 @@ def readvar(obj, *args):
     return current
 
 
-def cached(timeout):
+def cached(timeout, cache_size=4):
 
     def wrapper(func):
 
@@ -29,7 +29,7 @@ def cached(timeout):
             print("Cache expired. Running", func)
             return (time.time(), func(*args, **kwargs))
 
-        cachefunc = lru_cache(4)(cacheapply)
+        cachefunc = lru_cache(cache_size)(cacheapply)
 
         def call_func(*args, **kwargs):
             result = cachefunc(*args, **kwargs)

@@ -15,6 +15,7 @@ vue_dir = os.path.join(
     'vue'
 )
 
+
 def run(args):
     app = connexion.App('lapdog-api', specification_dir=swagger_dir)
     app.add_api('lapdog.yaml')

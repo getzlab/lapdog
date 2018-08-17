@@ -400,12 +400,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Returns a submission adapter for a lapdog submission
         """
-        return adapters.SubmissionAdapter(os.path.join(
-            'gs://'+self.get_bucket_id(),
-            'lapdog-executions',
-            submission_id,
-            'submission.json'
-        ))
+        return adapters.SubmissionAdapter(self.get_bucket_id(), submission_id)
 
     def list_submissions(self, config=None):
         """

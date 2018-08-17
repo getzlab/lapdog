@@ -16,13 +16,13 @@
           </div>
           <div class="row">
             <div class="input-field col s12">
-             <select id="clone-select" v-model="parent_workspace" class="browser-default">
-               <option value="" selected>Create empty workspace</option>
-               <option v-for="workspace in filtered_workspaces" v-bind:value="workspace.namespace+'/'+workspace.name">
-                 {{workspace.namespace+'/'+workspace.name}}
-               </option>
-             </select>
-           </div>
+               <select id="clone-select" v-model="parent_workspace" class="browser-default">
+                 <option value="" selected>Create empty workspace</option>
+                 <option v-for="workspace in filtered_workspaces" v-bind:value="workspace.namespace+'/'+workspace.name">
+                   Clone from {{workspace.namespace+'/'+workspace.name}}
+                 </option>
+               </select>
+             </div>
           </div>
           <div v-if="create_failed" class="row">
             <div class="col s12 red-text">

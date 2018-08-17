@@ -321,7 +321,9 @@ class Operator(object):
                     updates,
                     index
                 )
-                _ = self.entities
+                self.cache[key] = getter()
+                if key in self.dirty:
+                    self.dirty.remove(key)
             except ValueError:
                 self.go_offline()
                 self.pending.append((

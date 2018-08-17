@@ -7,7 +7,7 @@ produces:
 paths:
   /api/v1/status:
     get:
-      operationId: controllers.status
+      operationId: lapdog.api.controllers.status
       summary: Returns firecloud status
       responses:
         default:
@@ -18,7 +18,7 @@ paths:
             $ref: "#/definitions/Status"
   /api/v1/workspaces:
     get:
-      operationId: controllers.list_workspaces
+      operationId: lapdog.api.controllers.list_workspaces
       summary: Returns a list of workspaces
       responses:
         default:
@@ -44,7 +44,7 @@ paths:
           required: true
           type: string
           description: The workspaces name
-      operationId: controllers.workspace
+      operationId: lapdog.api.controllers.workspace
       summary: returns a workspace
       responses:
         default:
@@ -74,7 +74,7 @@ paths:
           type: string
           description: The parent workspace (in url encoded namespace/name format)
           default: ''
-      operationId: controllers.create_workspace
+      operationId: lapdog.api.controllers.create_workspace
       summary: Creates a new workspace and returns success or failure
       responses:
         default:
@@ -85,7 +85,7 @@ paths:
             type: object
   /api/v1/service-account:
     get:
-      operationId: controllers.service_account
+      operationId: lapdog.api.controllers.service_account
       summary: Returns the active service account
       responses:
         default:
@@ -109,7 +109,7 @@ paths:
           required: true
           type: string
           description: The workspaces name
-      operationId: controllers.service_acl
+      operationId: lapdog.api.controllers.service_acl
       summary: Checks ACL and returns whether or not the active service account is on the workspace
       responses:
         default:
@@ -132,7 +132,7 @@ paths:
           required: true
           type: string
           description: The workspaces name
-      operationId: controllers.set_acl
+      operationId: lapdog.api.controllers.set_acl
       summary: Ensures the current service account is added to the firecloud workspace
       responses:
         default:
@@ -156,7 +156,7 @@ paths:
   #         required: true
   #         type: string
   #         description: The workspaces name
-  #     operationId: controllers.get_entities
+  #     operationId: lapdog.api.controllers.get_entities
   #     summary: Returns a list of entity types
   #     responses:
   #       default:
@@ -183,7 +183,7 @@ paths:
           type: string
           description: The workspaces name
       summary: Gets the cache state of a given workspace
-      operationId: controllers.get_cache
+      operationId: lapdog.api.controllers.get_cache
       responses:
         default:
           description: Error
@@ -206,7 +206,7 @@ paths:
           type: string
           description: The workspaces name
       summary: Synchronizes the workspace cache
-      operationId: controllers.sync_cache
+      operationId: lapdog.api.controllers.sync_cache
       responses:
         default:
           description: Error
@@ -230,7 +230,7 @@ paths:
           type: string
           description: The workspaces name
       summary: Lists the method configs available in the workspace
-      operationId: controllers.get_configs
+      operationId: lapdog.api.controllers.get_configs
       responses:
         default:
           description: Error
@@ -250,7 +250,7 @@ paths:
           type: string
           description: A global lapdog submission id
       summary: Decodes a global id into namespace, workspace, and local_id components
-      operationId: controllers.decode_submission
+      operationId: lapdog.api.controllers.decode_submission
       responses:
         default:
           description: Error
@@ -290,7 +290,7 @@ paths:
           type: string
           description: The submission local id
       summary: Gets submission metadata
-      operationId: controllers.get_submission
+      operationId: lapdog.api.controllers.get_submission
       responses:
         default:
           description: Error
@@ -340,7 +340,7 @@ paths:
           description: The entity type (optional)
           default: ""
       summary: Checks if the provided inputs are valid to execute
-      operationId: controllers.preflight
+      operationId: lapdog.api.controllers.preflight
       responses:
         default:
           description: Error
@@ -390,7 +390,7 @@ paths:
           description: The entity type (optional)
           default: ""
       summary: Checks if the provided inputs are valid to execute
-      operationId: controllers.execute
+      operationId: lapdog.api.controllers.execute
       responses:
         default:
           description: Error

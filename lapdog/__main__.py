@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 import lapdog
+from .api.__main__ import run as ui_main
 import os
 
 def main():
@@ -266,6 +267,18 @@ def main():
         '-a', '--abort',
         action='store_true',
         help="Abort the submission, if it hasn't finished already"
+    )
+
+    ui_parser = subparsers.add_parser(
+        'ui',
+        help="Starts the web UI for lapdog",
+        description="Starts the web UI for lapdog"
+    )
+    ui_parser.set_defaults(func=lambda args: ui_main(args))
+    ui_parser.add_argument(
+        '-v', '--vue',
+        action='store_true',
+        help="Launch the vue UI"
     )
 
     args = parser.parse_args()
