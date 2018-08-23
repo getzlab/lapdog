@@ -10,6 +10,7 @@ import os
 from functools import lru_cache
 import contextlib
 import re
+import select
 
 timestamp_format = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -28,6 +29,12 @@ workflow_start_pattern = re.compile(r'WorkflowManagerActor Starting workflow UUI
 task_start_pattern = re.compile(r'\[UUID\((\w{8})\)(\w+)\.(\w+):(\w+):(\d+)\]: job id: (operations/[a-z0-9\-])')
 msg_pattern = re.compile(r'UUID\((\w{8})\)')
 fail_pattern = re.compile(r"ERROR - WorkflowManagerActor Workflow ([a-z0-9\-]+) failed \(during *?\): Job (\w+)\.(\w+):\w+:\d+ (.+)")
+
+class Recall(object):
+    value = None
+    def apply(self, value):
+        self.value = value
+        return value
 
 def safe_getblob(gs_path):
     blob = getblob(gs_path)
@@ -105,6 +112,20 @@ class SubmissionAdapter(object):
         self.workflows = {}
         self._internal_reader = None
 
+    def update(self):
+        if not self.live:
+            return
+        if self._internal_reader is None:
+            self._internal_reader = self.read_cromwell()
+        event_stream = []
+        while len(select.select([self._internal_reader], [], [], 1)[0]):
+            message = self._internal_reader.readline().decode().strip()
+            matcher = Recall()
+            if matcher.apply(workflow_start_pattern.search(message)):
+                print("New workflow started")
+
+
+
     def _parser_thread(self):
         """A thread to continuously eat shit"""
         reader = self.read_cromwell()
@@ -172,18 +193,55 @@ class SubmissionAdapter(object):
         else:
             return BytesIO(log_text)
 
-    def get_workflows(self, workflows):
+    # def get_workflows(self, workflows):
+    #
+    #     #LINK via ordering. we know the order in which workflows were submitted
+    #     #And so we should know the order in which they are returned
+    #     # This, at the very least, informs the adapter how many workflows to expect
+    #     # The workflow_start_pattern will inform cromwell of when each workflow checks in
+    #     # Depending on the data available in the status_json we may or may not be able to
+    #     # Link workflows at this point
+    #     # Alternatively, we can sniff the logs in from the workflow itself
+    #     # Input keys are derived entirely from values, not variable names, so we
+    #     #   might have enough data to link workflows that way
+    #
+    #     # This should start a monitoring thread to watch for patterns in the cromwell logs
+    #     # Then, relevant information is logged to this object or child workflow Adapters
+    #     pass
 
-        #LINK via ordering. we know the order in which workflows were submitted
-        #And so we should know the order in which they are returned
-        # This, at the very least, informs the adapter how many workflows to expect
-        # The workflow_start_pattern will inform cromwell of when each workflow checks in
-        # Depending on the data available in the status_json we may or may not be able to
-        # Link workflows at this point
-        # Alternatively, we can sniff the logs in from the workflow itself
-        # Input keys are derived entirely from values, not variable names, so we
-        #   might have enough data to link workflows that way
 
-        # This should start a monitoring thread to watch for patterns in the cromwell logs
-        # Then, relevant information is logged to this object or child workflow Adapters
-        pass
+class WorkflowAdapter(object):
+    # this adapter needs to be initialized from an input key and a cromwell workflow id (short or long)
+    # At first, dispatching events fills the replay buffer
+    # when the workflow is started, the buffer is played and the workflow updates to current state DAWG
+
+    def __init__(self, input_key, short_id, long_id=None):
+        self.id = short_id
+        self.key = input_key
+        self.long_id = self.long_id
+        self.replay_buffer = []
+        self.started = False
+
+    def handle(self, evt, *args, **kwargs):
+        if not self.started:
+            self.replay_buffer.append((evt, args, kwargs))
+            return
+        attribute = 'on_'+evt
+        if hasattr(self, attribute):
+            getattr(self, attribute)(*args, **kwargs)
+        print("No handler for event", evt)
+
+    def on_start(self, long_id):
+        self.started = True
+        self.long_id = long_id
+        for event, args, kwargs in self.replay_buffer:
+            print("Replaying previous events...")
+            self.handle(event, *args, **kwargs)
+
+
+# wf = WFAdapter(input_key, short_id, long_id=None)
+# wf.handle(event)
+# ...
+# wf.handle(start_event)
+# |
+# |_ [self.handle(event) for event in self.replay_buffer]

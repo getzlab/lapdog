@@ -172,6 +172,11 @@
         <div class="col s4">
           {{ws.workspaceSubmissionStats.runningSubmissionsCount}}
         </div>
+        <div class="col s6">
+          <a v-bind:href="'https://portal.firecloud.org/#workspaces/'+namespace+'/'+workspace+'/monitor'" class="btn blue">
+            View your Firecloud Submissions
+          </a>
+        </div>
       </div>
     </div>
   </div>
