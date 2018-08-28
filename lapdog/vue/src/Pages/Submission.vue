@@ -18,6 +18,16 @@ Other: error_outline
         </div>
       </div>
     </div>
+    <div class="modal" id="log-modal">
+      <div class="modal-content">
+        <div class="containe">
+          <h4>Log Text</h4>
+          <div class="log-container grey lighten-3" style="max-height: 80% !important;">
+            {{'\n'+active_log}}
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="modal" id="workflow-modal">
       <div class="modal-content">
         <div class="container">
@@ -49,8 +59,8 @@ Other: error_outline
               <li v-for="call in active_workflow.calls">
 
                 <div class="collapsible-header">
-                  <i v-if="call.status == 'Done'" class="material-icons">check_cicle</i>
-                  <i v-else-if="call.status == 'Aborted'" class="material-icons">sync_disabled</i>
+                  <i v-if="call.status == 'Success'" class="material-icons">check_cicle</i>
+                  <i v-else-if="call.status == 'Preempted'" class="material-icons">sync_disabled</i>
                   <i v-else-if="call.status == 'Failed'" class="material-icons">sync_problem</i>
                   <i v-else-if="call.status == 'Running'" class="material-icons">sync</i>
                   <i v-else class="material-icons">error_outline</i>
@@ -97,6 +107,20 @@ Other: error_outline
                     </div>
                     <div class="col s10" v-bind:class="call.code == 0 ? 'green-text' : 'red-text'">
                       {{call.code}}
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col s2">
+                      Logs:
+                    </div>
+                    <div class="col s3">
+                      <a href="#" v-on:click.prevent="get_log('stdout', call.idx)">Standard Out</a>
+                    </div>
+                    <div class="col s3">
+                      <a href="#" v-on:click.prevent="get_log('stderr', call.idx)">Standard Error</a>
+                    </div>
+                    <div class="col s3">
+                      <a href="#" v-on:click.prevent="get_log('google', call.idx)">Genomics</a>
                     </div>
                   </div>
                 </div>
@@ -210,8 +234,8 @@ Other: error_outline
     <h4>Workflows</h4>
     <div class="row" v-if="pending_workflows">
       <div class="col s12">
-        Waiting for {{pending_workflows}} workflows to check in...
-        {{workflows ? " Refresh the page to re-query workflows" : ""}}
+        <span v-if="workflows">Refresh the page to re-query remaining {{pending_workflows}} workflow(s)</span>
+        <span v-else>Waiting for {{pending_workflows}} workflows to check in...</span>
       </div>
     </div>
     <div class="workflow-container" v-if="workflows">
@@ -236,7 +260,7 @@ Other: error_outline
         <tbody>
           <tr v-for="workflow in workflows">
             <td>{{workflow.entity}}</td>
-            <td v-bind:class="workflow.status == 'Done' ? 'green-text' : workflow.status == 'Failed' ? 'red-text' : 'black-text'">
+            <td v-bind:class="workflow.status == 'Success' ? 'green-text' : workflow.status == 'Failed' ? 'red-text' : 'black-text'">
               {{workflow.status}}
             </td>
             <td>
@@ -268,7 +292,8 @@ export default {
       cromwell_offset: 0,
       cromwell_lines: null,
       active_workflow: null,
-      active_operation: null
+      active_operation: null,
+      active_log: null
     }
   },
   computed: {
@@ -341,6 +366,27 @@ export default {
           console.error(error);
         })
     },
+    get_log(log_type, call_index) {
+      this.active_log = null;
+      window.materialize.toast({
+        html: "Reading log...",
+        displayLength: 2000,
+      });
+      axios.get('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+this.active_workflow.id+'/'+log_type+'/'+call_index)
+        .then(response => {
+          this.active_log = response.data;
+          window.$('#log-modal').modal();
+          window.$('#log-modal').modal('open');
+        })
+        .catch(error => {
+          console.error("FAILURE");
+          console.error(error);
+          window.materialize.toast({
+            html: "Unable to access log. File not found",
+            displayLength: 2000,
+          });
+        })
+    },
     display_workflow(workflow_id) {
       this.active_workflow = null;
       window.materialize.toast({
@@ -370,6 +416,7 @@ export default {
       this.cromwell_lines = null;
       this.active_workflow = null;
       this.active_operation = null;
+      this.active_log = null;
       this.init(to.params.namespace, to.params.workspace, to.params.submission_id)
       next();
     }

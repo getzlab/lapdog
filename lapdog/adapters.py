@@ -150,8 +150,12 @@ class CommandReader(object):
     def __init__(self, cmd, *args, __insert_text=None, **kwargs):
         r,w = os.pipe()
         r2,w2 = os.pipe()
+        if '__insert_text' in kwargs:
+            __insert_text = kwargs['__insert_text']
+            del kwargs['__insert_text']
         if __insert_text is not None:
-            w.write(__insert_text)
+            os.write(w, __insert_text)
+        print(kwargs)
         self.proc = subprocess.Popen(cmd, *args, stdout=w, stderr=w, stdin=r2, universal_newlines=False, **kwargs)
         self.reader = open(r, 'rb')
 
@@ -361,7 +365,7 @@ class SubmissionAdapter(object):
                 'logs',
                 self.operation[11:]+'-stdout.log'
             ))
-        if not 'done' in status and status['done']:
+        if not ('done' in status and status['done']):
             cmd = (
                 "gcloud compute ssh --zone {zone} {instance_name} -- "
                 "'docker logs -f $(docker ps -q)'"
@@ -369,7 +373,7 @@ class SubmissionAdapter(object):
                 zone=status['metadata']['runtimeMetadata']['computeEngine']['zone'],
                 instance_name=status['metadata']['runtimeMetadata']['computeEngine']['instanceName']
             )
-            return CommandReader(cmd, __insert_text=log_text, shell=True, executable='/bin/bash')
+            return CommandReader(cmd, shell=True, executable='/bin/bash')
         else:
             print("Logs:", len(log_text))
             return BytesIO(log_text)

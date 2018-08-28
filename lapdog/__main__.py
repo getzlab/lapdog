@@ -270,15 +270,16 @@ def main():
     )
 
     ui_parser = subparsers.add_parser(
-        'ui',
-        help="Starts the web UI for lapdog",
-        description="Starts the web UI for lapdog"
+        'api',
+        help="Starts the web API for lapdog",
+        description="Starts the web API for lapdog"
     )
     ui_parser.set_defaults(func=lambda args: ui_main(args))
     ui_parser.add_argument(
-        '-v', '--vue',
-        action='store_true',
-        help="Launch the vue UI"
+        '-n', '--no-ui',
+        action='store_false',
+        help="Do not launch the ui",
+        dest='vue'
     )
 
     args = parser.parse_args()

@@ -362,7 +362,7 @@ def list_submissions(namespace, name):
             if s['submissionDate'] != 'TIME'
             else time.localtime()
             ),
-        reverse=False
+        reverse=True
     )
 
 def preflight(namespace, name, config, entity, expression="", etype=""):
@@ -523,9 +523,10 @@ def get_workflow(namespace, name, id, workflow_id):
                     'operation': call.operation,
                     'task': call.task,
                     'gs_path': call.path,
-                    'code': call.return_code
+                    'code': call.return_code,
+                    'idx': i
                 }
-                for call in wf.calls
+                for i, call in enumerate(wf.calls)
             ],
             'gs_path': wf.path,
             'status': wf.status,
@@ -553,8 +554,8 @@ def get_workflow(namespace, name, id, workflow_id):
 @cached(30)
 def read_logs(namespace, name, id, workflow_id, log, call):
     suffix = {
-        'stdout': '-stdout.log',
-        'stderr': '-stderr.log',
+        'stdout': 'stdout',
+        'stderr': 'stderr',
         'google': '.log'
     }[log]
     adapter = get_adapter(namespace, name, id)
@@ -562,10 +563,16 @@ def read_logs(namespace, name, id, workflow_id, log, call):
     if workflow_id[:8] in adapter.workflows:
         workflow = adapter.workflows[workflow_id[:8]]
         if call < len(workflow.calls):
+            call = workflow.calls[call]
             path = os.path.join(
                 call.path,
                 call.task+suffix
             )
+            if '.log' not in suffix:
+                path = os.path.join(
+                    call.path,
+                    suffix
+                )
             from ..adapters import safe_getblob
             try:
                 blob = safe_getblob(path)

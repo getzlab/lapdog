@@ -206,6 +206,7 @@
               <tr>
                 <th>Configuration</th>
                 <th>Entity</th>
+                <th>Date</th>
                 <th>Submission ID</th>
               </tr>
             </thead>
@@ -213,6 +214,7 @@
               <tr v-for="sub in submissions">
                 <td>{{sub.methodConfigurationName}}</td>
                 <td>{{sub.submissionEntity.entityName}}</td>
+                <td>{{sub.submissionDate}}</td>
                 <td>
                   <router-link :to="{name: 'submission', params: {namespace:sub.namespace, workspace:sub.workspace, submission_id:sub.submission_id}}">
                     {{sub.submission_id}}
