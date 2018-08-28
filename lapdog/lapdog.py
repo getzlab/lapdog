@@ -19,11 +19,14 @@ from io import StringIO
 from . import adapters
 from .adapters import getblob, get_operation_status
 from .operations import APIException, Operator, capture
+from itertools import repeat
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
 lapdog_submission_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/submission.json')
 creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
+
+timestamp_format = '%Y-%m-%dT%H:%M:%S.000%Z'
 
 @contextlib.contextmanager
 def dalmatian_api():
@@ -118,6 +121,21 @@ def get_submission(submission_id):
         ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
         return WorkspaceManager(ns, ws).get_submission(sid)
     raise TypeError("Global get_submission can only operate on lapdog global ids")
+
+mtypes = {
+    'n1-standard-%d'%(2**i): (0.0475*(2**i), 0.01*(2**i)) for i in range(7)
+}
+mtypes.update({
+    'n1-highmem-%d'%(2**i): (.0592*(2**i), .0125*(2**i)) for i in range(1,7)
+})
+mtypes.update({
+    'n1-highcpu-%d'%(2**i): (.03545*(2**i), .0075*(2**1)) for i in range(1,7)
+})
+mtypes.update({
+    'f1-micro': (0.0076, 0.0035),
+    'g1-small': (0.0257, 0.007)
+})
+
 
 class WorkspaceManager(dog.WorkspaceManager):
     def __init__(self, reference, workspace=None, timezone='America/New_York'):
@@ -393,6 +411,13 @@ class WorkspaceManager(dog.WorkspaceManager):
         with dalmatian_api():
             return super().get_submission(submission_id)
 
+    @parallelize(5)
+    def _get_multiple_executions(self, execution_path):
+        result = lapdog_submission_pattern.match(execution_path.name)
+        if result:
+            return self.get_submission(result.group(1))
+
+
     def list_configs(self):
         return self.operator.configs
 
@@ -408,10 +433,9 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         with dalmatian_api():
             results = super().list_submissions(config)
-        for path in storage.Client().get_bucket(self.get_bucket_id()).list_blobs(prefix='lapdog-executions'):
-            result = lapdog_submission_pattern.match(path.name)
-            if result:
-                results.append(self.get_submission(result.group(1)))
+        for submission in WorkspaceManager._get_multiple_executions(repeat(self), storage.Client().get_bucket(self.get_bucket_id()).list_blobs(prefix='lapdog-executions')):
+            if submission is not None:
+                results.append(submission)
         return results
 
     def execute_preflight(self, config_name, entity, expression=None, etype=None):
@@ -521,7 +545,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             'methodConfigurationName':config['name'],
             'methodConfigurationNamespace':config['namespace'],
             'status': 'lapdog',
-            'submissionDate': 'TIME',
+            'submissionDate': time.strftime(timestamp_format),
             'submissionEntity': {
                 'entityName': entity,
                 'entityType': etype
@@ -535,15 +559,16 @@ class WorkspaceManager(dog.WorkspaceManager):
         def prepare_workflow(workflow_entity):
             wf_template = {}
             for k,v in template.items():
-                resolution = self.operator.evaluate_expression(
-                    config['rootEntityType'],
-                    workflow_entity,
-                    v
-                )
-                if len(resolution) == 1:
-                    wf_template[k] = resolution[0]
-                else:
-                    wf_template[k] = resolution
+                if len(v):
+                    resolution = self.operator.evaluate_expression(
+                        config['rootEntityType'],
+                        workflow_entity,
+                        v
+                    )
+                    if len(resolution) == 1:
+                        wf_template[k] = resolution[0]
+                    else:
+                        wf_template[k] = resolution
             return wf_template
 
         tempdir = tempfile.TemporaryDirectory()
@@ -638,63 +663,80 @@ class WorkspaceManager(dog.WorkspaceManager):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
             return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
-            try:
-                submission = json.loads(getblob(os.path.join(
-                    'gs://'+self.get_bucket_id(),
-                    'lapdog-executions',
-                    submission_id,
-                    'submission.json'
-                )).download_as_string())
-                status = get_operation_status(submission['operation'])
-                done = 'done' in status and status['done']
-                if done:
-                    print("All workflows completed. Uploading results...")
-                    output_template = check_api(dog.firecloud.api.get_workspace_config(
-                        submission['namespace'],
-                        submission['workspace'],
-                        submission['methodConfigurationNamespace'],
-                        submission['methodConfigurationName']
-                    )).json()['outputs']
+            submission = json.loads(getblob(os.path.join(
+                'gs://'+self.get_bucket_id(),
+                'lapdog-executions',
+                submission_id,
+                'submission.json'
+            )).download_as_string())
+            status = get_operation_status(submission['operation'])
+            done = 'done' in status and status['done']
+            if done:
+                print("All workflows completed. Uploading results...")
+                output_template = check_api(dog.firecloud.api.get_workspace_config(
+                    submission['namespace'],
+                    submission['workspace'],
+                    submission['methodConfigurationNamespace'],
+                    submission['methodConfigurationName']
+                )).json()['outputs']
 
-                    output_data = {}
-                    try:
-                        workflow_metadata = json.loads(getblob(
-                            'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
-                                bucket_id=self.get_bucket_id(),
-                                submission_id=submission_id
+                output_data = {}
+                try:
+                    workflow_metadata = json.loads(getblob(
+                        'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
+                            bucket_id=self.get_bucket_id(),
+                            submission_id=submission_id
+                        )
+                    ).download_as_string())
+                except:
+                    raise FileNotFoundError("Unable to locate the tracking file for this submission. It may have been aborted")
+
+                workflow_metadata = {
+                    build_input_key(meta['workflow_metadata']['inputs']):meta
+                    for meta in workflow_metadata
+                }
+                submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
+                for key, entity in status_bar.iter(submission_workflows.items(), prepend="Uploading results... "):
+                    if key not in workflow_metadata:
+                        print("Entity", entity, "has no output metadata")
+                    elif workflow_metadata[key]['workflow_status'] != 'Succeeded':
+                        print("Entity", entity, "failed")
+                        print("Errors:")
+                        for call, calldata in workflow_metadata[key]['workflow_metadata']['calls'].items():
+                            print("Call", call, "failed with error:", get_operation_status(calldata['jobId'])['error'])
+                    else:
+                        output_data = workflow_metadata[key]['workflow_output']
+                        entity_data = {}
+                        for k,v in output_data['outputs'].items():
+                            k = output_template[k]
+                            if k.startswith('this.'):
+                                entity_data[k[5:]] = v
+                        with capture():
+                            self.update_entity_attributes(
+                                submission['workflowEntityType'],
+                                pd.DataFrame(
+                                    entity_data,
+                                    index=[entity]
+                                ),
                             )
-                        ).download_as_string())
-                    except:
-                        raise FileNotFoundError("Unable to locate the tracking file for this submission. It may have been aborted")
-
-                    workflow_metadata = {
-                        build_input_key(meta['workflow_metadata']['inputs']):meta
-                        for meta in workflow_metadata
-                    }
-                    submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
-                    for key, entity in status_bar.iter(submission_workflows.items(), prepend="Uploading results... "):
-                        if key not in workflow_metadata:
-                            print("Entity", entity, "has no output metadata")
-                        elif workflow_metadata[key]['workflow_status'] != 'Succeeded':
-                            print("Entity", entity, "failed")
-                            print("Errors:")
-                            for call, calldata in workflow_metadata[key]['workflow_metadata']['calls'].items():
-                                print("Call", call, "failed with error:", get_operation_status(calldata['jobId'])['error'])
-                        else:
-                            output_data = workflow_metadata[key]['workflow_output']
-                            entity_data = {}
-                            for k,v in output_data['outputs'].items():
-                                k = output_template[k]
-                                if k.startswith('this.'):
-                                    entity_data[k[5:]] = v
-                            with capture():
-                                self.update_entity_attributes(
-                                    submission['workflowEntityType'],
-                                    pd.DataFrame(
-                                        entity_data,
-                                        index=[entity]
-                                    ),
-                                )
-            except:
-                pass
+                cost = 0
+                maxTime = 0
+                total = 0
+                for wf in workflow_metadata:
+                    for calls in wf['workflow_metadata']['calls'].values():
+                        for call in calls:
+                            if 'end' in call:
+                                delta = datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+                                delta = (delta.days*24) + (delta.seconds/3600)
+                                if delta > maxTime:
+                                    maxTime = delta
+                                total += delta
+                                if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
+                                    cost += mtypes[call['jes']['machineType'].split('/')[-1]][int('preemptible' in call and call['preemptible'])]*delta
+                cost += mtypes['n1-standard-1'][0] * maxTime
+                return {
+                    'clock_h': maxTime,
+                    'cpu_h': total,
+                    'est_cost': cost
+                }
         raise TypeError("complete_execution not available for firecloud submissions")

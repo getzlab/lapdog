@@ -49,7 +49,7 @@
           <div class="collection">
             <div class="collection-item" v-if="!workspaces">
               <div class="progress">
-                <div class="indeterminate"></div>
+                <div class="indeterminate blue"></div>
               </div>
             </div>
             <div class="collection-item" v-else>

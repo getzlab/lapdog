@@ -1,5 +1,116 @@
+<!--
+Icons:
+Done-ok: check_cicle
+Aborted: sync_disabled
+Running: sync
+Failed: sync_problem
+Other: error_outline
+-->
 <template lang="html">
   <div id="submission">
+    <div class="modal" id="operation-modal">
+      <div class="modal-content">
+        <div class="containe">
+          <h4>Operation</h4>
+          <div class="log-container grey lighten-3" style="max-height: 80% !important;">
+            {{'\n'+active_operation}}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal" id="workflow-modal">
+      <div class="modal-content">
+        <div class="container">
+          <h4>Workflow Info</h4>
+          <div class="workflow-data" v-if="active_workflow">
+            <div class="row" >
+              <div class="col s2">
+                Workflow Entity:
+              </div>
+              <div class="col s10">
+                {{active_workflow.entity}}
+              </div>
+            </div>
+            <div class="row">
+              <div class="col s2">
+                Workflow Status:
+              </div>
+              <div class="col s10">
+                {{active_workflow.status}}
+              </div>
+            </div>
+            <div class="row">
+              <!-- <div class="col s12">
+                Calls
+              </div> -->
+              <h5>Calls</h5>
+            </div>
+            <ul class="collapsible">
+              <li v-for="call in active_workflow.calls">
+
+                <div class="collapsible-header">
+                  <i v-if="call.status == 'Done'" class="material-icons">check_cicle</i>
+                  <i v-else-if="call.status == 'Aborted'" class="material-icons">sync_disabled</i>
+                  <i v-else-if="call.status == 'Failed'" class="material-icons">sync_problem</i>
+                  <i v-else-if="call.status == 'Running'" class="material-icons">sync</i>
+                  <i v-else class="material-icons">error_outline</i>
+                  {{call.task}}
+                </div>
+                <div class="collapsible-body">
+                  <div class="row">
+                    <div class="col s2">
+                      Status:
+                    </div>
+                    <div class="col s10" v-bind:class="call.status == 'Done' ? 'green-text' : call.status == 'Failed' ? 'red-text' : 'black-text'">
+                      {{call.status}}
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col s2">
+                      Operation ID:
+                    </div>
+                    <div class="col s10 truncate">
+                      <a href="#" v-on:click.prevent="get_operation(call.operation)">{{call.operation}}</a>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col s2">
+                      Google Bucket:
+                    </div>
+                    <div class="col s10 truncate">
+                      <a target="_blank" v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+call.gs_path.substring(5)">
+                        {{call.gs_path}}
+                      </a>
+                    </div>
+                  </div>
+                  <div class="row" v-if="call.message && call.message.length">
+                    <div class="col s2">
+                      Last Message:
+                    </div>
+                    <div class="col s10 truncate">
+                      {{call.message}}
+                    </div>
+                  </div>
+                  <div class="row" v-if="call.code">
+                    <div class="col s2">
+                      Return Code:
+                    </div>
+                    <div class="col s10" v-bind:class="call.code == 0 ? 'green-text' : 'red-text'">
+                      {{call.code}}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <div v-else>
+            <div class="progress">
+              <div class="indeterminate blue"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <h4>
       <router-link :to="{name: 'workspace', params: {namespace: namespace, workspace: workspace}}">
         {{namespace}}/{{workspace}}
@@ -12,6 +123,9 @@
       </div>
       <div class="col s10" v-if="submission">
         {{submission.identifier}}
+      </div>
+      <div class="col s10" v-else>
+        Loading...
       </div>
     </div>
     <div class="row">
@@ -27,7 +141,23 @@
         Operation ID:
       </div>
       <div class="col s10" v-if="submission">
-        {{submission.operation}}
+        <a href="#" v-on:click.prevent="get_operation(submission.operation)">{{submission.operation}}</a>
+      </div>
+      <div class="col s10" v-else>
+        Loading...
+      </div>
+    </div>
+    <div class="row">
+      <div class="col s2">
+        Google bucket:
+      </div>
+      <div class="col s10" v-if="submission">
+        <a target="_blank" v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+submission.gs_path.substring(5)">
+          {{submission.gs_path}}
+        </a>
+      </div>
+      <div class="col s10" v-else>
+        Loading...
       </div>
     </div>
     <div class="row">
@@ -47,29 +177,111 @@
       </div>
     </div>
     <div class="row">
+      <div v-if="!display_cromwell" class="col s12" v-on:click.prevent="read_cromwell">
+        <span>
+          <i class="material-icons">keyboard_arrow_right</i>
+          Cromwell Log
+        </span>
+      </div>
+      <div v-else class="col s12" v-on:click.prevent="display_cromwell = false">
+        <span>
+          <i class="material-icons">keyboard_arrow_down</i>
+          Cromwell Log
+        </span>
+      </div>
+    </div>
+    <div v-if="display_cromwell">
+      <div v-if="cromwell_lines" style="border: 1px solid grey;">
+      <!-- <div v-if="cromwell_lines" class="card-panel"> -->
+        <!-- <p class="flow-text">{{'...\n'+cromwell_lines.join('\n')}}</p> -->
+        <div class="log-container grey lighten-3">
+          {{'\n'+cromwell_lines.join('\n')}}
+        </div>
+      </div>
+      <div v-else>
+        <div class="progress">
+          <div class="indeterminate blue"></div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
 
     </div>
     <h4>Workflows</h4>
-    <div class="row" v-if="submission">
+    <div class="row" v-if="pending_workflows">
       <div class="col s12">
-        Waiting for {{submission.workflows.length}} workflows to check in...
+        Waiting for {{pending_workflows}} workflows to check in...
+        {{workflows ? " Refresh the page to re-query workflows" : ""}}
+      </div>
+    </div>
+    <div class="workflow-container" v-if="workflows">
+      <!-- <ul class="collapsible popout">
+        <li v-for="workflow in workflows">
+          <div class="collapsible-header">
+            {{workflow.entity}}  {{workflow.status}}  ({{workflow.id}})
+          </div>
+          <div class="collapsible-body">
+            (Workflow data)
+          </div>
+        </li>
+      </ul> -->
+      <table>
+        <thead>
+          <tr>
+            <th>Entity</th>
+            <th>Status</th>
+            <th>Workflow ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="workflow in workflows">
+            <td>{{workflow.entity}}</td>
+            <td v-bind:class="workflow.status == 'Done' ? 'green-text' : workflow.status == 'Failed' ? 'red-text' : 'black-text'">
+              {{workflow.status}}
+            </td>
+            <td>
+              <a v-on:click.prevent="display_workflow(workflow.id)" href="#">{{workflow.id}}</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div v-else>
+      <div class="progress">
+        <div class="indeterminate blue"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import axios from'axios'
-import _ from 'lodash'
+import axios from'axios';
+import _ from 'lodash';
+import timeago from 'timeago.js';
 export default {
   props: ['namespace', 'workspace', 'submission_id'],
   data() {
     return {
       submission: null,
+      workflows: null,
+      display_cromwell: false,
+      cromwell_offset: 0,
+      cromwell_lines: null,
+      active_workflow: null,
+      active_operation: null
+    }
+  },
+  computed: {
+    pending_workflows() {
+      if (this.submission) {
+        return this.workflows ? this.submission.workflows.length - this.workflows.length : this.submission.workflows.length;
+      }
+      return 0;
     }
   },
   created() {
     this.init(this.namespace, this.workspace, this.submission_id);
+    window.$('.modal').modal();
   },
   methods: {
     init(namespace, workspace, sid) {
@@ -78,13 +290,86 @@ export default {
         .then(response => {
           console.log("Got submission");
           this.submission = response.data;
+          console.log("Fetching workflows");
+          axios.get('http://localhost:4201/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/workflows')
+            .then(response => {
+              console.log("Got workflows");
+              console.log(response.data);
+              this.workflows = response.data
+              setTimeout(() => {
+                window.$('.collapsible').collapsible();
+              }, 100);
+            })
+            .catch(error => {
+              console.error("Failed");
+              console.error(error);
+            })
         })
         .catch(response => {
           console.error("Failed");
           console.error(response)
         })
     },
+    read_cromwell() {
+      this.display_cromwell = true;
+      console.log("Reading cromwell");
+      axios.get('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/cromwell?offset='+encodeURIComponent(''+this.cromwell_offset))
+        .then(response => {
+          console.log("Read cromwell lines");
+          console.log(response.data);
+          this.cromwell_lines = response.data;
+        })
+        .catch(error => {
+          console.error("Failed");
+          console.error(error)
+        })
+    },
+    get_operation(operation_id) {
+      this.active_operation = null;
+      window.materialize.toast({
+        html: "Checking operation "+operation_id+"...",
+        displayLength: 2000,
+      });
+      axios.get('http://localhost:4201/api/v1/operations/'+encodeURIComponent(operation_id.substring(11)))
+        .then(response => {
+          this.active_operation = response.data;
+          window.$('#operation-modal').modal();
+          window.$('#operation-modal').modal('open');
+        })
+        .catch(error => {
+          console.error("FAILURE");
+          console.error(error);
+        })
+    },
+    display_workflow(workflow_id) {
+      this.active_workflow = null;
+      window.materialize.toast({
+        html: "Loading workflow "+workflow_id+"...",
+        displayLength: 2000,
+      });
+      axios.get('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+workflow_id)
+        .then(response => {
+          console.log("Got workflow detail");
+          console.log(response.data);
+          this.active_workflow = response.data
+          setTimeout(() => {
+            window.$('.collapsible').collapsible();
+          }, 100);
+          window.$('#workflow-modal').modal();
+          window.$('#workflow-modal').modal('open');
+        })
+        .catch(error => {
+          console.error("Failed");
+          console.error(error);
+        })
+    },
     beforeRouteUpdate(to, from, next) {
+      this.submission = null;
+      this.workflows = null;
+      this.display_cromwell = false;
+      this.cromwell_lines = null;
+      this.active_workflow = null;
+      this.active_operation = null;
       this.init(to.params.namespace, to.params.workspace, to.params.submission_id)
       next();
     }
@@ -93,4 +378,16 @@ export default {
 </script>
 
 <style lang="css">
+div.log-container {
+  max-height: 216px;
+  border-radius: 8px;
+  overflow-y: auto;
+  /* margin: 1em;
+  padding: 1em; */
+  /* border: 1px solid black; */
+  padding-left: 20px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  font-size: 90%;
+}
 </style>

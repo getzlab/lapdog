@@ -9,8 +9,14 @@ from flask import current_app
 import random
 import pandas as pd
 import lapdog
+import os
 import json
 import base64
+import traceback
+import select
+from agutil.parallel import parallelize
+from itertools import repeat
+import yaml
 
 def readvar(obj, *args):
     current = obj
@@ -25,11 +31,10 @@ def cached(timeout, cache_size=4):
 
     def wrapper(func):
 
-        def cacheapply(*args, **kwargs):
+        @lru_cache(cache_size)
+        def cachefunc(*args, **kwargs):
             print("Cache expired. Running", func)
             return (time.time(), func(*args, **kwargs))
-
-        cachefunc = lru_cache(cache_size)(cacheapply)
 
         def call_func(*args, **kwargs):
             result = cachefunc(*args, **kwargs)
@@ -59,6 +64,23 @@ def get_workspace_object(namespace, name):
         if readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager') is None:
             current_app.config['storage']['cache'][namespace][name]['manager'] = ws
     return ws
+
+@lru_cache(2)
+def get_adapter(namespace, workspace, submission):
+    return get_workspace_object(namespace, workspace).get_adapter(submission)
+
+@lru_cache(2)
+def _get_lines(namespace, workspace, submission):
+    adapter = get_adapter(namespace, workspace, submission)
+    reader = adapter.read_cromwell()
+    return reader, []
+
+def get_lines(namespace, workspace, submission):
+    from ..adapters import do_select
+    reader, lines = _get_lines(namespace, workspace, submission)
+    while len(do_select(reader, 1)[0]):
+        lines.append(reader.readline().decode().strip())
+    return lines
 
 @cached(30)
 def status():
@@ -326,6 +348,23 @@ def get_configs(namespace, name):
     ws = get_workspace_object(namespace, name)
     return ws.list_configs()
 
+@cached(20)
+def list_submissions(namespace, name):
+    from ..lapdog import timestamp_format
+    ws = get_workspace_object(namespace, name)
+    return sorted(
+        (
+            sub for sub in ws.list_submissions()
+            if 'identifier' in sub
+        ),
+        key=lambda s:(
+            time.strptime(s['submissionDate'], timestamp_format)
+            if s['submissionDate'] != 'TIME'
+            else time.localtime()
+            ),
+        reverse=False
+    )
+
 def preflight(namespace, name, config, entity, expression="", etype=""):
     ws = get_workspace_object(namespace, name)
     try:
@@ -401,4 +440,145 @@ def decode_submission(submission_id):
 
 def get_submission(namespace, name, id):
     ws = get_workspace_object(namespace, name)
-    return ws.get_submission(id), 200
+    return {
+        **ws.get_submission(id),
+        **{
+            'gs_path': os.path.join(
+                'gs://'+ws.get_bucket_id(),
+                'lapdog-executions',
+                id
+            )
+        }
+    }, 200
+
+def abort_submission(namespace, name, id):
+    adapter, cromwell = get_adapter(namespace, name, id)
+    adapter.abort()
+    return [wf.long_id for wf in adapter.workflows in wf.long_id is not None], 200
+
+def upload_submission(namespace, name, id):
+    ws = get_workspace_object(namespace, name)
+    try:
+        stats = ws.complete_execution(id)
+    except FileNotFoundError:
+        return {
+            'failed': True,
+            'message': 'Job did not complete. It may have been aborted'
+        }, 200
+    except:
+        return {
+            'failed': True,
+            'message': 'Exception: '+ traceback.format_exc()
+        }, 500
+    else:
+        stats.update({'failed': False})
+        return stats, 200
+
+@cached(10)
+def read_cromwell(namespace, name, id, offset=0):
+    _get_lines.cache_clear()
+    lines = get_lines(namespace, name, id)
+    return lines[offset:], 200
+
+@cached(10)
+def get_workflows(namespace, name, id):
+    adapter = get_adapter(namespace, name, id)
+    adapter.update()
+    return [
+        {
+            'entity': wf['workflowEntity'],
+            'id': adapter.workflow_mapping[wf['workflowOutputKey']],
+            'status': (
+                adapter.workflows[adapter.workflow_mapping[wf['workflowOutputKey']][:8]].status
+                if adapter.workflow_mapping[wf['workflowOutputKey']][:8] in adapter.workflows
+                else 'Starting'
+            )
+        }
+        for wf in adapter.raw_workflows
+        if wf['workflowOutputKey'] in adapter.workflow_mapping
+    ], 200
+
+# @cached(10)
+@cached(10)
+def get_workflow(namespace, name, id, workflow_id):
+    adapter = get_adapter(namespace, name, id)
+    adapter.update()
+    # print(adapter.workflows)
+    if workflow_id[:8] in adapter.workflows:
+        # Return data from workflow
+        wf = adapter.workflows[workflow_id[:8]]
+        entity_map = {w['workflowOutputKey']:w['workflowEntity'] for w in adapter.raw_workflows}
+        reverse_map = {v:entity_map[k] for k,v in adapter.workflow_mapping.items()}
+        return {
+            'id': wf.long_id,
+            'short_id': wf.id,
+            'key': wf.key,
+            'running': wf.started,
+            'n_calls': len(wf.calls),
+            'calls': [
+                {
+                    'status': call.status,
+                    'message': call.last_message,
+                    'attempt': call.attempt,
+                    'operation': call.operation,
+                    'task': call.task,
+                    'gs_path': call.path,
+                    'code': call.return_code
+                }
+                for call in wf.calls
+            ],
+            'gs_path': wf.path,
+            'status': wf.status,
+            'failure': wf.failure,
+            'entity': (
+                reverse_map[workflow_id]
+                if workflow_id in reverse_map
+                else None
+            )
+        }, 200
+    else:
+        return {
+            'id': None,
+            'short_id': None,
+            'key': None,
+            'running': False,
+            'n_calls': 0,
+            'calls': [],
+            'gs_path': None,
+            'status': 'Pending',
+            'failure': None,
+            'entity': None
+        }, 200
+
+@cached(30)
+def read_logs(namespace, name, id, workflow_id, log, call):
+    suffix = {
+        'stdout': '-stdout.log',
+        'stderr': '-stderr.log',
+        'google': '.log'
+    }[log]
+    adapter = get_adapter(namespace, name, id)
+    adapter.update()
+    if workflow_id[:8] in adapter.workflows:
+        workflow = adapter.workflows[workflow_id[:8]]
+        if call < len(workflow.calls):
+            path = os.path.join(
+                call.path,
+                call.task+suffix
+            )
+            from ..adapters import safe_getblob
+            try:
+                blob = safe_getblob(path)
+            except FileNotFoundError:
+                pass
+            else:
+                return blob.download_as_string().decode(), 200
+    return 'Error', 500
+
+@cached(10)
+def operation_status(operation_id):
+    from ..adapters import get_operation_status
+    print("Getting status:", operation_id)
+    text =  get_operation_status(operation_id, False)
+    print(text[:256])
+    return text, 200

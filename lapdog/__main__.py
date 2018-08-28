@@ -492,17 +492,6 @@ def get_operation_status(opid):
         )
     )
 
-def abort_operation(opid):
-    return subprocess.run(
-        'yes | gcloud alpha genomics operations cancel %s' % (
-            opid
-        ),
-        shell=True,
-        executable='/bin/bash',
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-
 def cmd_finish(args):
     print("Note: lapdog-finish is not yet fully implemented")
     lapdog.complete_execution(args.submission_id)

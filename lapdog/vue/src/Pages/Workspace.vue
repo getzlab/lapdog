@@ -179,6 +179,58 @@
         </div>
       </div>
     </div>
+    <div class="submission-container">
+      <div class="row">
+        <div class="col s12">
+          Labdog Submissions:
+        </div>
+      </div>
+      <!-- <div v-if="submissions" class="collection">
+        <router-link v-for="sub in submissions" class="collection-item black-text"
+          :to="{name: 'submission', params: {namespace:sub.namespace, workspace:sub.workspace, submission_id:sub.submission_id}}">
+          <div>
+            Ran <strong>{{sub.methodConfigurationName}}</strong> on <strong>{{sub.submissionEntity.entityName}}</strong> ({{sub.submission_id}})
+          </div>
+        </router-link>
+      </div>
+      <div v-else>
+        <div class="progress">
+          <div class="indeterminate blue"></div>
+        </div>
+      </div> -->
+
+      <div v-if="submissions" class="row">
+        <div class="col s12">
+          <table>
+            <thead>
+              <tr>
+                <th>Configuration</th>
+                <th>Entity</th>
+                <th>Submission ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="sub in submissions">
+                <td>{{sub.methodConfigurationName}}</td>
+                <td>{{sub.submissionEntity.entityName}}</td>
+                <td>
+                  <router-link :to="{name: 'submission', params: {namespace:sub.namespace, workspace:sub.workspace, submission_id:sub.submission_id}}">
+                    {{sub.submission_id}}
+                  </router-link>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div v-else>
+        <div class="progress">
+          <div class="indeterminate blue"></div>
+        </div>
+      </div>
+
+
+    </div>
   </div>
 </template>
 
@@ -200,6 +252,7 @@
         submission_etype: "",
         submission_expression: "",
         submission_message: "",
+        submissions: null,
         expr_disabled: false,
         submit_okay: false,
         // entities: null
@@ -246,6 +299,12 @@
         let query = 'http://localhost:4201/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
         query += "config="+encodeURIComponent(this.submission_config);
         query += "&entity="+encodeURIComponent(this.entity_field);
+        if (this.submission_expression != "") query += "&expression="+encodeURIComponent(this.submission_expression);
+        if (this.submission_etype != "") query += "&etype="+encodeURIComponent(this.submission_etype);
+        window.materialize.toast({
+          html: "Preparing job...",
+          displayLength: 5000,
+        })
         axios.post(query)
           .then(response => {
             console.log("Execution returned");
@@ -311,16 +370,27 @@
             axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
               .then(response => {
                 console.log(response.data);
-                this.cache_state = response.data
+                this.cache_state = response.data;
+                console.log("Fetching submissions");
+                  axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions')
+                    .then(response => {
+                      console.log("Fetched submissions");
+                      console.log(response.data);
+                      this.submissions = response.data;
+                    })
+                    .catch(error => {
+                      console.error("FAIL");
+                      console.error(error)
+                    })
               })
               .catch(error => {
                 console.error("FAIL");
-                console.error(response)
+                console.error(error)
               })
           })
           .catch(error => {
             console.error("FAIL");
-            console.error(response)
+            console.error(error)
           })
       },
 
@@ -333,7 +403,7 @@
           })
           .catch(error => {
             console.error("FAIL")
-            console.error(response)
+            console.error(error)
           })
       },
 
@@ -399,6 +469,7 @@
       this.submission_message = "";
       this.entity_field = "";
       this.submission_expression = "";
+      this.submissions = null;
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();

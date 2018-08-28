@@ -29,6 +29,24 @@ paths:
             type: array
             items:
               $ref: "#/definitions/WorkspaceSummary"
+  /api/v1/operations/{operation_id}:
+    get:
+      operationId: lapdog.api.controllers.operation_status
+      summary: Gets the status of a gcloud operation
+      parameters:
+        -
+          in: path
+          name: operation_id
+          required: true
+          type: string
+          description: Google operation id
+      responses:
+        default:
+          description: Error
+        200:
+          description: Operation status
+          schema:
+            type: string
   /api/v1/workspaces/{namespace}/{name}:
     get:
       parameters:
@@ -214,6 +232,32 @@ paths:
           description: Cache state
           schema:
             type: string
+  /api/v1/workspaces/{namespace}/{name}/submissions:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+      summary: Lists the submissions in order
+      operationId: lapdog.api.controllers.list_submissions
+      responses:
+        default:
+          description: Error
+        200:
+          description: Submissions
+          schema:
+            type: array
+            items:
+              type: object
   /api/v1/workspaces/{namespace}/{name}/configs:
     get:
       parameters:
@@ -298,6 +342,223 @@ paths:
           description: Submission id components
           schema:
             type: object
+    delete:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+      summary: Aborts a submission
+      operationId: lapdog.api.controllers.abort_submission
+      responses:
+        default:
+          description: Error
+        200:
+          description: Abort response
+          schema:
+            type: array
+            items:
+              type: string
+    put:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+      summary: Uploads submission results
+      operationId: lapdog.api.controllers.upload_submission
+      responses:
+        default:
+          description: Error
+        200:
+          description: Upload response and submission stats
+          schema:
+            type: object
+  /api/v1/submissions/expanded/{namespace}/{name}/{id}/cromwell:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+        - in: query
+          name: offset
+          required: false
+          type: integer
+          description: Line offset in cromwell text. Defaults to 0 for all text
+          default: 0
+      summary: Gets raw cromwell logs
+      operationId: lapdog.api.controllers.read_cromwell
+      responses:
+        default:
+          description: Error
+        200:
+          description: Gets lines of cromwell log text
+          schema:
+            type: array
+            items:
+              type: string
+  /api/v1/submissions/expanded/{namespace}/{name}/{id}/workflows:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+      summary: Gets basic info of active workflows
+      operationId: lapdog.api.controllers.get_workflows
+      responses:
+        default:
+          description: Error
+        200:
+          description: Gets individual workflow basics
+          schema:
+            type: array
+            items:
+              type: object
+  /api/v1/submissions/expanded/{namespace}/{name}/{id}/workflows/{workflow_id}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+        - in: path
+          name: workflow_id
+          required: true
+          type: string
+          description: The long-form workflow id for the workflow
+      summary: Gets detailed data on a workflow
+      operationId: lapdog.api.controllers.get_workflow
+      responses:
+        default:
+          description: Error
+        200:
+          description: Gets workflow metadata
+          schema:
+            type: object
+  /api/v1/submissions/expanded/{namespace}/{name}/{id}/workflows/{workflow_id}/{log}/{call}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+        -
+          in: path
+          name: workflow_id
+          required: true
+          type: string
+          description: The cromwell ID of the workflow
+        - in: path
+          name: log
+          required: true
+          type: string
+          description: Choice of log to display
+          enum:
+            - stdout
+            - stderr
+            - google
+        - in: path
+          name: call
+          type: integer
+          required: true
+          description: Call ID
+      summary: Gets raw log text from a call
+      operationId: lapdog.api.controllers.read_logs
+      responses:
+        default:
+          description: Error
+        200:
+          description: Gets lines of log-text
+          schema:
+            type: array
+            items:
+              type: string
   /api/v1/workspaces/{namespace}/{name}/preflight:
     post:
       parameters:
