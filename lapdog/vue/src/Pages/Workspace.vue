@@ -211,14 +211,16 @@
                 <th>Entity</th>
                 <th>Status</th>
                 <th>Date</th>
-                <th>Submission ID</th>
+                <th>Local Submission ID</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="sub in submissions">
                 <td>{{sub.methodConfigurationName}}</td>
                 <td>{{sub.submissionEntity.entityName}}</td>
-                <td>{{sub.status}}</td>
+                <td v-bind:class="sub.status == 'Failed' || sub.status == 'Error' ? 'red-text' : (sub.status == 'Succeeded' ? 'green-text' : '')">
+                  {{sub.status}}
+                </td>
                 <td>{{sub.submissionDate}}</td>
                 <td>
                   <router-link :to="{name: 'submission', params: {namespace:sub.namespace, workspace:sub.workspace, submission_id:sub.submission_id}}">

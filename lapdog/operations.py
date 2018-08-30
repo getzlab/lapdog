@@ -334,7 +334,7 @@ class Operator(object):
                 self.pending.append((
                     'entity_types',
                     None,
-                    lambda x:self.entities
+                    lambda x=None:self.entities
                 ))
         else:
             self.pending.append((
@@ -345,7 +345,7 @@ class Operator(object):
             self.pending.append((
                 'entity_types',
                 None,
-                lambda x:self.entities
+                lambda x=None:self.entities
             ))
         if self.live:
             try:

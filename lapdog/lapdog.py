@@ -15,11 +15,14 @@ import subprocess
 from hashlib import md5
 import base64
 import yaml
+from glob import glob
 from io import StringIO
 from . import adapters
-from .adapters import getblob, get_operation_status
+from .adapters import getblob, get_operation_status, mtypes
+from .cache import cache_init
 from .operations import APIException, Operator, capture
 from itertools import repeat
+import pandas as pd
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -73,6 +76,11 @@ def upload(bucket, path, source):
     # print("Commencing upload:", source)
     blob.upload_from_filename(source)
 
+def purge_cache():
+    for path in glob(cache_init()+'/*'):
+        os.remove(path)
+
+
 class BucketUploader(object):
     def __init__(self, bucket, prefix, key):
         self.bucket = bucket
@@ -121,20 +129,6 @@ def get_submission(submission_id):
         ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
         return WorkspaceManager(ns, ws).get_submission(sid)
     raise TypeError("Global get_submission can only operate on lapdog global ids")
-
-mtypes = {
-    'n1-standard-%d'%(2**i): (0.0475*(2**i), 0.01*(2**i)) for i in range(7)
-}
-mtypes.update({
-    'n1-highmem-%d'%(2**i): (.0592*(2**i), .0125*(2**i)) for i in range(1,7)
-})
-mtypes.update({
-    'n1-highcpu-%d'%(2**i): (.03545*(2**i), .0075*(2**1)) for i in range(1,7)
-})
-mtypes.update({
-    'f1-micro': (0.0076, 0.0035),
-    'g1-small': (0.0257, 0.007)
-})
 
 
 class WorkspaceManager(dog.WorkspaceManager):
@@ -669,6 +663,14 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         return global_id, submission_id, submission_data['operation']
 
+    def get_submission_cost(self, submission_id):
+        if submission_id.startswith('lapdog/'):
+            ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+            return WorkspaceManager(ns, ws).get_submission_cost(sid)
+        elif lapdog_id_pattern.match(submission_id):
+            return self.get_adapter(submission_id).cost()
+        raise TypeError("complete_execution not available for firecloud submissions")
+
     def complete_execution(self, submission_id):
         """
         Checks a GCP job status and returns results to firecloud, if possible
@@ -677,12 +679,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
             return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
-            submission = json.loads(getblob(os.path.join(
-                'gs://'+self.get_bucket_id(),
-                'lapdog-executions',
-                submission_id,
-                'submission.json'
-            )).download_as_string())
+            submission = self.get_adapter(submission_id).data
             status = get_operation_status(submission['operation'])
             done = 'done' in status and status['done']
             if done:
@@ -703,7 +700,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                         )
                     ).download_as_string())
                 except:
-                    raise FileNotFoundError("Unable to locate the tracking file for this submission. It may have been aborted")
+                    raise FileNotFoundError("Unable to locate the tracking file for this submission. It may not have finished")
 
                 workflow_metadata = {
                     build_input_key(meta['workflow_metadata']['inputs']):meta
@@ -733,24 +730,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                                     index=[entity]
                                 ),
                             )
-                cost = 0
-                maxTime = 0
-                total = 0
-                for wf in workflow_metadata:
-                    for calls in wf['workflow_metadata']['calls'].values():
-                        for call in calls:
-                            if 'end' in call:
-                                delta = datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
-                                delta = (delta.days*24) + (delta.seconds/3600)
-                                if delta > maxTime:
-                                    maxTime = delta
-                                total += delta
-                                if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
-                                    cost += mtypes[call['jes']['machineType'].split('/')[-1]][int('preemptible' in call and call['preemptible'])]*delta
-                cost += mtypes['n1-standard-1'][0] * maxTime
-                return {
-                    'clock_h': maxTime,
-                    'cpu_h': total,
-                    'est_cost': cost
-                }
+                return True
+            else:
+                print("This submission has not finished")
+                return False
         raise TypeError("complete_execution not available for firecloud submissions")

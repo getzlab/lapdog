@@ -40,3 +40,15 @@ A relaxed wrapper for dalmatian and FISS
     - Return BytesIO of buffer
 2. Improve caching latency
 3. Sort out adapter cache hierarchy
+4. Add submission-level cost calculation and add to get_submission endpoint
+5. Add external cache
+    - On startup, create a `~/.caches/lapdog/` folder, if it doesn't exist
+    - When a long value is requested (log text, operation status, submission cost, etc)
+    check if a cache file exists for it in the folder
+    - If it does, return the value
+      - If a tag for the file exists, check the timestamp
+      - If the tag has expired, delete the file and return not found
+    - If not, compute it directly
+      - If the value is expected to never change (finished operations, logs of finished submissions, cost of finished submission)
+      Store in a file
+      - If the value is large (>512kb) tag it

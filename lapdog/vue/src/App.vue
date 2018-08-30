@@ -114,8 +114,11 @@
         <div class="col s2 offset-s2">
           Powered by <a href="https://github.com/broadinstitute/dalmatian">Dalmatian</a>
         </div>
-        <div v-if="acct" class="col s7">
+        <div v-if="acct" class="col s5">
           Your google service account: {{acct}}
+        </div>
+        <div v-if="cache_size" class="col s2">
+          Cache size: {{cache_size}}
         </div>
       </div>
     </footer>
@@ -151,7 +154,8 @@ export default {
       create_namespace: '',
       create_workspace: '',
       parent_workspace: '',
-      create_failed: null
+      create_failed: null,
+      cache_size: null
     }
   },
 
@@ -166,6 +170,16 @@ export default {
   created() {
     this.getWorkspaces();
     this.getServiceAccount();
+    axios.get('http://localhost:4201/api/v1/cache')
+      .then(response => {
+        this.cache_size = response.data;
+        setInterval(() => {
+          axios.get('http://localhost:4201/api/v1/cache')
+            .then(response => {
+              this.cache_size = response.data
+            })
+        }, 30000);
+      })
   },
 
   methods: {
@@ -228,7 +242,10 @@ export default {
           });
         })
         .catch(response => {
-          console.error("FAIL");
+          window.materialize.toast({
+            html: "No such submission: " + this.submission,
+            displayLength: 5000,
+          });
           console.error(response);
         })
     },

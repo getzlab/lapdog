@@ -11,7 +11,8 @@ from functools import lru_cache
 import contextlib
 import re
 import select
-from .api.controllers import cached
+from .cache import cache_fetch, cache_write, cached
+import traceback
 
 # Label filter format: labels.(label name)=(label value)
 
@@ -39,6 +40,21 @@ fail_pattern = re.compile(r"ERROR - WorkflowManagerActor Workflow ([a-z0-9\-]+) 
 #(long id), (opt: during status), (failure message)
 status_pattern = re.compile(r'PipelinesApiAsyncBackendJobExecutionActor \[UUID\(([a-z0-9\-]+)\)(\w+)\.(\w+):(\w+):(\d+)]: Status change from (.+) to (.+)')
 #(short code), (workflow name), (task name), (? 'NA'), (call id), (old status), (new status)
+
+mtypes = {
+    'n1-standard-%d'%(2**i): (0.0475*(2**i), 0.01*(2**i)) for i in range(7)
+}
+mtypes.update({
+    'n1-highmem-%d'%(2**i): (.0592*(2**i), .0125*(2**i)) for i in range(1,7)
+})
+mtypes.update({
+    'n1-highcpu-%d'%(2**i): (.03545*(2**i), .0075*(2**1)) for i in range(1,7)
+})
+mtypes.update({
+    'f1-micro': (0.0076, 0.0035),
+    'g1-small': (0.0257, 0.007)
+})
+
 
 class Recall(object):
     value = None
@@ -93,24 +109,27 @@ class Call(object):
         except FileNotFoundError:
             return None
 
-@cached(2)
+@cached(10)
 def get_operation_status(opid, parse=True):
-    text = subprocess.run(
-        'gcloud alpha genomics operations describe %s' % (
-            opid
-        ),
-        shell=True,
-        executable='/bin/bash',
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    ).stdout.decode()
+    text = cache_fetch('operation', opid)
+    if text is None:
+        text = subprocess.run(
+            'gcloud alpha genomics operations describe %s' % (
+                opid
+            ),
+            shell=True,
+            executable='/bin/bash',
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ).stdout.decode()
+        data = yaml.load(StringIO(text))
+        if 'done' in data and data['done']:
+            cache_write(text, 'operation', opid)
+    else:
+        data = yaml.load(StringIO(text))
     if not parse:
         return text
-    return yaml.load(
-        StringIO(
-            text
-        )
-    )
+    return data
 
 def abort_operation(opid):
     return subprocess.run(
@@ -192,7 +211,12 @@ class SubmissionAdapter(object):
             self.path,
             'submission.json'
         )
-        self.data = json.loads(safe_getblob(gs_path).download_as_string())
+        self.data = cache_fetch('submission-json', bucket, submission)
+        _do_cache_write = False
+        if self.data is None:
+            self.data = safe_getblob(gs_path).download_as_string().decode()
+            _do_cache_write = True
+        self.data = json.loads(self.data)
         self.workspace = self.data['workspace']
         self.namespace = self.data['namespace']
         self.identifier = self.data['identifier']
@@ -204,11 +228,88 @@ class SubmissionAdapter(object):
         self.submission = submission
         self.workflows = {}
         self._internal_reader = None
+        if _do_cache_write and not self.live:
+            cache_write(json.dumps(self.data), 'submission-json', bucket, submission)
 
     def _init_workflow(self, short, key=None, long_id=None):
         if short not in self.workflows:
             self.workflows[short] = WorkflowAdapter(short, self.path, key, long_id)
         return self.workflows[short]
+
+    def cost(self):
+        if not self.live:
+            stored_cost = cache_fetch('submission', self.namespace, self.workspace, self.submission, dtype='cost')
+            if stored_cost is not None:
+                return json.loads(stored_cost)
+            try:
+                workflow_metadata = json.loads(getblob(
+                    os.path.join(
+                        self.path,
+                        'results',
+                        'workflows.json'
+                    )
+                ).download_as_string())
+                cost = 0
+                maxTime = 0
+                total = 0
+                for wf in workflow_metadata:
+                    for calls in wf['workflow_metadata']['calls'].values():
+                        for call in calls:
+                            if 'end' in call:
+                                delta = datetime.datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+                                delta = delta.total_seconds() / 3600
+                                if delta > maxTime:
+                                    maxTime = delta
+                                total += delta
+                                if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
+                                    cost += mtypes[call['jes']['machineType'].split('/')[-1]][int('preemptible' in call and call['preemptible'])]*delta
+                cost += mtypes['n1-standard-1'][0] * maxTime
+                cost = int(cost * 100) / 100
+                result = {
+                    'clock_h': maxTime,
+                    'cpu_h': total,
+                    'est_cost': cost
+                }
+                cache_write(json.dumps(result), 'submission', self.namespace, self.workspace, self.submission, dtype='cost')
+                return result
+            except:
+                # Try the slow route
+                print(traceback.format_exc())
+                pass
+        self.update()
+        cost = 0
+        maxTime = 0
+        total = 0
+        for wf in self.workflows.values():
+            for call in wf.calls:
+                try:
+                    call = get_operation_status(call.operation)
+                    delta = datetime.datetime.strptime(
+                        call['metadata']['endTime'],
+                        timestamp_format
+                    ) - datetime.datetime.strptime(
+                        call['metadata']['startTime'],
+                        timestamp_format
+                    )
+                    delta = delta.total_seconds() / 3600
+                    if delta > maxTime:
+                        maxTime = delta
+                    total += delta
+                    if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
+                        cost += mtypes[call['jes']['machineType'].split('/')[-1]][int(
+                            'preemptible' in call['metadata']['request']['pipelineArgs']['resources']
+                            and call['metadata']['request']['pipelineArgs']['resources']['preemptible']
+                        )]*delta
+                except KeyError:
+                    print(call)
+        cost += mtypes['n1-standard-1'][0] * maxTime
+        cost = int(cost * 100) / 100
+        return {
+            'clock_h': maxTime,
+            'cpu_h': total,
+            'est_cost': cost
+        }
+
 
     def update(self):
         if self._internal_reader is None:
@@ -327,45 +428,21 @@ class SubmissionAdapter(object):
         Returns a file-object which reads stdout from the submission Cromwell VM
         """
         status = self.status # maybe this shouldn't be a property...it takes a while to load
+        cromwell_text = cache_fetch('submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
+        if cromwell_text is not None:
+            return BytesIO(cromwell_text)
         while 'metadata' not in status or 'startTime' not in status['metadata']:
             status = self.status
             time.sleep(1)
         if _do_wait:
             sleep_until(
-                (datetime.datetime.strptime(
+                datetime.datetime.strptime(
                     status['metadata']['startTime'],
                     timestamp_format
-                ) + utc_offset) + datetime.timedelta(seconds=45)
+                )
+                + utc_offset
+                + datetime.timedelta(seconds=45)
             )
-        stdout_blob = getblob(os.path.join(
-            'gs://'+self.bucket,
-            'lapdog-executions',
-            self.submission,
-            'logs',
-            self.operation[11:]+'-stdout.log'
-        ))
-        log_text = b''
-        if stdout_blob.exists():
-            stderr_blob = getblob(os.path.join(
-                'gs://'+self.bucket,
-                'lapdog-executions',
-                self.submission,
-                'logs',
-                self.operation[11:]+'-stderr.log'
-            ))
-            log_text = stdout_blob.download_as_string() + (
-                stderr_blob.download_as_string() if stderr_blob.exists()
-                else b''
-            )
-        else:
-            print("Logs not found")
-            print(os.path.join(
-                'gs://'+self.bucket,
-                'lapdog-executions',
-                self.submission,
-                'logs',
-                self.operation[11:]+'-stdout.log'
-            ))
         if not ('done' in status and status['done']):
             cmd = (
                 "gcloud compute ssh --zone {zone} {instance_name} -- "
@@ -375,7 +452,16 @@ class SubmissionAdapter(object):
                 instance_name=status['metadata']['runtimeMetadata']['computeEngine']['instanceName']
             )
             return CommandReader(cmd, shell=True, executable='/bin/bash')
-        else:
+        stdout_blob = getblob(os.path.join(
+            'gs://'+self.bucket,
+            'lapdog-executions',
+            self.submission,
+            'logs',
+            self.operation[11:]+'-stdout.log'
+        ))
+        if stdout_blob.exists():
+            log_text = stdout_blob.download_as_string()
+            cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
             return BytesIO(log_text)
 
     # def get_workflows(self, workflows):
@@ -415,7 +501,10 @@ class WorkflowAdapter(object):
     @property
     def status(self):
         if len(self.calls):
-            return self.calls[-1].status
+            status = self.calls[-1].status
+            if status == '-':
+                return 'Starting'
+            return status
         return 'Pending'
 
     def handle(self, evt, *args, **kwargs):

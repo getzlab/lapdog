@@ -16,6 +16,17 @@ paths:
           description: A Status Object representing the current Firecloud status
           schema:
             $ref: "#/definitions/Status"
+  /api/v1/cache:
+    get:
+      operationId: lapdog.api.controllers.cache_size
+      summary: Returns the size of the cache
+      responses:
+        default:
+          description: Error
+        200:
+          description: Size of lapdog cache
+          schema:
+            type: string
   /api/v1/workspaces:
     get:
       operationId: lapdog.api.controllers.list_workspaces

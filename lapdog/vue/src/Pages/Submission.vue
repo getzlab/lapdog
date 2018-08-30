@@ -143,7 +143,7 @@ Other: error_outline
     <h3>Submission</h3>
     <div class="row">
       <div class="col s2">
-        Global ID:
+        Submission ID:
       </div>
       <div class="col s10" v-if="submission">
         {{submission.identifier}}
@@ -154,7 +154,7 @@ Other: error_outline
     </div>
     <div class="row">
       <div class="col s2">
-        Local ID:
+        Local Submission ID:
       </div>
       <div class="col s6">
         {{submission_id}}
@@ -188,20 +188,32 @@ Other: error_outline
       <div class="col s2">
         Status:
       </div>
-      <div class="col s10" v-if="submission"
+      <div class="col s2" v-if="submission"
         v-bind:class="submission.status == 'Failed' || submission.status == 'Error' ? 'red-text' : (submission.status == 'Succeeded' ? 'green-text' : '')">
         {{submission.status}}
       </div>
-      <div class="col s10" v-else>
+      <div class="col s2" v-else>
         Loading...
       </div>
-    </div>
-    <div class="row">
+      <div class="col s2">
+        Cost:
+      </div>
+      <div class="col s2" v-if="submission">
+        ${{submission.cost.est_cost}}
+      </div>
+      <div class="col s2" v-else>
+        Loading...
+      </div>
       <div class="col s2">
         Workflows:
       </div>
-      <div class="col s10" v-if="submission">
+      <div class="col s2" v-if="submission">
         {{submission.workflows.length}}
+      </div>
+    </div>
+    <div class="row" v-if="submission && (submission.status == 'Succeeded' || submission.status == 'Failed')">
+      <div class="col s6">
+        <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
       </div>
     </div>
     <div class="row">
@@ -411,6 +423,34 @@ export default {
         .catch(error => {
           console.error("Failed");
           console.error(error);
+        })
+    },
+    upload() {
+      window.materialize.toast({
+        html: "Uploading results to Firecloud...",
+        displayLength: 2000,
+      });
+      axios.put('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
+        .then(response => {
+          console.log("Upload results");
+          console.log(response);
+          if (!response.data.failed) {
+            window.materialize.toast({
+              html: "Success! Results have been saved to Firecloud",
+              displayLength: 5000,
+            });
+          } else {
+            window.materialize.toast({
+              html: "Unable to upload results: " + response.data.message,
+              displayLength: 10000,
+            });
+          }
+        })
+        .catch(error => {
+          window.materialize.toast({
+            html: "Unable to upload results: " + response.data.message,
+            displayLength: 10000,
+          });
         })
     },
     beforeRouteUpdate(to, from, next) {

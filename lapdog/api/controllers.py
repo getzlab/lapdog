@@ -14,9 +14,12 @@ import json
 import base64
 import traceback
 import select
+from agutil import byteSize
 from agutil.parallel import parallelize
 from itertools import repeat
+from glob import glob
 import yaml
+from ..cache import cached, cache_fetch, cache_write, cache_init
 
 def readvar(obj, *args):
     current = obj
@@ -25,31 +28,6 @@ def readvar(obj, *args):
             return None
         current = current[arg]
     return current
-
-
-def cached(timeout, cache_size=4):
-
-    def wrapper(func):
-
-        @lru_cache(cache_size)
-        def cachefunc(*args, **kwargs):
-            print("Cache expired. Running", func)
-            return (time.time(), func(*args, **kwargs))
-
-        def call_func(*args, **kwargs):
-            result = cachefunc(*args, **kwargs)
-            if time.time() - result[0] > timeout:
-                cachefunc.cache_clear()
-                result = cachefunc(*args, **kwargs)
-            else:
-                print("Cache intact. Retrieving cached results from", func)
-            return result[1]
-
-        call_func.cache_clear = cachefunc.cache_clear
-
-        return call_func
-
-    return wrapper
 
 def get_workspace_object(namespace, name):
     ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
@@ -69,17 +47,29 @@ def get_workspace_object(namespace, name):
 def get_adapter(namespace, workspace, submission):
     return get_workspace_object(namespace, workspace).get_adapter(submission)
 
-@lru_cache(2)
+@cached(120)
 def _get_lines(namespace, workspace, submission):
     adapter = get_adapter(namespace, workspace, submission)
     reader = adapter.read_cromwell()
     return reader, []
 
 def get_lines(namespace, workspace, submission):
-    from ..adapters import do_select
+    # from ..adapters import do_select
+    # reader, lines = _get_lines(namespace, workspace, submission)
+    # print("READER", reader)
+    # while len(do_select(reader, 1)[0]):
+    #     lines.append(reader.readline().decode().strip())
+    #     print("READLINE", lines[-1])
+    # return lines
     reader, lines = _get_lines(namespace, workspace, submission)
-    while len(do_select(reader, 1)[0]):
-        lines.append(reader.readline().decode().strip())
+    from select import select
+    try:
+        if len(select([reader], [], [], 10)[0]):
+            lines.append(reader.readline().decode().strip())
+        while len(select([reader], [], [], 1)[0]):
+            lines.append(reader.readline().decode().strip())
+    except:
+        lines.append([line.decode().strip() for line in reader.readlines()])
     return lines
 
 @cached(30)
@@ -99,7 +89,6 @@ def status():
 
 @cached(120)
 def list_workspaces():
-    # print("REQUESTING", fc.list_workspaces())
     return sorted([
         {
             'accessLevel': workspace['accessLevel'],
@@ -360,7 +349,7 @@ def list_submissions(namespace, name):
         key=lambda s:(
             time.strptime(s['submissionDate'], timestamp_format)
             if s['submissionDate'] != 'TIME'
-            else time.localtime()
+            else time.gmtime()
             ),
         reverse=True
     )
@@ -397,7 +386,7 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
         return {
             'failed': True,
             'ok': False,
-            'message': "Failure: "+repr(sys.exc_info()),
+            'message': "Failure: "+traceback.format_exc(),
             'workflows': 0,
             'invalid_inputs': 'None'
         }, 200
@@ -440,6 +429,7 @@ def decode_submission(submission_id):
 
 def get_submission(namespace, name, id):
     ws = get_workspace_object(namespace, name)
+    adapter = get_adapter(namespace, name, id)
     return {
         **ws.get_submission(id),
         **{
@@ -448,6 +438,7 @@ def get_submission(namespace, name, id):
                 'lapdog-executions',
                 id
             ),
+            'cost': adapter.cost()
         }
     }, 200
 
@@ -471,21 +462,22 @@ def upload_submission(namespace, name, id):
             'message': 'Exception: '+ traceback.format_exc()
         }, 500
     else:
-        stats.update({'failed': False})
-        return stats, 200
+        return {
+            'failed': not stats,
+            'message': 'Failed'
+        }, 200
 
-@cached(10)
 def read_cromwell(namespace, name, id, offset=0):
     # _get_lines.cache_clear()
-    # lines = get_lines(namespace, name, id)
-    # return lines[offset:], 200
-    adapter = get_adapter(namespace, name, id)
-    reader = adapter.read_cromwell()
-    from ..adapters import do_select
-    lines = []
-    while len(do_select(reader, 1)[0]):
-        lines.append(reader.readline().decode().strip())
-    return lines
+    lines = get_lines(namespace, name, id)
+    return lines[offset:], 200
+    # adapter = get_adapter(namespace, name, id)
+    # reader = adapter.read_cromwell()
+    # from ..adapters import do_select
+    # lines = []
+    # while len(do_select(reader, 1)[0]):
+    #     lines.append(reader.readline().decode().strip())
+    # return lines
 
 @cached(10)
 def get_workflows(namespace, name, id):
@@ -566,6 +558,9 @@ def read_logs(namespace, name, id, workflow_id, log, call):
         'google': '.log'
     }[log]
     adapter = get_adapter(namespace, name, id)
+    log_text = cache_fetch('workflow', id, workflow_id, dtype=log, ext='log')
+    if log_text is not None:
+        return log_text, 200
     adapter.update()
     if workflow_id[:8] in adapter.workflows:
         workflow = adapter.workflows[workflow_id[:8]]
@@ -575,18 +570,27 @@ def read_logs(namespace, name, id, workflow_id, log, call):
                 call.path,
                 call.task+suffix
             )
-            if '.log' not in suffix:
-                path = os.path.join(
-                    call.path,
-                    suffix
-                )
             from ..adapters import safe_getblob
             try:
                 blob = safe_getblob(path)
             except FileNotFoundError:
-                pass
+                if '.log' not in suffix:
+                    path = os.path.join(
+                        call.path,
+                        suffix
+                    )
+                try:
+                    blob = safe_getblob(path)
+                except FileNotFoundError:
+                    pass
+                else:
+                    text = blob.download_as_string().decode()
+                    cache_write(text, 'workflow', id, workflow_id, dtype=log, ext='log')
+                    return text, 200
             else:
-                return blob.download_as_string().decode(), 200
+                text = blob.download_as_string().decode()
+                cache_write(text, 'workflow', id, workflow_id, dtype=log, ext='log')
+                return text, 200
     return 'Error', 500
 
 @cached(10)
@@ -596,3 +600,9 @@ def operation_status(operation_id):
     text =  get_operation_status(operation_id, False)
     print(text[:256])
     return text, 200
+
+def cache_size():
+    total = 0
+    for path in glob(cache_init()+'/*'):
+        total += os.path.getsize(path)
+    return byteSize(total), 200
