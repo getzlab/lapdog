@@ -281,6 +281,11 @@ def main():
         help="Do not launch the ui",
         dest='vue'
     )
+    ui_parser.add_argument(
+        '--install',
+        action='store_true',
+        help="Installs the node dependencies to run the UI"
+    )
 
     args = parser.parse_args()
     try:

@@ -125,7 +125,7 @@ def abort_operation(opid):
 
 def kill_machines(workflow_id):
     machines = subprocess.run(
-        'gcloud compute instances list --filter="labels.cromwell_workflow_id=%s"' % (
+        'gcloud compute instances list --filter="labels.cromwell-workflow-id=cromwell-%s"' % (
             workflow_id
         ),
         shell=True,
@@ -182,7 +182,7 @@ class CommandReader(object):
 
 class SubmissionAdapter(object):
     def __init__(self, bucket, submission):
-        print("Shit, you done rebuilt the adapter")
+        print("Constructing adapter")
         self.path = os.path.join(
             'gs://'+bucket,
             'lapdog-executions',
@@ -192,12 +192,12 @@ class SubmissionAdapter(object):
             self.path,
             'submission.json'
         )
-        data = json.loads(safe_getblob(gs_path).download_as_string())
-        self.workspace = data['workspace']
-        self.namespace = data['namespace']
-        self.identifier = data['identifier']
-        self.operation = data['operation']
-        self.raw_workflows = data['workflows']
+        self.data = json.loads(safe_getblob(gs_path).download_as_string())
+        self.workspace = self.data['workspace']
+        self.namespace = self.data['namespace']
+        self.identifier = self.data['identifier']
+        self.operation = self.data['operation']
+        self.raw_workflows = self.data['workflows']
         self.workflow_mapping = {}
         self.thread = None
         self.bucket = bucket
@@ -306,6 +306,7 @@ class SubmissionAdapter(object):
             wf.abort()
 
     @property
+    @cached(2)
     def status(self):
         """
         Get the operation status
@@ -319,7 +320,7 @@ class SubmissionAdapter(object):
         Reports if the submission is active or not
         """
         status = self.status
-        return 'done' in status and status['done']
+        return not ('done' in status and status['done'])
 
     def read_cromwell(self, _do_wait=True):
         """
@@ -375,7 +376,6 @@ class SubmissionAdapter(object):
             )
             return CommandReader(cmd, shell=True, executable='/bin/bash')
         else:
-            print("Logs:", len(log_text))
             return BytesIO(log_text)
 
     # def get_workflows(self, workflows):

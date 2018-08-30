@@ -389,6 +389,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         )
         if result is None:
             raise APIException("Unexpected response from dalmatian: "+stdout_text)
+        return result.group(1)
 
     def get_submission(self, submission_id):
         """
@@ -399,12 +400,13 @@ class WorkspaceManager(dog.WorkspaceManager):
             return WorkspaceManager(ns, ws).get_submission(sid)
         elif lapdog_id_pattern.match(submission_id):
             try:
-                return json.loads(getblob(os.path.join(
-                    'gs://'+self.get_bucket_id(),
-                    'lapdog-executions',
-                    submission_id,
-                    'submission.json'
-                )).download_as_string())
+                adapter = self.get_adapter(submission_id)
+                return {
+                    **adapter.data,
+                    # **{
+                    #     'status': adapter.submission_status(True)
+                    # }
+                }
             except:
                 with dalmatian_api():
                     return super().get_submission(submission_id)
@@ -462,6 +464,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             entity,
             (expression if expression is not None else 'this')+'.%s_id' % config['rootEntityType']
         )
+        if isinstance(workflow_entities, dict) and 'statusCode' in workflow_entities and workflow_entities['statusCode'] >= 400:
+            return False, workflow_entities['message'] if 'message' in workflow_entities else repr(workflow_entities)
+        elif not len(workflow_entities):
+            return False, "Expression evaluates to 0 entities"
 
         template = self.operator.get_config_detail(
             config['namespace'],
@@ -544,7 +550,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             'submission_id': submission_id,
             'methodConfigurationName':config['name'],
             'methodConfigurationNamespace':config['namespace'],
-            'status': 'lapdog',
+            'status': 'Running',
             'submissionDate': time.strftime(timestamp_format),
             'submissionEntity': {
                 'entityName': entity,
@@ -611,6 +617,13 @@ class WorkspaceManager(dog.WorkspaceManager):
             for e, t in zip(workflow_entities, workflow_inputs)
         ]
 
+        submission_data_path = os.path.join(
+            'gs://'+self.get_bucket_id(),
+            'lapdog-executions',
+            submission_id,
+            'submission.json'
+        )
+
         cmd = (
             'gcloud alpha genomics pipelines run '
             '--pipeline-file {source_dir}/wdl_pipeline.yaml '
@@ -621,6 +634,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             '--inputs LAPDOG_SUBMISSION_ID={submission_id} '
             '--inputs WORKSPACE=gs://{bucket_id}/lapdog-executions/{submission_id}/workspace '
             '--inputs OUTPUTS=gs://{bucket_id}/lapdog-executions/{submission_id}/results '
+            '--inputs SUBMISSION_DATA_PATH={submission_data_path} '
             '--logging gs://{bucket_id}/lapdog-executions/{submission_id}/logs '
             '--labels lapdog-submission-id={submission_id},lapdog-execution-role=cromwell '
             '--service-account-scopes=https://www.googleapis.com/auth/devstorage.read_write'
@@ -632,6 +646,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             options_template=os.path.join(tempdir.name, 'options.json'),
             bucket_id=self.get_bucket_id(),
             submission_id=submission_id,
+            submission_data_path=submission_data_path
         )
 
         results = subprocess.run(
@@ -639,19 +654,18 @@ class WorkspaceManager(dog.WorkspaceManager):
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT
         ).stdout.decode()
 
-        submission_data['operation'] = re.search(
-            r'(operations/\S+)\].',
-            results
-        ).group(1)
+        try:
+            submission_data['operation'] = re.search(
+                r'(operations/\S+)\].',
+                results
+            ).group(1)
+        except AttributeError:
+            print(results)
+            raise
 
         print("Created submission", global_id)
 
-        getblob(os.path.join(
-            'gs://'+self.get_bucket_id(),
-            'lapdog-executions',
-            submission_id,
-            'submission.json'
-        )).upload_from_string(json.dumps(submission_data))
+        getblob(submission_data_path).upload_from_string(json.dumps(submission_data))
 
         return global_id, submission_id, submission_data['operation']
 

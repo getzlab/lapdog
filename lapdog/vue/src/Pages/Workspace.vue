@@ -35,7 +35,10 @@
             </div>
           </div>
           <div v-if="submission_message != ''" class="row">
-            <div class="col s12" v-bind:class="submit_okay ? 'green-text' : 'red-text'">
+            <div class="col s12" v-if="submission_message == '-'">
+              Validating inputs...
+            </div>
+            <div v-else class="col s12" v-bind:class="submit_okay ? 'green-text' : 'red-text'">
               {{(submit_okay ? "" : "Error: ") + submission_message}}
             </div>
           </div>
@@ -206,6 +209,7 @@
               <tr>
                 <th>Configuration</th>
                 <th>Entity</th>
+                <th>Status</th>
                 <th>Date</th>
                 <th>Submission ID</th>
               </tr>
@@ -214,6 +218,7 @@
               <tr v-for="sub in submissions">
                 <td>{{sub.methodConfigurationName}}</td>
                 <td>{{sub.submissionEntity.entityName}}</td>
+                <td>{{sub.status}}</td>
                 <td>{{sub.submissionDate}}</td>
                 <td>
                   <router-link :to="{name: 'submission', params: {namespace:sub.namespace, workspace:sub.workspace, submission_id:sub.submission_id}}">
@@ -274,8 +279,9 @@
     },
     methods: {
       preflight: _.debounce((_this) => {
-        _this.submission_message = "Validating inputs...";
+        _this.submission_message = "Incomplete fields";
         if (_this.submission_config == "" || _this.submission_etype == "" || _this.entity_field == "") return;
+        _this.submission_message = "-";
         console.log("Executing preflight");
         console.log(_this);
         let query = 'http://localhost:4201/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+"/preflight?";

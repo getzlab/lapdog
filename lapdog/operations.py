@@ -89,9 +89,9 @@ class Operator(object):
         self.live = not len(self.pending)
         return self.live, exceptions
 
-    def tentative_json(self, result):
+    def tentative_json(self, result, *expected_failures):
         self.last_result = result
-        if result.status_code >= 400:
+        if result.status_code >= 400 and result.status_code not in expected_failures:
             self.go_offline()
             return None
         try:
@@ -404,7 +404,9 @@ class Operator(object):
                         entity
                     ),
                     data=expression
-                )
+                ),
+                400,
+                404
             )
             if result is not None:
                 return result

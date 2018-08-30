@@ -65,7 +65,7 @@ def get_workspace_object(namespace, name):
             current_app.config['storage']['cache'][namespace][name]['manager'] = ws
     return ws
 
-@lru_cache(2)
+@lru_cache(10)
 def get_adapter(namespace, workspace, submission):
     return get_workspace_object(namespace, workspace).get_adapter(submission)
 
@@ -447,7 +447,7 @@ def get_submission(namespace, name, id):
                 'gs://'+ws.get_bucket_id(),
                 'lapdog-executions',
                 id
-            )
+            ),
         }
     }, 200
 
@@ -476,9 +476,16 @@ def upload_submission(namespace, name, id):
 
 @cached(10)
 def read_cromwell(namespace, name, id, offset=0):
-    _get_lines.cache_clear()
-    lines = get_lines(namespace, name, id)
-    return lines[offset:], 200
+    # _get_lines.cache_clear()
+    # lines = get_lines(namespace, name, id)
+    # return lines[offset:], 200
+    adapter = get_adapter(namespace, name, id)
+    reader = adapter.read_cromwell()
+    from ..adapters import do_select
+    lines = []
+    while len(do_select(reader, 1)[0]):
+        lines.append(reader.readline().decode().strip())
+    return lines
 
 @cached(10)
 def get_workflows(namespace, name, id):

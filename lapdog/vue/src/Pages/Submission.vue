@@ -188,8 +188,12 @@ Other: error_outline
       <div class="col s2">
         Status:
       </div>
-      <div class="col s10 red-text">
-        Stand-in [Running/Finished]
+      <div class="col s10" v-if="submission"
+        v-bind:class="submission.status == 'Failed' || submission.status == 'Error' ? 'red-text' : (submission.status == 'Succeeded' ? 'green-text' : '')">
+        {{submission.status}}
+      </div>
+      <div class="col s10" v-else>
+        Loading...
       </div>
     </div>
     <div class="row">

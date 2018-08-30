@@ -17,6 +17,14 @@ vue_dir = os.path.join(
 
 
 def run(args):
+    if args.install:
+        print("Installing UI Dependencies")
+        return subprocess.run(
+            'npm install',
+            shell=True,
+            executable='/bin/bash',
+            preexec_fn=lambda :os.chdir(vue_dir)
+        ).returncode
     app = connexion.App('lapdog-api', specification_dir=swagger_dir)
     app.add_api('lapdog.yaml')
     CORS(app.app, origins=r'.*')
@@ -36,5 +44,10 @@ if __name__ == '__main__':
         '-v', '--vue',
         action='store_true',
         help="Launch the vue UI"
+    )
+    parser.add_argument(
+        '--install',
+        action='store_true',
+        help="Installs the node dependencies to run the UI"
     )
     run(parser.parse_args())

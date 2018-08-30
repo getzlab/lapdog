@@ -14,6 +14,8 @@ inputParameters:
   description: Cloud Storage path for intermediate files
 - name: OUTPUTS
   description: Cloud Storage path for output files
+- name: SUBMISSION_DATA_PATH
+  description: gsutil path to submission data object
 
 docker:
   imageName: gcr.io/broad-cga-aarong-gtex/wdl_runner:latest
