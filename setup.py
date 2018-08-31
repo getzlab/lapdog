@@ -1,9 +1,24 @@
 from setuptools import setup
 setup(
     name = 'lapdog',
-    version = '0.1.0',
-    packages = ['lapdog'],
-    package_data={'':['wdl_pipeline.yaml']},
+    version = '0.1.1',
+    packages = [
+        'lapdog',
+        'lapdog.api'
+    ],
+    package_data={
+        '':[
+            'wdl_pipeline.yaml',
+            'vue/.babelrc',
+            'vue/index.html',
+            'vue/package.json',
+            'vue/webpack.config.js',
+            'vue/src/main.js',
+            'vue/src/App.vue',
+            'vue/src/Pages/*.vue',
+            'api/swagger/lapdog.yaml'
+        ],
+    },
     description = 'A wrapper for FISS and dalmatian',
     author = 'Broad Institute - Cancer Genome Computational Analysis',
     author_email = 'gdac@broadinstitute.org',
