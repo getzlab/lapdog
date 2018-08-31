@@ -1,7 +1,7 @@
 from setuptools import setup
 setup(
     name = 'lapdog',
-    version = '0.0.7',
+    version = '0.1.0',
     packages = ['lapdog'],
     package_data={'':['wdl_pipeline.yaml']},
     description = 'A wrapper for FISS and dalmatian',
