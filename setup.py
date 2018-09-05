@@ -1,7 +1,7 @@
 from setuptools import setup
 setup(
     name = 'lapdog',
-    version = '0.2.1',
+    version = '0.2.2',
     packages = [
         'lapdog',
         'lapdog.api'
@@ -36,7 +36,8 @@ setup(
         'flask_cors',
         'crayons',
         'connexion',
-        'oauth2client'
+        'oauth2client',
+        'requests'
     ],
     classifiers = [
         "Programming Language :: Python :: 3",

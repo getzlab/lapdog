@@ -518,6 +518,7 @@ def cmd_finish(args):
     lapdog.complete_execution(args.submission_id)
 
 def cmd_service_account(args):
+    import requests
     from oauth2client.service_account import ServiceAccountCredentials
     scopes = ['https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
     credentials = ServiceAccountCredentials.from_json_keyfile_name(args.key, scopes=scopes)
@@ -526,7 +527,7 @@ def cmd_service_account(args):
     profile_json = {"firstName":"None", "lastName": "None", "title":"None", "contactEmail":args.email,
                                "institute":"None", "institutionalProgram": "None", "programLocationCity": "None", "programLocationState": "None",
                                "programLocationCountry": "None", "pi": "None", "nonProfitStatus": "false"}
-    request = lapdog.fc.__post("/register/profile", headers=headers, json=profile_json)
+    request = requests.post("https://api.firecloud.org/register/profile", headers=headers, json=profile_json)
     if request.status_code == 200:
         print("Service account is now registered with Firecloud")
     else:
