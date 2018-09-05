@@ -185,35 +185,41 @@ Other: error_outline
       </div>
     </div>
     <div class="row">
-      <div class="col s2">
+      <div class="col s1">
         Status:
       </div>
-      <div class="col s2" v-if="submission"
+      <div class="col s3" v-if="submission"
         v-bind:class="submission.status == 'Failed' || submission.status == 'Error' ? 'red-text' : (submission.status == 'Succeeded' ? 'green-text' : '')">
         {{submission.status}}
       </div>
-      <div class="col s2" v-else>
+      <div class="col s3" v-else>
         Loading...
       </div>
-      <div class="col s2">
+      <div class="col s1">
         Cost:
       </div>
-      <div class="col s2" v-if="submission">
+      <div class="col s3" v-if="submission">
         ${{submission.cost.est_cost}}
       </div>
-      <div class="col s2" v-else>
+      <div class="col s3" v-else>
         Loading...
       </div>
-      <div class="col s2">
+      <div class="col s1">
         Workflows:
       </div>
-      <div class="col s2" v-if="submission">
+      <div class="col s3" v-if="submission">
         {{submission.workflows.length}}
       </div>
+      <div class="col s3" v-else>
+        Loading...
+      </div>
     </div>
-    <div class="row" v-if="submission && (submission.status == 'Succeeded' || submission.status == 'Failed')">
-      <div class="col s6">
+    <div class="row" v-if="submission">
+      <div class="col s6" v-if="submission.status == 'Succeeded' || submission.status == 'Failed'">
         <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
+      </div>
+      <div class="col s6" v-if="submission.status == 'Running'">
+        <a class='btn blue' v-on:click.prevent="abort_sub">Abort Submission</a>
       </div>
     </div>
     <div class="row">
@@ -234,7 +240,7 @@ Other: error_outline
       <div v-if="cromwell_lines" style="border: 1px solid grey;">
       <!-- <div v-if="cromwell_lines" class="card-panel"> -->
         <!-- <p class="flow-text">{{'...\n'+cromwell_lines.join('\n')}}</p> -->
-        <div class="log-container grey lighten-3">
+        <div class="log-container grey lighten-3" id="cromwell-log">
           {{'\n'+cromwell_lines.join('\n')}}
         </div>
       </div>
@@ -359,6 +365,10 @@ export default {
           console.log("Read cromwell lines");
           console.log(response.data);
           this.cromwell_lines = response.data;
+          setTimeout(() => {
+            let elem = window.$('#cromwell-log').get(0);
+            elem.scrollTop = elem.scrollHeight;
+          }, 100);
         })
         .catch(error => {
           console.error("Failed");
@@ -423,6 +433,23 @@ export default {
         .catch(error => {
           console.error("Failed");
           console.error(error);
+        })
+    },
+    abort_sub() {
+      window.materialize.toast({
+        html: "Aborting Submission",
+        displayLength: 2000,
+      });
+      axios.delete('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
+        .then(response => {
+          console.log("Abort results");
+          console.log(response);
+        })
+        .catch(error => {
+          window.materialize.toast({
+            html: "Failed to abort",
+            displayLength: 10000,
+          });
         })
     },
     upload() {

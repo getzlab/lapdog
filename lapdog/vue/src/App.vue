@@ -79,7 +79,7 @@
               <div class="col s6 offset-s1">
                 <form v-on:submit.prevent="get_submission">
                   <div class="input-field">
-                    <input type="text" id="submission-search" class="white" placeholder=" Search Submissions" v-model="submission"/>
+                    <input type="text" id="submission-search" class="white" placeholder=" Jump to submission" v-model="submission"/>
                     <!-- <label for="submission-search">search</label> -->
                   </div>
                 </form>

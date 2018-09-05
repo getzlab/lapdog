@@ -321,6 +321,10 @@
             console.log(response);
             let result = response.data;
             if (result.ok && !result.failed) {
+              window.materialize.toast({
+                html: "It may take several minutes for the submission to check in",
+                displayLength: 10000,
+              })
               this.$router.push({
                 name: 'submission',
                 params: {

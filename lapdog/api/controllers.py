@@ -443,9 +443,9 @@ def get_submission(namespace, name, id):
     }, 200
 
 def abort_submission(namespace, name, id):
-    adapter, cromwell = get_adapter(namespace, name, id)
+    adapter = get_adapter(namespace, name, id)
     adapter.abort()
-    return [wf.long_id for wf in adapter.workflows in wf.long_id is not None], 200
+    return [wf.long_id for wf in adapter.workflows if wf.long_id is not None], 200
 
 def upload_submission(namespace, name, id):
     ws = get_workspace_object(namespace, name)
@@ -558,7 +558,7 @@ def read_logs(namespace, name, id, workflow_id, log, call):
         'google': '.log'
     }[log]
     adapter = get_adapter(namespace, name, id)
-    log_text = cache_fetch('workflow', id, workflow_id, dtype=log, ext='log')
+    log_text = cache_fetch('workflow', id, workflow_id, dtype=str(call)+'.', ext=log+'.log')
     if log_text is not None:
         return log_text, 200
     adapter.update()
@@ -585,20 +585,20 @@ def read_logs(namespace, name, id, workflow_id, log, call):
                     pass
                 else:
                     text = blob.download_as_string().decode()
-                    cache_write(text, 'workflow', id, workflow_id, dtype=log, ext='log')
+                    cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
                     return text, 200
             else:
                 text = blob.download_as_string().decode()
-                cache_write(text, 'workflow', id, workflow_id, dtype=log, ext='log')
+                cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
                 return text, 200
     return 'Error', 500
 
 @cached(10)
 def operation_status(operation_id):
     from ..adapters import get_operation_status
-    print("Getting status:", operation_id)
+    # print("Getting status:", operation_id)
     text =  get_operation_status(operation_id, False)
-    print(text[:256])
+    # print(text[:256])
     return text, 200
 
 def cache_size():

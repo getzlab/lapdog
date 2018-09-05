@@ -545,7 +545,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             'methodConfigurationName':config['name'],
             'methodConfigurationNamespace':config['namespace'],
             'status': 'Running',
-            'submissionDate': time.strftime(timestamp_format),
+            'submissionDate': time.strftime(
+                timestamp_format,
+                time.gmtime()
+            ),
             'submissionEntity': {
                 'entityName': entity,
                 'entityType': etype
@@ -707,6 +710,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     for meta in workflow_metadata
                 }
                 submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
+                submission_data = pd.DataFrame()
                 for key, entity in status_bar.iter(submission_workflows.items(), prepend="Uploading results... "):
                     if key not in workflow_metadata:
                         print("Entity", entity, "has no output metadata")
@@ -722,14 +726,15 @@ class WorkspaceManager(dog.WorkspaceManager):
                             k = output_template[k]
                             if k.startswith('this.'):
                                 entity_data[k[5:]] = v
-                        with capture():
-                            self.update_entity_attributes(
-                                submission['workflowEntityType'],
-                                pd.DataFrame(
-                                    entity_data,
-                                    index=[entity]
-                                ),
-                            )
+                        submission_data = submission_data.append(pd.DataFrame(
+                            entity_data,
+                            index=[entity]
+                        ))
+                with capture():
+                    self.update_entity_attributes(
+                        submission['workflowEntityType'],
+                        submission_data,
+                    )
                 return True
             else:
                 print("This submission has not finished")

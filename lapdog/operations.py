@@ -151,24 +151,30 @@ class Operator(object):
 
     def add_config(self, config):
         if 'configs' in self.cache and self.cache['configs'] is not None:
-            self.cache[config['name']] = config
-        self.cache['config:%s/%s' % (config['namespace'], config['name'])] = config
+            # self.cache[config['name']] = config
+            self.cache['configs'] = [
+                cfg for cfg in self.cache['configs']
+                if not (cfg['namespace'] == config['namespace'] and cfg['name'] == config['name'])
+            ] + [
+                {
+                    'methodRepoMethod': config['methodRepoMethod'],
+                    'name': config['name'],
+                    'namespace': config['namespace'],
+                    'rootEntityType': config['rootEntityType']
+                }
+            ]
+            key = 'config:%s/%s' % (config['namespace'], config['name'])
+        self.cache[key] = config
         if self.live:
             result = self._upload_config(config)
-            if result is False:
-                self.go_offline()
-                self.pending.append((
-                    None,
-                    partial(self._upload_config, config),
-                    None
-                ))
-            return result
-        else:
-            self.pending.append((
-                None,
-                partial(self._upload_config, config),
-                None
-            ))
+            if result:
+                return result
+            self.go_offline()
+        self.pending.append((
+            None,
+            partial(self._upload_config, config),
+            None
+        ))
         return False
 
     def get_wdl(self, namespace, name, version=None):

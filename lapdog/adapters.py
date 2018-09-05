@@ -13,6 +13,7 @@ import re
 import select
 from .cache import cache_fetch, cache_write, cached
 import traceback
+import sys
 
 # Label filter format: labels.(label name)=(label value)
 
@@ -31,7 +32,7 @@ def sleep_until(dt):
 # Possibly, the task start pattern will contain multiple operation starts (or maybe shard-ids are given as one of the digit fields)
 
 workflow_dispatch_pattern = re.compile(r'Workflows(( [a-z0-9\-]+,?)+) submitted.')
-workflow_start_pattern = re.compile(r'WorkflowManagerActor Starting workflow UUID\(([a-z0-9\-]+)\)')
+workflow_start_pattern = re.compile(r'WorkflowManagerActor Successfully started WorkflowActor-([a-z0-9\-]+)')
 task_start_pattern = re.compile(r'\[UUID\((\w{8})\)(\w+)\.(\w+):(\w+):(\d+)\]: job id: (operations/\S+)')
 #(short code), (workflow name), (task name), (? 'NA'), (call id), (operation)
 msg_pattern = re.compile(r'\[UUID\((\w{8})\)\]')
@@ -122,7 +123,11 @@ def get_operation_status(opid, parse=True):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         ).stdout.decode()
-        data = yaml.load(StringIO(text))
+        try:
+            data = yaml.load(StringIO(text))
+        except yaml.scanner.ScannerError:
+            if 'Permission denied' in text:
+                raise ValueError("Permission Denied")
         if 'done' in data and data['done']:
             cache_write(text, 'operation', opid)
     else:
@@ -152,6 +157,7 @@ def kill_machines(workflow_id):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     ).stdout.decode().split('\n')
+    print("M:", machines)
     if len(machines) > 1:
         machines = ' '.join(line.split()[0] for line in machines[1:])
     if len(machines):
@@ -174,7 +180,7 @@ class CommandReader(object):
             del kwargs['__insert_text']
         if __insert_text is not None:
             os.write(w, __insert_text)
-        print(kwargs)
+        # print(kwargs)
         self.proc = subprocess.Popen(cmd, *args, stdout=w, stderr=w, stdin=r2, universal_newlines=False, **kwargs)
         self.reader = open(r, 'rb')
 
@@ -201,7 +207,7 @@ class CommandReader(object):
 
 class SubmissionAdapter(object):
     def __init__(self, bucket, submission):
-        print("Constructing adapter")
+        # print("Constructing adapter")
         self.path = os.path.join(
             'gs://'+bucket,
             'lapdog-executions',
@@ -242,7 +248,7 @@ class SubmissionAdapter(object):
             if stored_cost is not None:
                 return json.loads(stored_cost)
             try:
-                workflow_metadata = json.loads(getblob(
+                workflow_metadata = json.loads(safe_getblob(
                     os.path.join(
                         self.path,
                         'results',
@@ -274,7 +280,7 @@ class SubmissionAdapter(object):
                 return result
             except:
                 # Try the slow route
-                print(traceback.format_exc())
+                print(traceback.format_exc(), file=sys.stderr)
                 pass
         self.update()
         cost = 0
@@ -301,7 +307,22 @@ class SubmissionAdapter(object):
                             and call['metadata']['request']['pipelineArgs']['resources']['preemptible']
                         )]*delta
                 except KeyError:
-                    print(call)
+                    pass
+        status = self.status
+        if 'metadata' in status and 'startTime' in status['metadata']:
+            delta = (
+                datetime.datetime.strptime(
+                    status['metadata']['endTime'],
+                    timestamp_format
+                ) if 'endTime' in status['metadata']
+                else datetime.datetime.utcnow()
+            ) - datetime.datetime.strptime(
+                status['metadata']['startTime'],
+                timestamp_format
+            )
+            delta = delta.total_seconds() / 3600
+            if delta > maxTime:
+                maxTime = delta
         cost += mtypes['n1-standard-1'][0] * maxTime
         cost = int(cost * 100) / 100
         return {
@@ -315,15 +336,18 @@ class SubmissionAdapter(object):
         if self._internal_reader is None:
             self._internal_reader = self.read_cromwell(_do_wait=self.live)
         event_stream = []
+        message = ''
         while len(do_select(self._internal_reader, 1)[0]):
             message = self._internal_reader.readline().decode().strip()
+            if '.xml' not in message:
+                print("DBG: Message:", message)
             matcher = Recall()
             if matcher.apply(workflow_dispatch_pattern.search(message)):
                 ids = [
                     wf_id.strip() for wf_id in
                     matcher.value.group(1).split(',')
                 ]
-                print(len(ids), 'workflow(s) dispatched')
+                # print(len(ids), 'workflow(s) dispatched')
                 for long_id, data in zip(ids, self.raw_workflows):
                     self._init_workflow(
                         long_id[:8],
@@ -332,7 +356,7 @@ class SubmissionAdapter(object):
                     )
                     self.workflow_mapping[data['workflowOutputKey']] = long_id
             elif matcher.apply(workflow_start_pattern.search(message)):
-                print("New workflow started")
+                # print("New workflow started")
                 long_id = matcher.value.group(1)
                 if long_id in {*self.workflow_mapping.values()}:
                     # dispatch event on fully started workflow
@@ -399,12 +423,26 @@ class SubmissionAdapter(object):
                 )
             # else:
             #     print("NO MATCH:", message)
+        print("DBG: Final message:", message)
     def abort(self):
         self.update()
         # FIXME: Once everything else works, see if cromwell labels work
         # At that point, we can add an abort here to kill everything with the id
         for wf in self.workflows.values():
             wf.abort()
+        gs_path = os.path.join(
+            self.path,
+            'submission.json'
+        )
+        getblob(gs_path).upload_from_string(
+            json.dumps(
+                {
+                    **self.data,
+                    **{'status': 'Aborted'}
+                }
+            )
+        )
+
 
     @property
     @cached(2)
@@ -412,7 +450,7 @@ class SubmissionAdapter(object):
         """
         Get the operation status
         """
-        print("READING ADAPTER STATUS")
+        # print("READING ADAPTER STATUS")
         return get_operation_status(self.operation)
 
     @property
@@ -515,17 +553,17 @@ class WorkflowAdapter(object):
         getattr(self, attribute)(*args, **kwargs)
 
     def on_start(self, input_key, long_id):
-        print("Handling start event")
+        # print("Handling start event")
         self.started = True
         self.long_id = long_id
         self.input_key = input_key
         for event, args, kwargs in self.replay_buffer:
-            print("Replaying previous events...")
+            # print("Replaying previous events...")
             self.handle(event, *args, **kwargs)
         self.replay_buffer = []
 
     def on_task(self, workflow, task, na, call, operation):
-        print("Starting task", workflow, task, na, call, operation)
+        # print("Starting task", workflow, task, na, call, operation)
         path = os.path.join(
             self.parent_path,
             'workspace',
@@ -545,8 +583,8 @@ class WorkflowAdapter(object):
     def on_message(self, message):
         if len(self.calls):
             self.calls[-1].last_message = message.strip()
-        else:
-            print("Discard message", message)
+        # else:
+            # print("Discard message", message)
 
     def on_fail(self, message, status=None):
         self.failure = message
@@ -554,12 +592,12 @@ class WorkflowAdapter(object):
     def on_status(self, old, new):
         if len(self.calls):
             self.calls[-1].status = new
-        else:
-            print("Discard status", old,'->', new)
+        # else:
+            # print("Discard status", old,'->', new)
 
     def abort(self):
         if len(self.calls):
-            print("Aborting", self.calls[-1].operation)
+            # print("Aborting", self.calls[-1].operation)
             abort_operation(self.calls[-1].operation)
         if self.long_id is not None:
             kill_machines(self.long_id)

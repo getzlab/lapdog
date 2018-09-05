@@ -105,7 +105,10 @@ class Evaluator(object):
                     return [*this.index]
                 else:
                     if len(components) <= 2:
-                        return [getattr(this, components[-1])]
+                        val = getattr(this, components[-1])
+                        if not isinstance(val, list):
+                            return [val]
+                        return [*val]
                     return [*getattr(this, components[-1])]
             except Exception as e:
                 raise EvaluationError("Unable to evaluate expression attribute '%s' : %s" % (

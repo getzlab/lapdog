@@ -32,7 +32,10 @@ setup(
         'firecloud-dalmatian',
         'google-cloud-storage',
         'pyyaml',
-        'agutil'
+        'agutil',
+        'flask_cors',
+        'crayons',
+        'connexion'
     ],
     classifiers = [
         "Programming Language :: Python :: 3",

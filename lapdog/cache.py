@@ -2,7 +2,7 @@ import os
 import time
 import shutil
 import time
-from functools import lru_cache
+from functools import lru_cache, partial, wraps
 
 CACHES = {}
 
@@ -12,7 +12,7 @@ def cached(timeout, cache_size=4):
 
         @lru_cache(cache_size)
         def cachefunc(*args, **kwargs):
-            print("Cache expired. Running", func)
+            # print("Cache expired. Running", func)
             return (time.time(), func(*args, **kwargs))
 
         def call_func(*args, **kwargs):
@@ -20,8 +20,8 @@ def cached(timeout, cache_size=4):
             if time.time() - result[0] > timeout:
                 cachefunc.cache_clear()
                 result = cachefunc(*args, **kwargs)
-            else:
-                print("Cache intact. Retrieving cached results from", func)
+            # else:
+                # print("Cache intact. Retrieving cached results from", func)
             return result[1]
 
         call_func.cache_clear = cachefunc.cache_clear
@@ -94,6 +94,7 @@ def cache_path(key):
         return CACHES[key]
     return _default_type
 
+
 def cache_fetch(object_type, *args, dtype='data', ext='', decode=True, **kwargs):
     if len(ext) and not ext.startswith('.'):
         ext = '.' + ext
@@ -107,7 +108,7 @@ def cache_fetch(object_type, *args, dtype='data', ext='', decode=True, **kwargs)
                 os.remove(path)
                 os.remove(path+'.tag')
                 return None
-        print("<CACHE> Read data from", path)
+        # print("<CACHE> Read data from", path)
         with open(path, decode) as r:
             return r.read()
     return None
@@ -116,7 +117,7 @@ def cache_write(data, object_type, *args, dtype='data', ext='', decode=True, **k
     if len(ext) and not ext.startswith('.'):
         ext = '.' + ext
     path = cache_path(object_type)(*args, dtype, ext, **kwargs)
-    print("<CACHE> Write data to", path)
+    # print("<CACHE> Write data to", path)
     if decode:
         data = str(data)
     decode = 'w' if decode else 'wb'
