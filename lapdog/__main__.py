@@ -359,7 +359,7 @@ def cmd_upload(args):
         df = pd.DataFrame(json.load(args.source))
     else:
         sys.exit("Please use a .tsv, .csv, or .json file")
-    if 'sample_id' not in df.columns or participant_id not in df.columns:
+    if 'sample_id' not in df.columns or 'participant_id' not in df.columns:
         sys.exit("Input source file must contain 'sample_id' and 'participant_id' fields")
     df = df.set_index('sample_id')
     df = df[['participant_id'] + [*{col for col in df.columns if col != 'participant_id'}]]
