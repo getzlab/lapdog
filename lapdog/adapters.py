@@ -159,7 +159,7 @@ def kill_machines(workflow_id):
     ).stdout.decode().split('\n')
     print("M:", machines)
     if len(machines) > 1:
-        machines = ' '.join(line.split()[0] for line in machines[1:])
+        machines = ' '.join(line.split()[0] for line in machines[1:] if len(line.strip()))
     if len(machines):
         return subprocess.run(
             'yes | gcloud compute instances delete %s' % (
@@ -180,14 +180,23 @@ class CommandReader(object):
             del kwargs['__insert_text']
         if __insert_text is not None:
             os.write(w, __insert_text)
-        # print(kwargs)
+        # self.proc = subprocess.Popen(cmd, *args, stdout=w, stderr=w, stdin=r2, universal_newlines=False, **kwargs)
         self.proc = subprocess.Popen(cmd, *args, stdout=w, stderr=w, stdin=r2, universal_newlines=False, **kwargs)
         self.reader = open(r, 'rb')
+        self.buffer = b''
 
     def close(self, *args, **kwargs):
         self.reader.close(*args, **kwargs)
         if self.proc.returncode is None:
             self.proc.kill()
+
+    def readline(self, length=256, *args, **kwargs):
+        while b'\n' not in self.buffer:
+            self.buffer += os.read(self.reader.fileno(), length)
+        self.buffer = self.buffer.split(b'\n')
+        output = self.buffer.pop(0)
+        self.buffer = b'\n'.join(self.buffer)
+        return output
 
     def __getattr__(self, attr):
         if hasattr(self.reader, attr):
@@ -321,6 +330,7 @@ class SubmissionAdapter(object):
                 timestamp_format
             )
             delta = delta.total_seconds() / 3600
+            print("Delta:", delta)
             if delta > maxTime:
                 maxTime = delta
         cost += mtypes['n1-standard-1'][0] * maxTime
@@ -339,8 +349,6 @@ class SubmissionAdapter(object):
         message = ''
         while len(do_select(self._internal_reader, 1)[0]):
             message = self._internal_reader.readline().decode().strip()
-            if '.xml' not in message:
-                print("DBG: Message:", message)
             matcher = Recall()
             if matcher.apply(workflow_dispatch_pattern.search(message)):
                 ids = [
@@ -423,13 +431,14 @@ class SubmissionAdapter(object):
                 )
             # else:
             #     print("NO MATCH:", message)
-        print("DBG: Final message:", message)
+
     def abort(self):
         self.update()
         # FIXME: Once everything else works, see if cromwell labels work
         # At that point, we can add an abort here to kill everything with the id
         for wf in self.workflows.values():
             wf.abort()
+        abort_operation(self.operation)
         gs_path = os.path.join(
             self.path,
             'submission.json'

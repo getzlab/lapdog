@@ -445,7 +445,7 @@ def get_submission(namespace, name, id):
 def abort_submission(namespace, name, id):
     adapter = get_adapter(namespace, name, id)
     adapter.abort()
-    return [wf.long_id for wf in adapter.workflows if wf.long_id is not None], 200
+    return [wf.long_id for wf in adapter.workflows.values() if wf.long_id is not None], 200
 
 def upload_submission(namespace, name, id):
     ws = get_workspace_object(namespace, name)
@@ -585,11 +585,13 @@ def read_logs(namespace, name, id, workflow_id, log, call):
                     pass
                 else:
                     text = blob.download_as_string().decode()
-                    cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
+                    if not adapter.live:
+                        cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
                     return text, 200
             else:
                 text = blob.download_as_string().decode()
-                cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
+                if not adapter.live:
+                    cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
                 return text, 200
     return 'Error', 500
 

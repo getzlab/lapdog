@@ -11,6 +11,19 @@ A relaxed wrapper for dalmatian and FISS
 2. (Optional) Install additional dependencies for the user interface:
   - Install `node` and `npm` if you don't already have them installed
   - Run `lapdog ui --install`. This may take a while
+3. (Optional) Configure your GCloud account to use lapdog
+  - Get your service account email
+    * `gcloud iam service-accounts list`
+    * Look for "Compute Engine default service account"
+    * Copy the email (it will end with `compute@developer.gserviceaccount.com`)
+  - Issue a key for the service account
+    * `gcloud iam service-accounts keys create --iam-account {account email} {output file path}`
+    * `{account email}` should be the email copied from the above step
+    * `{output file path}` should be a path where gcloud will save the service account key (don't lose this file - you can't ever get it back)
+  - Register your service account in firecloud
+    * `lapdog register-service-account {your account email} {service account key path}`
+    * `{your account email}` should be the email registered to your account in firecloud
+    * `{service account key path}` should be the path to the json key generated in the previous step
 
 ## Usage
 1. `lapdog` may be imported within python as a drop-in replacement for `dalmatian`

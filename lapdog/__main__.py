@@ -287,6 +287,21 @@ def main():
         help="Installs the node dependencies to run the UI"
     )
 
+    service_account_parser = subparsers.add_parser(
+        'register-service-account',
+        help="Adds your service account to firecloud",
+        description="Adds your service account to firecloud"
+    )
+    service_account_parser.set_defaults(func=cmd_service_account)
+    service_account_parser.add_argument(
+        'email',
+        help="Your firecloud account email"
+    )
+    service_account_parser.add_argument(
+        'key',
+        help="Path to your service account credentials"
+    )
+
     args = parser.parse_args()
     try:
         func = args.func
@@ -501,6 +516,26 @@ def get_operation_status(opid):
 def cmd_finish(args):
     print("Note: lapdog-finish is not yet fully implemented")
     lapdog.complete_execution(args.submission_id)
+
+def cmd_service_account(args):
+    from oauth2client.service_account import ServiceAccountCredentials
+    scopes = ['https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(args.key, scopes=scopes)
+    headers = {"Authorization": "bearer " + credentials.get_access_token().access_token}
+    headers["User-Agent"] = lapdog.fc.FISS_USER_AGENT
+    profile_json = {"firstName":"None", "lastName": "None", "title":"None", "contactEmail":args.email,
+                               "institute":"None", "institutionalProgram": "None", "programLocationCity": "None", "programLocationState": "None",
+                               "programLocationCountry": "None", "pi": "None", "nonProfitStatus": "false"}
+    request = lapdog.fc.__post("/register/profile", headers=headers, json=profile_json)
+    if request.status_code == 200:
+        print("Service account is now registered with Firecloud")
+    else:
+        print("Failed!")
+        try:
+            print(request.json()['message'])
+        except:
+            print(request.text)
+        sys.exit(1)
 
     # if args.status:
     #     if done:

@@ -35,7 +35,8 @@ setup(
         'agutil',
         'flask_cors',
         'crayons',
-        'connexion'
+        'connexion',
+        'oauth2client'
     ],
     classifiers = [
         "Programming Language :: Python :: 3",
