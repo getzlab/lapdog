@@ -43,11 +43,11 @@ def get_workspace_object(namespace, name):
             current_app.config['storage']['cache'][namespace][name]['manager'] = ws
     return ws
 
-@lru_cache(10)
+@cached(120, 10)
 def get_adapter(namespace, workspace, submission):
     return get_workspace_object(namespace, workspace).get_adapter(submission)
 
-@cached(120)
+@cached(60)
 def _get_lines(namespace, workspace, submission):
     adapter = get_adapter(namespace, workspace, submission)
     reader = adapter.read_cromwell()
@@ -113,7 +113,7 @@ def workspace(namespace, name):
     data['configs'] = get_configs(namespace, name)
     return data, response.status_code
 
-@cached(60)
+@cached(600)
 def service_account():
     try:
         buff = io.StringIO(subprocess.check_output(
@@ -552,47 +552,44 @@ def get_workflow(namespace, name, id, workflow_id):
 
 @cached(30)
 def read_logs(namespace, name, id, workflow_id, log, call):
-    suffix = {
-        'stdout': 'stdout',
-        'stderr': 'stderr',
-        'google': '.log'
+    filename, suffix = {
+        'stdout': ('stdout', '-stdout.log'),
+        'stderr': ('stderr', '-stderr.log'),
+        'google': (None, '.log')
     }[log]
-    adapter = get_adapter(namespace, name, id)
     log_text = cache_fetch('workflow', id, workflow_id, dtype=str(call)+'.', ext=log+'.log')
+    adapter = get_adapter(namespace, name, id)
     if log_text is not None:
         return log_text, 200
     adapter.update()
+    from ..adapters import safe_getblob
     if workflow_id[:8] in adapter.workflows:
         workflow = adapter.workflows[workflow_id[:8]]
         if call < len(workflow.calls):
             call = workflow.calls[call]
-            path = os.path.join(
-                call.path,
-                call.task+suffix
-            )
-            from ..adapters import safe_getblob
-            try:
-                blob = safe_getblob(path)
-            except FileNotFoundError:
-                if '.log' not in suffix:
-                    path = os.path.join(
-                        call.path,
-                        suffix
-                    )
+            blob = None
+            if filename is not None:
+                path = os.path.join(
+                    call.path,
+                    filename
+                )
                 try:
                     blob = safe_getblob(path)
                 except FileNotFoundError:
                     pass
-                else:
-                    text = blob.download_as_string().decode()
-                    if not adapter.live:
-                        cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
-                    return text, 200
-            else:
-                text = blob.download_as_string().decode()
-                if not adapter.live:
-                    cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
-                return text, 200
+            if blob is None:
+                path = os.path.join(
+                    call.path,
+                    call.task + suffix
+                )
+                try:
+                    blob = safe_getblob(path)
+                except FileNotFoundError:
+                    return "Not found", 404
+            text = blob.download_as_string().decode()
+            if not adapter.live:
+                cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
+            return text, 200
     return 'Error', 500
 
 @cached(10)
@@ -608,3 +605,51 @@ def cache_size():
     for path in glob(cache_init()+'/*'):
         total += os.path.getsize(path)
     return byteSize(total), 200
+
+@cached(120)
+def quotas(region):
+    try:
+        text = subprocess.run(
+            'gcloud compute project-info describe',
+            shell=True,
+            executable='/bin/bash',
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ).stdout.decode()
+        data = yaml.load(io.StringIO(text))['quotas']
+    except:
+        print(text)
+        raise
+    try:
+        text = subprocess.run(
+            'gcloud compute regions describe %s' % region,
+            shell=True,
+            executable='/bin/bash',
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ).stdout.decode()
+        data += [
+            {
+                **r,
+                **{
+                    'metric': r['metric']+'.'+region
+                }
+            }
+            for r in yaml.load(io.StringIO(text))['quotas']
+        ]
+    except:
+        print(text)
+        raise
+    alerts = [
+        {
+            **r,
+            **{
+                'percent': '%0.2f%%' % (100 * r['usage'] / r['limit'])
+            }
+        }
+        for r in data if r['limit'] > 0 and r['usage']/r['limit'] > .5
+    ]
+    return {
+        'alerts': alerts,
+        'raw': data
+    }, 200

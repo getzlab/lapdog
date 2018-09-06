@@ -72,7 +72,8 @@
               <div class="col s2">
                 <ul class="left">
                   <li>
-                    <a data-target="slide-out" class="sidenav-trigger show-on-large"><i class="material-icons">menu</i></a>
+                    <a data-target="slide-out" class="sidenav-trigger show-on-large">Workspaces</a>
+                    <a data-target="slide-out" class="sidenav-trigger show-on-medium-and-down"><i class="material-icons">menu</i></a>
                   </li>
                 </ul>
               </div>
@@ -106,6 +107,19 @@
       <aside class="sidebar">
       </aside>
       <div class="content container">
+        <div v-if="quotas && quotas.alerts.length" class="row" style="border: 2px solid red;">
+          <div class="col s10 offset s1 red-text pushpin">
+            Alert: The following quotas are nearly exceeded: {{
+              lodash.join(
+                lodash.map(
+                  quotas.alerts,
+                  obj => obj.metric + ' ('+obj.percent+')'
+                ),
+                ', '
+              )
+            }}
+          </div>
+        </div>
         <router-view></router-view>
       </div>
     </main>
@@ -143,10 +157,12 @@
 </style>
 
 <script>
-import axios from'axios'
+import axios from 'axios'
+import _ from 'lodash'
 export default {
   data() {
     return {
+      lodash:_,
       workspaces: null,
       acct: null,
       search: '',
@@ -155,7 +171,8 @@ export default {
       create_workspace: '',
       parent_workspace: '',
       create_failed: null,
-      cache_size: null
+      cache_size: null,
+      quotas: null
     }
   },
 
@@ -180,6 +197,17 @@ export default {
             })
         }, 30000);
       })
+      setInterval(() => {
+        axios.get('http://localhost:4201/api/v1/quotas')
+          .then(response => {
+            this.quotas = response.data;
+            // if (this.quotas.alerts.length) {
+            //   setTimeout(() => {
+            //     window.$('.pushpin').pushpin();
+            //   }, 100);
+            // }
+          })
+      }, 60000);
   },
 
   methods: {

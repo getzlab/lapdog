@@ -61,7 +61,7 @@ Other: error_outline
                 <div class="collapsible-header">
                   <i v-if="call.status == 'Success'" class="material-icons">check_cicle</i>
                   <i v-else-if="call.status == 'Preempted'" class="material-icons">sync_disabled</i>
-                  <i v-else-if="call.status == 'Failed'" class="material-icons">sync_problem</i>
+                  <i v-else-if="call.status == 'Failed'  || call.status == 'Cancelled'" class="material-icons">sync_problem</i>
                   <i v-else-if="call.status == 'Running'" class="material-icons">sync</i>
                   <i v-else class="material-icons">error_outline</i>
                   {{call.task}}
@@ -184,6 +184,30 @@ Other: error_outline
         Loading...
       </div>
     </div>
+    <div v-if="submission">
+      <div class="row">
+        <div class="col s2">
+          Submission Date:
+        </div>
+        <div class="col s3">
+          {{submission.submissionDate}}
+        </div>
+      </div>
+      <div class="row">
+        <div class="col s2">
+          Configuration:
+        </div>
+        <div class="col s4">
+          {{submission.methodConfigurationName}}
+        </div>
+        <div class="col s1">
+          Entity:
+        </div>
+        <div class="col s5">
+          {{submission.submissionEntity.entityName}}
+        </div>
+      </div>
+    </div>
     <div class="row">
       <div class="col s1">
         Status:
@@ -274,9 +298,33 @@ Other: error_outline
       <table>
         <thead>
           <tr>
-            <th>Entity</th>
-            <th>Status</th>
-            <th>Workflow ID</th>
+            <th v-on:click="sort_workflows('entity')">
+              <i v-if="sort_key == 'entity' && !reversed" class="material-icons tiny">
+                keyboard_arrow_down
+              </i>
+              <i v-else-if="sort_key == 'entity'" class="material-icons tiny">
+                keyboard_arrow_up
+              </i>
+              Entity
+            </th>
+            <th v-on:click="sort_workflows('status')">
+              <i v-if="sort_key == 'status' && !reversed" class="material-icons tiny">
+                keyboard_arrow_down
+              </i>
+              <i v-else-if="sort_key == 'status'" class="material-icons tiny">
+                keyboard_arrow_up
+              </i>
+              Status
+            </th>
+            <th v-on:click="sort_workflows('id')">
+              <i v-if="sort_key == 'id' && !reversed" class="material-icons tiny">
+                keyboard_arrow_down
+              </i>
+              <i v-else-if="sort_key == 'id'" class="material-icons tiny">
+                keyboard_arrow_up
+              </i>
+              Workflow ID
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -315,7 +363,9 @@ export default {
       cromwell_lines: null,
       active_workflow: null,
       active_operation: null,
-      active_log: null
+      active_log: null,
+      sort_key: null,
+      reversed: false
     }
   },
   computed: {
@@ -356,6 +406,17 @@ export default {
           console.error("Failed");
           console.error(response)
         })
+    },
+    sort_workflows(key) {
+      if (key == this.sort_key) {
+        this.workflows = _.reverse(this.workflows);
+        this.reversed = !this.reversed;
+      }
+      else {
+        this.reversed = false;
+        this.sort_key = key;
+        this.workflows = _.sortBy(this.workflows, key);
+      }
     },
     read_cromwell() {
       this.display_cromwell = true;
@@ -488,6 +549,8 @@ export default {
       this.active_workflow = null;
       this.active_operation = null;
       this.active_log = null;
+      this.sort_key = null;
+      this.reversed = false;
       this.init(to.params.namespace, to.params.workspace, to.params.submission_id)
       next();
     }

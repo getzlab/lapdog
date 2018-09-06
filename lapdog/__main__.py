@@ -3,6 +3,8 @@ import pandas as pd
 import lapdog
 from .api.__main__ import run as ui_main
 import os
+import tempfile
+import subprocess
 
 def main():
     parent = argparse.ArgumentParser(add_help=False)
@@ -270,13 +272,13 @@ def main():
     )
 
     ui_parser = subparsers.add_parser(
-        'api',
+        'ui',
         help="Starts the web API for lapdog",
         description="Starts the web API for lapdog"
     )
     ui_parser.set_defaults(func=lambda args: ui_main(args))
     ui_parser.add_argument(
-        '-n', '--no-ui',
+        '-a', '--api-only',
         action='store_false',
         help="Do not launch the ui",
         dest='vue'
@@ -296,10 +298,6 @@ def main():
     service_account_parser.add_argument(
         'email',
         help="Your firecloud account email"
-    )
-    service_account_parser.add_argument(
-        'key',
-        help="Path to your service account credentials"
     )
 
     args = parser.parse_args()
@@ -518,10 +516,25 @@ def cmd_finish(args):
     lapdog.complete_execution(args.submission_id)
 
 def cmd_service_account(args):
+    from .controllers import service_account
+    tempdir = tempfile.TemporaryDirectory()
+    print("Detecting GCloud service account")
+    acct, code = service_account()
+    if code != 200:
+        print("Error:", acct)
+    print("Detected:", acct)
+    print("Issuing service account token")
+    cmd = "gcloud iam service-accounts keys create --iam-account {} {}".format(
+        acct,
+        os.path.join(tempdir.name, 'key.json')
+    )
+    print(cmd)
+    subprocess.check_call(cmd, shell=True, executable='/bin/bash')
+    print("Registering service account with Firecloud")
     import requests
     from oauth2client.service_account import ServiceAccountCredentials
     scopes = ['https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(args.key, scopes=scopes)
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(os.path.join(tempdir.name, 'key.json'), scopes=scopes)
     headers = {"Authorization": "bearer " + credentials.get_access_token().access_token}
     headers["User-Agent"] = lapdog.fc.FISS_USER_AGENT
     profile_json = {"firstName":"None", "lastName": "None", "title":"None", "contactEmail":args.email,

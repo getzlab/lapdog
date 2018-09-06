@@ -16,6 +16,25 @@ paths:
           description: A Status Object representing the current Firecloud status
           schema:
             $ref: "#/definitions/Status"
+  /api/v1/quotas:
+    get:
+      operationId: lapdog.api.controllers.quotas
+      summary: Returns firecloud status
+      parameters:
+        -
+          in: query
+          name: region
+          required: false
+          type: string
+          description: Google cloud region
+          default: us-east1
+      responses:
+        default:
+          description: Error
+        200:
+          description: A list of quotas and usage
+          schema:
+            type: object
   /api/v1/cache:
     get:
       operationId: lapdog.api.controllers.cache_size

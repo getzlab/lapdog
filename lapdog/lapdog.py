@@ -721,15 +721,12 @@ class WorkspaceManager(dog.WorkspaceManager):
                             print("Call", call, "failed with error:", get_operation_status(calldata['jobId'])['error'])
                     else:
                         output_data = workflow_metadata[key]['workflow_output']
-                        entity_data = {}
+                        entity_data = pd.DataFrame(index=[entity])
                         for k,v in output_data['outputs'].items():
                             k = output_template[k]
                             if k.startswith('this.'):
-                                entity_data[k[5:]] = v
-                        submission_data = submission_data.append(pd.DataFrame(
-                            entity_data,
-                            index=[entity]
-                        ))
+                                entity_data[k[5:]] = [v]
+                        submission_data = submission_data.append(entity_data)
                 with capture():
                     self.update_entity_attributes(
                         submission['workflowEntityType'],

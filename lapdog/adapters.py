@@ -128,6 +128,8 @@ def get_operation_status(opid, parse=True):
         except yaml.scanner.ScannerError:
             if 'Permission denied' in text:
                 raise ValueError("Permission Denied")
+            print(text)
+            raise
         if 'done' in data and data['done']:
             cache_write(text, 'operation', opid)
     else:
