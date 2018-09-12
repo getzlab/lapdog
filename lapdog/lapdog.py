@@ -6,7 +6,7 @@ import contextlib
 import csv
 from google.cloud import storage
 from agutil.parallel import parallelize, parallelize2
-from agutil import status_bar, byteSize
+from agutil import status_bar, byteSize, cmd as execute_command
 import sys
 import re
 import tempfile
@@ -72,9 +72,23 @@ def build_input_key(template):
 
 @parallelize2()
 def upload(bucket, path, source):
+    #4294967296
+    if os.path.isfile(source) and os.path.getsize(source) >= 3865470566:
+        # 4Gib, must do a composite upload
+        result = execute_command(
+            'gsutil -o GSUtil:parallel_composite_upload_threshold=150M cp {} {}'.format(
+                source,
+                path
+            ),
+            False
+        )
+        if result.returncode:
+            print(result.buffer)
+            raise ValueError("Large file upload failed")
     blob = bucket.blob(path)
     # print("Commencing upload:", source)
     blob.upload_from_filename(source)
+
 
 def purge_cache():
     for path in glob(cache_init()+'/*'):
@@ -180,8 +194,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         return bool(creation_success_pattern.search(text))
 
     def upload_entities(self, etype, df, index=True):
-        #FIXME: This includes entity rewrites
-        self.operator.update_entities_df(etype, df)
+        return self.operator.update_entities_df(etype, df, index)
 
     def get_samples(self):
         return self.operator.get_entities_df('sample')
@@ -261,6 +274,12 @@ class WorkspaceManager(dog.WorkspaceManager):
     def upload_entities(self, etype, df, index=True):
         return self.operator.update_entities_df(etype, df, index)
 
+    def update_entity_attributes(self, etype, df):
+        if isinstance(df, pd.DataFrame):
+            return self.operator.update_entities_df_attributes(etype, df)
+        else:
+            return super().update_entity_attributes(etype, df)
+
     def update_configuration(self, config, wdl=None, name=None, namespace=None):
         """
         Update a method configuration and (optionally) the WDL
@@ -293,7 +312,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             if result:
                 version = int(result.group(1))
         if config['methodRepoMethod']['methodVersion'] == 'latest':
-            if version is not None:
+            if version is None:
                 with dalmatian_api():
                     version = int(dog.get_method_version(
                         config['methodRepoMethod']['methodNamespace'],
@@ -320,7 +339,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             if isinstance(attrs[k], str) and os.path.isfile(attrs[k]):
                 path, callback = uploader.upload(
                     attrs[k],
-                    os.path.basename(attrs[k])
+                    ''
                 )
                 attrs[k] = path
                 uploads.append(callback)
@@ -553,7 +572,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 'entityName': entity,
                 'entityType': etype
             },
-            'submitter': 'labdog',
+            'submitter': 'lapdog',
             'workflowEntityType': config['rootEntityType'],
             'workflowExpression': expression if expression is not None else None
         }

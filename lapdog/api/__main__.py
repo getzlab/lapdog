@@ -30,13 +30,19 @@ def run(args):
     CORS(app.app, origins=r'.*')
     app.app.config['storage'] = {}
     if args.vue:
+        with open(vue_dir+'/.env', 'w') as w:
+            w.write("API_URL=http://localhost:%d" % args.port)
         subprocess.Popen(
             'npm run dev',
             shell=True,
             executable='/bin/bash',
-            preexec_fn=lambda :os.chdir(vue_dir)
+            preexec_fn=lambda :os.chdir(vue_dir),
+            env={
+                **os.environ,
+                **{"PORT": str(args.ui_port)}
+            }
         )
-    app.run(port=4201)
+    app.run(port=args.port)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('lapdog-ui')
@@ -49,5 +55,17 @@ if __name__ == '__main__':
         '--install',
         action='store_true',
         help="Installs the node dependencies to run the UI"
+    )
+    parser.add_argument(
+        '-p', '--port',
+        type=int,
+        help="Port to run the API (default: 4201)",
+        default=4201
+    )
+    parser.add_argument(
+        '-u', '--ui-port',
+        type=int,
+        help="Port to run the browser UI (default: 4200)",
+        default=4200
     )
     run(parser.parse_args())

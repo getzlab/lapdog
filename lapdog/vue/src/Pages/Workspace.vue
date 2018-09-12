@@ -286,7 +286,7 @@
         _this.submission_message = "-";
         console.log("Executing preflight");
         console.log(_this);
-        let query = 'http://localhost:4201/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+"/preflight?";
+        let query = API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+"/preflight?";
         query += "config="+encodeURIComponent(_this.submission_config);
         query += "&entity="+encodeURIComponent(_this.entity_field);
         if (_this.submission_expression != "") query += "&expression="+encodeURIComponent(_this.submission_expression);
@@ -306,7 +306,7 @@
           })
       }, 1000),
       submit_workflow() {
-        let query = 'http://localhost:4201/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
+        let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
         query += "config="+encodeURIComponent(this.submission_config);
         query += "&entity="+encodeURIComponent(this.entity_field);
         if (this.submission_expression != "") query += "&expression="+encodeURIComponent(this.submission_expression);
@@ -374,19 +374,19 @@
         return this.entity_field == 'h' ? 'valid' : 'invalid';
       },
       getWorkspace(namespace, workspace) {
-        axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace)
+        axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
             console.log(response.data);
             this.ws = response.data;
             this.entity_types = response.data.entities;
             this.method_configs = response.data.configs;
             window.$('.modal').modal();
-            axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
+            axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
               .then(response => {
                 console.log(response.data);
                 this.cache_state = response.data;
                 console.log("Fetching submissions");
-                  axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions')
+                  axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions')
                     .then(response => {
                       console.log("Fetched submissions");
                       console.log(response.data);
@@ -409,7 +409,7 @@
       },
 
      get_acl(namespace, workspace) {
-        axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/acl')
+        axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/acl')
           .then(response => {
             console.log("RESPONSE");
             console.log(response.data);
@@ -422,7 +422,7 @@
       },
 
       // get_entities(namespace, workspace) {
-      //   axios.get('http://localhost:4201/api/v1/workspaces/'+namespace+'/'+workspace+'/entities')
+      //   axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/entities')
       //     .then(response => {
       //       this.entities = response.data.entity_types;
       //       for(let etype in this.entities.entity_types)
@@ -437,7 +437,7 @@
       // },
       sync_cache() {
         this.cache_state = 'sync';
-        axios.put('http://localhost:4201/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache')
+        axios.put(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache')
           .then(response => {
             console.log(response.data);
             this.cache_state = response.data
@@ -448,7 +448,7 @@
           })
       },
       get_configs() {
-        axios.get('http://localhost:4201/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/configs')
+        axios.get(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/configs')
           .then(response => {
             console.log(response.data);
             this.method_configs = response.data;
@@ -461,7 +461,7 @@
           })
       }
       // get_cache_state(etype) {
-      //   axios.get('http://localhost:4201/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache/'+etype)
+      //   axios.get(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache/'+etype)
       //     .then(response => {
       //       console.log("Fetched cache state for "+etype);
       //       this.cache_state[etype] = response.data;

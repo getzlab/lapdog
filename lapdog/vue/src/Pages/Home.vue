@@ -47,7 +47,7 @@
 
     methods: {
       getStatus() {
-        axios.get('http://localhost:4201/api/v1/status')
+        axios.get(API_URL+'/api/v1/status')
           .then(response => {
             console.log(response.data);
             this.systems = [];

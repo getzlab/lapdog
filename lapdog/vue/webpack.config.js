@@ -1,5 +1,7 @@
 var path = require('path')
 var webpack = require('webpack')
+require('dotenv').config()
+console.log(process.env.API_URL);
 
 module.exports = {
   entry: './src/main.js',
@@ -53,7 +55,12 @@ module.exports = {
   performance: {
     hints: false
   },
-  devtool: '#eval-source-map'
+  devtool: '#eval-source-map',
+  plugins: [
+    new webpack.DefinePlugin({
+      API_URL: JSON.stringify(process.env.API_URL)
+    })
+  ]
 }
 
 if (process.env.NODE_ENV === 'production') {

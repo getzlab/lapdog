@@ -149,17 +149,16 @@ def abort_operation(opid):
         stderr=subprocess.STDOUT,
     )
 
-def kill_machines(workflow_id):
+def kill_machines(label):
     machines = subprocess.run(
-        'gcloud compute instances list --filter="labels.cromwell-workflow-id=cromwell-%s"' % (
-            workflow_id
+        'gcloud compute instances list --filter="labels.%s"' % (
+            label
         ),
         shell=True,
         executable='/bin/bash',
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     ).stdout.decode().split('\n')
-    print("M:", machines)
     if len(machines) > 1:
         machines = ' '.join(line.split()[0] for line in machines[1:] if len(line.strip()))
     if len(machines):
@@ -301,9 +300,13 @@ class SubmissionAdapter(object):
             for call in wf.calls:
                 try:
                     call = get_operation_status(call.operation)
-                    delta = datetime.datetime.strptime(
-                        call['metadata']['endTime'],
-                        timestamp_format
+                    delta = (
+                        datetime.datetime.strptime(
+                            call['metadata']['endTime'],
+                            timestamp_format
+                        )
+                        if 'endTime' in call['metadata']
+                        else datetime.datetime.utcnow()
                     ) - datetime.datetime.strptime(
                         call['metadata']['startTime'],
                         timestamp_format
@@ -453,6 +456,7 @@ class SubmissionAdapter(object):
                 }
             )
         )
+        kill_machines('lapdog-submission-id='+self.submission)
 
 
     @property
@@ -611,7 +615,7 @@ class WorkflowAdapter(object):
             # print("Aborting", self.calls[-1].operation)
             abort_operation(self.calls[-1].operation)
         if self.long_id is not None:
-            kill_machines(self.long_id)
+            kill_machines('cromwell-workflow-id=cromwell-'+self.long_id)
 
 
 

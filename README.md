@@ -4,6 +4,9 @@
 
 A relaxed wrapper for dalmatian and FISS
 
+## Requirements
+Lapdog requires the Google Cloud SDK, which can be installed [here](https://cloud.google.com/sdk/)
+
 ## Installing
 1. Install lapdog via pip: `pip install lapdog`
     - If you already have lapdog installed, you can upgrade it with

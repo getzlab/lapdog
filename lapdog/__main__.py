@@ -288,6 +288,20 @@ def main():
         action='store_true',
         help="Installs the node dependencies to run the UI"
     )
+    ui_parser.add_argument(
+        '-p', '--port',
+        type=int,
+        help="Set the port for the browser UI. (Default: 4200)",
+        default=4200,
+        dest='ui_port'
+    )
+    ui_parser.add_argument(
+        '--api-port',
+        type=int,
+        help="Set the port for the backend API. (Default: 4201)",
+        default=4201,
+        dest='port'
+    )
 
     service_account_parser = subparsers.add_parser(
         'register-service-account',
@@ -518,6 +532,14 @@ def cmd_finish(args):
 def cmd_service_account(args):
     from .controllers import service_account
     tempdir = tempfile.TemporaryDirectory()
+    print("Enabling the Genomics API")
+    cmd = "gcloud services enable genomics.googleapis.com"
+    print(cmd)
+    subprocess.check_call(
+        cmd,
+        shell=True,
+        executable='/bin/bash'
+    )
     print("Detecting GCloud service account")
     acct, code = service_account()
     if code != 200:

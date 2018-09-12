@@ -7,12 +7,13 @@ import crayons
 import dalmatian as dog
 from io import StringIO
 import contextlib
+import traceback
 
 class APIException(ValueError):
     pass
 
 @contextlib.contextmanager
-def capture():
+def capture(display=True):
     try:
         stdout_buff = StringIO()
         stderr_buff = StringIO()
@@ -24,12 +25,13 @@ def capture():
     finally:
         sys.stdout = old_stdout
         stdout_buff.seek(0,0)
-        print(stdout_buff.read(), end='')
-        stdout_buff.seek(0,0)
         sys.stderr = old_stderr
         stderr_buff.seek(0,0)
-        print(stderr_buff.read(), end='', file=sys.stderr)
-        stderr_buff.seek(0,0)
+        if display:
+            print(stderr_buff.read(), end='', file=sys.stderr)
+            stderr_buff.seek(0,0)
+            print(stdout_buff.read(), end='')
+            stdout_buff.seek(0,0)
 
 class Operator(object):
     def __init__(self, workspace_manager):
@@ -49,6 +51,9 @@ class Operator(object):
 
     def go_offline(self):
         self.live = False
+        a, b, c = sys.exc_info()
+        if a is None and b is None:
+            print(traceback.format_exc())
         print(
             crayons.red("WARNING:", bold=False),
             "The operation cache is now offline for {}/{}".format(
@@ -69,6 +74,7 @@ class Operator(object):
             except Exception as e:
                 failures.append((key, setter, getter))
                 exceptions.append(e)
+                print(traceback.format_exc())
             else:
                 try:
                     if getter is not None:
@@ -150,6 +156,7 @@ class Operator(object):
         return 'Successfully' in text and 'configuration' in text and config['name'] in text
 
     def add_config(self, config):
+        key = 'config:%s/%s' % (config['namespace'], config['name'])
         if 'configs' in self.cache and self.cache['configs'] is not None:
             # self.cache[config['name']] = config
             self.cache['configs'] = [
@@ -163,7 +170,15 @@ class Operator(object):
                     'rootEntityType': config['rootEntityType']
                 }
             ]
-            key = 'config:%s/%s' % (config['namespace'], config['name'])
+        else:
+            self.cache['configs'] = [
+                {
+                    'methodRepoMethod': config['methodRepoMethod'],
+                    'name': config['name'],
+                    'namespace': config['namespace'],
+                    'rootEntityType': config['rootEntityType']
+                }
+            ]
         self.cache[key] = config
         if self.live:
             result = self._upload_config(config)
@@ -346,6 +361,75 @@ class Operator(object):
             self.pending.append((
                 key,
                 partial(dog.WorkspaceManager.upload_entities, self.workspace, etype, updates, index),
+                getter
+            ))
+            self.pending.append((
+                'entity_types',
+                None,
+                lambda x=None:self.entities
+            ))
+        if self.live:
+            try:
+                self.get_entities_df(etype)
+            except APIException:
+                pass
+
+    def update_entities_df_attributes(self, etype, updates):
+        getter = partial(
+            getattr(
+                dog.WorkspaceManager,
+                'get_'+etype+'s'
+            ),
+            self.workspace
+        )
+        # getter = getattr(
+        #     self.workspace,
+        #     'get_'+etype+'s'
+        # )
+        key = 'entities:'+etype
+        if key in self.cache:
+            if self.cache[key] is None:
+                self.cache[key] = updates
+            else:
+                self.cache[key] = self.cache[key].append(
+                    updates.loc[[k for k in updates.index if k not in self.cache[key].index]]
+                )
+                self.cache[key].update(updates)
+            self.dirty.add(key)
+            if 'entity_types' not in self.cache:
+                self.cache['entity_types'] = {}
+            self.cache['entity_types'][etype] = {
+                'attributeNames': [*self.cache[key].columns],
+                'count': len(self.cache[key]),
+                'idName': etype+'_id'
+            }
+            self.dirty.add('entity_types')
+        if self.live:
+            try:
+                dog.WorkspaceManager.update_entity_attributes(
+                    self.workspace,
+                    etype,
+                    updates
+                )
+                self.cache[key] = getter()
+                if key in self.dirty:
+                    self.dirty.remove(key)
+            except ValueError:
+                self.go_offline()
+                self.pending.append((
+                    key,
+                    partial(dog.WorkspaceManager.update_entity_attributes, self.workspace, etype, updates),
+                    getter
+                ))
+                self.pending.append((
+                    'entity_types',
+                    None,
+                    lambda x=None:self.entities
+                ))
+        else:
+            self.pending.append((
+                key,
+                partial(dog.WorkspaceManager.update_entity_attributes, self.workspace, etype, updates),
                 getter
             ))
             self.pending.append((

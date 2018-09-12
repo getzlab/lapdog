@@ -58,7 +58,7 @@ Other: error_outline
             <ul class="collapsible">
               <li v-for="call in active_workflow.calls">
 
-                <div class="collapsible-header">
+                <div class="collapsible-header" v-bind:title="call.status">
                   <i v-if="call.status == 'Success'" class="material-icons">check_cicle</i>
                   <i v-else-if="call.status == 'Preempted'" class="material-icons">sync_disabled</i>
                   <i v-else-if="call.status == 'Failed'  || call.status == 'Cancelled'" class="material-icons">sync_problem</i>
@@ -97,7 +97,7 @@ Other: error_outline
                     <div class="col s2">
                       Last Message:
                     </div>
-                    <div class="col s10 truncate">
+                    <div class="col s10 truncate" v-bind:title="call.message">
                       {{call.message}}
                     </div>
                   </div>
@@ -243,7 +243,7 @@ Other: error_outline
         <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
       </div>
       <div class="col s6" v-if="submission.status == 'Running'">
-        <a class='btn blue' v-on:click.prevent="abort_sub">Abort Submission</a>
+        <a class='btn red darken-3' v-on:click.prevent="abort_sub">Abort Submission</a>
       </div>
     </div>
     <div class="row">
@@ -383,12 +383,12 @@ export default {
   methods: {
     init(namespace, workspace, sid) {
       this.submission = null;
-      axios.get('http://localhost:4201/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid)
+      axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid)
         .then(response => {
           console.log("Got submission");
           this.submission = response.data;
           console.log("Fetching workflows");
-          axios.get('http://localhost:4201/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/workflows')
+          axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/workflows')
             .then(response => {
               console.log("Got workflows");
               console.log(response.data);
@@ -421,7 +421,7 @@ export default {
     read_cromwell() {
       this.display_cromwell = true;
       console.log("Reading cromwell");
-      axios.get('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/cromwell?offset='+encodeURIComponent(''+this.cromwell_offset))
+      axios.get(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/cromwell?offset='+encodeURIComponent(''+this.cromwell_offset))
         .then(response => {
           console.log("Read cromwell lines");
           console.log(response.data);
@@ -442,7 +442,7 @@ export default {
         html: "Checking operation "+operation_id+"...",
         displayLength: 2000,
       });
-      axios.get('http://localhost:4201/api/v1/operations/'+encodeURIComponent(operation_id.substring(11)))
+      axios.get(API_URL+'/api/v1/operations/'+encodeURIComponent(operation_id.substring(11)))
         .then(response => {
           this.active_operation = response.data;
           window.$('#operation-modal').modal();
@@ -459,7 +459,7 @@ export default {
         html: "Reading log...",
         displayLength: 2000,
       });
-      axios.get('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+this.active_workflow.id+'/'+log_type+'/'+call_index)
+      axios.get(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+this.active_workflow.id+'/'+log_type+'/'+call_index)
         .then(response => {
           this.active_log = response.data;
           window.$('#log-modal').modal();
@@ -480,7 +480,7 @@ export default {
         html: "Loading workflow "+workflow_id+"...",
         displayLength: 2000,
       });
-      axios.get('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+workflow_id)
+      axios.get(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+workflow_id)
         .then(response => {
           console.log("Got workflow detail");
           console.log(response.data);
@@ -501,7 +501,7 @@ export default {
         html: "Aborting Submission",
         displayLength: 2000,
       });
-      axios.delete('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
+      axios.delete(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
         .then(response => {
           console.log("Abort results");
           console.log(response);
@@ -518,7 +518,7 @@ export default {
         html: "Uploading results to Firecloud...",
         displayLength: 2000,
       });
-      axios.put('http://localhost:4201/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
+      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
         .then(response => {
           console.log("Upload results");
           console.log(response);
@@ -559,16 +559,16 @@ export default {
 </script>
 
 <style lang="css">
-div.log-container {
-  max-height: 216px;
-  border-radius: 8px;
-  overflow-y: auto;
-  /* margin: 1em;
-  padding: 1em; */
-  /* border: 1px solid black; */
-  padding-left: 20px;
-  font-family: monospace;
-  white-space: pre-wrap;
-  font-size: 90%;
-}
+  div.log-container {
+    max-height: 250px;
+    border-radius: 8px;
+    overflow-y: auto;
+    /* margin: 1em;
+    padding: 1em; */
+    /* border: 1px solid black; */
+    padding-left: 20px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    font-size: 90%;
+  }
 </style>

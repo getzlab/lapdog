@@ -18,7 +18,7 @@
             <div class="input-field col s12">
                <select id="clone-select" v-model="parent_workspace" class="browser-default">
                  <option value="" selected>Create empty workspace</option>
-                 <option v-for="workspace in filtered_workspaces" v-bind:value="workspace.namespace+'/'+workspace.name">
+                 <option v-for="workspace in filtered_workspaces" v-bind:value="workspace.namespace+'/'+workspace.name" :key="workspace.namespace+'/'+workspace.name">
                    Clone from {{workspace.namespace+'/'+workspace.name}}
                  </option>
                </select>
@@ -59,7 +59,7 @@
               </div>
             </div>
             <router-link class="blue-text text-darken-4 collection-item sidenav-close" v-for="workspace in filtered_workspaces" active-class="active blue lighten-1"
-              :to="{name: 'workspace', params: {namespace: workspace.namespace, workspace: workspace.name}}">
+              :to="{name: 'workspace', params: {namespace: workspace.namespace, workspace: workspace.name}}" :key="workspace.namespace+'/'+workspace.name">
               {{workspace.namespace}}/{{workspace.name}}
             </router-link>
           </div>
@@ -107,16 +107,13 @@
       <aside class="sidebar">
       </aside>
       <div class="content container">
-        <div v-if="quotas && quotas.alerts.length" class="row" style="border: 2px solid red;">
+        <div v-if="quotas && quotas.alerts.length" class="row" style="margin-top: 10px; border: 2px solid red;">
           <div class="col s10 offset s1 red-text pushpin">
-            Alert: The following quotas are nearly exceeded: {{
-              lodash.join(
-                lodash.map(
-                  quotas.alerts,
-                  obj => obj.metric + ' ('+obj.percent+')'
-                ),
-                ', '
-              )
+            Alert: The following quotas may delay workflows: {{
+              lodash.chain(quotas.alerts)
+                .map(obj => obj.metric + ' (' + obj.usage + '/' + obj.limit + ')')
+                .join(', ')
+                .value()
             }}
           </div>
         </div>
@@ -187,32 +184,27 @@ export default {
   created() {
     this.getWorkspaces();
     this.getServiceAccount();
-    axios.get('http://localhost:4201/api/v1/cache')
+    axios.get(API_URL+'/api/v1/cache')
       .then(response => {
         this.cache_size = response.data;
         setInterval(() => {
-          axios.get('http://localhost:4201/api/v1/cache')
+          axios.get(API_URL+'/api/v1/cache')
             .then(response => {
               this.cache_size = response.data
             })
         }, 30000);
       })
       setInterval(() => {
-        axios.get('http://localhost:4201/api/v1/quotas')
+        axios.get(API_URL+'/api/v1/quotas')
           .then(response => {
             this.quotas = response.data;
-            // if (this.quotas.alerts.length) {
-            //   setTimeout(() => {
-            //     window.$('.pushpin').pushpin();
-            //   }, 100);
-            // }
           })
-      }, 60000);
+      }, 120000);
   },
 
   methods: {
     create_new_workspace(event) {
-      let url = 'http://localhost:4201/api/v1/workspaces/'+this.create_namespace+'/'+this.create_workspace;
+      let url = API_URL+'/api/v1/workspaces/'+this.create_namespace+'/'+this.create_workspace;
       if (this.parent_workspace.length > 1 && this.parent_workspace.includes('/')) {
         url += '?parent='+encodeURIComponent(this.parent_workspace);
       }
@@ -245,7 +237,7 @@ export default {
     },
 
     getWorkspaces() {
-      axios.get('http://localhost:4201/api/v1/workspaces')
+      axios.get(API_URL+'/api/v1/workspaces')
         .then(response => {
           this.workspaces = response.data;
           // window.$('select').formSelect();
@@ -256,7 +248,7 @@ export default {
         })
     },
     get_submission() {
-      axios.get('http://localhost:4201/api/v1/submissions/decode?submission_id='+encodeURIComponent(this.submission))
+      axios.get(API_URL+'/api/v1/submissions/decode?submission_id='+encodeURIComponent(this.submission))
         .then(response => {
           console.log("Decoded submission");
           this.submission = '';
@@ -278,7 +270,7 @@ export default {
         })
     },
     getServiceAccount() {
-      axios.get('http://localhost:4201/api/v1/service-account')
+      axios.get(API_URL+'/api/v1/service-account')
         .then(response => {
           this.acct = response.data
         })

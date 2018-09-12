@@ -10,6 +10,8 @@ window.jQuery = require('jquery')
 window.materialize = require('materialize-css')
 Vue.use(Router)
 
+// require('dotenv').config()
+
 const router = new Router({
   routes:
   [

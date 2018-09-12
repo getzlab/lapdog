@@ -305,8 +305,7 @@ def sync_cache(namespace, name):
         except NameError:
             # WDL Doesnt exist
             pass
-    if was_live:
-        ws.sync()
+    ws.sync()
     ws.operator._webcache_ = True
     return get_cache(namespace, name)
 
@@ -409,7 +408,7 @@ def execute(namespace, name, config, entity, expression="", etype=""):
             'operation_id': operation_id
         }, 200
     except:
-        print(sys.exc_info())
+        print(traceback.format_exc())
         return {
             'failed': True,
             'ok': False,
@@ -632,7 +631,7 @@ def quotas(region):
             {
                 **r,
                 **{
-                    'metric': r['metric']+'.'+region
+                    'metric': region+'.'+r['metric']
                 }
             }
             for r in yaml.load(io.StringIO(text))['quotas']
