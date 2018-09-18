@@ -8,6 +8,7 @@ import dalmatian as dog
 from io import StringIO
 import contextlib
 import traceback
+import pandas as pd
 
 class APIException(ValueError):
     pass
@@ -113,6 +114,26 @@ class Operator(object):
                 self.last_result.text if self.last_result is not None else '<No api calls>'
             )
         )
+
+    @property
+    def bucket_id(self):
+        ws = self.firecloud_workspace
+        if 'workspace' in ws and 'bucketName' in ws['workspace']:
+            return ws['workspace']['bucketName']
+        self.fail()
+
+    @property
+    def firecloud_workspace(self):
+        if self.live:
+            result = self.tentative_json(api.get_workspace(
+                self.workspace.namespace,
+                self.workspace.workspace
+            ))
+            if result is not None:
+                self.cache['workspace'] = result
+        if 'workspace' in self.cache and self.cache['workspace'] is not None:
+            return self.cache['workspace']
+        self.fail()
 
     @property
     def configs(self):
@@ -282,6 +303,15 @@ class Operator(object):
             return self.cache['entity_types']
         self.fail()
 
+    @property
+    def _entities_live_update(self):
+        state = self.live
+        self.live = True
+        try:
+            return self.entity_types
+        finally:
+            self.live = state
+
 
     def get_entities_df(self, etype):
         getter = partial(
@@ -317,23 +347,22 @@ class Operator(object):
         #     'get_'+etype+'s'
         # )
         key = 'entities:'+etype
-        if key in self.cache:
-            if self.cache[key] is None:
-                self.cache[key] = updates
-            else:
-                self.cache[key] = self.cache[key].append(
-                    updates.loc[[k for k in updates.index if k not in self.cache[key].index]]
-                )
-                self.cache[key].update(updates)
-            self.dirty.add(key)
-            if 'entity_types' not in self.cache:
-                self.cache['entity_types'] = {}
-            self.cache['entity_types'][etype] = {
-                'attributeNames': [*self.cache[key].columns],
-                'count': len(self.cache[key]),
-                'idName': etype+'_id'
-            }
-            self.dirty.add('entity_types')
+        if key not in self.cache or self.cache[key] is None:
+            self.cache[key] = updates
+        else:
+            self.cache[key] = self.cache[key].append(
+                updates.loc[[k for k in updates.index if k not in self.cache[key].index]]
+            )
+            self.cache[key].update(updates)
+        self.dirty.add(key)
+        if 'entity_types' not in self.cache:
+            self.cache['entity_types'] = {}
+        self.cache['entity_types'][etype] = {
+            'attributeNames': [*self.cache[key].columns],
+            'count': len(self.cache[key]),
+            'idName': etype+'_id'
+        }
+        self.dirty.add('entity_types')
         if self.live:
             try:
                 dog.WorkspaceManager.upload_entities(
@@ -355,7 +384,7 @@ class Operator(object):
                 self.pending.append((
                     'entity_types',
                     None,
-                    lambda x=None:self.entities
+                    lambda x=None:self._entities_live_update
                 ))
         else:
             self.pending.append((
@@ -366,7 +395,7 @@ class Operator(object):
             self.pending.append((
                 'entity_types',
                 None,
-                lambda x=None:self.entities
+                lambda x=None:self._entities_live_update
             ))
         if self.live:
             try:
@@ -387,23 +416,22 @@ class Operator(object):
         #     'get_'+etype+'s'
         # )
         key = 'entities:'+etype
-        if key in self.cache:
-            if self.cache[key] is None:
-                self.cache[key] = updates
-            else:
-                self.cache[key] = self.cache[key].append(
-                    updates.loc[[k for k in updates.index if k not in self.cache[key].index]]
-                )
-                self.cache[key].update(updates)
-            self.dirty.add(key)
-            if 'entity_types' not in self.cache:
-                self.cache['entity_types'] = {}
-            self.cache['entity_types'][etype] = {
-                'attributeNames': [*self.cache[key].columns],
-                'count': len(self.cache[key]),
-                'idName': etype+'_id'
-            }
-            self.dirty.add('entity_types')
+        if key not in self.cache or self.cache[key] is None:
+            self.cache[key] = updates
+        else:
+            self.cache[key] = self.cache[key].append(
+                updates.loc[[k for k in updates.index if k not in self.cache[key].index]]
+            )
+            self.cache[key].update(updates)
+        self.dirty.add(key)
+        if 'entity_types' not in self.cache:
+            self.cache['entity_types'] = {}
+        self.cache['entity_types'][etype] = {
+            'attributeNames': [*self.cache[key].columns],
+            'count': len(self.cache[key]),
+            'idName': etype+'_id'
+        }
+        self.dirty.add('entity_types')
         if self.live:
             try:
                 dog.WorkspaceManager.update_entity_attributes(
@@ -424,7 +452,7 @@ class Operator(object):
                 self.pending.append((
                     'entity_types',
                     None,
-                    lambda x=None:self.entities
+                    lambda x=None:self._entities_live_update
                 ))
         else:
             self.pending.append((
@@ -435,7 +463,7 @@ class Operator(object):
             self.pending.append((
                 'entity_types',
                 None,
-                lambda x=None:self.entities
+                lambda x=None:self._entities_live_update
             ))
         if self.live:
             try:
@@ -443,43 +471,108 @@ class Operator(object):
             except APIException:
                 pass
 
-    @property
-    def attributes(self):
+    def update_entity_set(self, etype, set_id, member_ids):
+        key = 'entities:%s_set' % etype
+        updates = pd.DataFrame(index=[set_id], data={etype+'s':[[*member_ids]]})
+        if key not in self.cache or self.cache[key] is None:
+            self.cache[key] = updates
+        else:
+            self.cache[key] = self.cache[key].append(
+                updates.loc[[k for k in updates.index if k not in self.cache[key].index]],
+                sort=True
+            )
+            self.cache[key].update(updates)
+        self.dirty.add(key)
+        if 'entity_types' not in self.cache:
+            self.cache['entity_types'] = {}
+        self.cache['entity_types'][etype+'_set'] = {
+            'attributeNames': [*self.cache[key].columns],
+            'count': len(self.cache[key]),
+            'idName': etype+'_set_id'
+        }
+        self.dirty.add('entity_types')
+        setter = partial(
+            dog.WorkspaceManager.update_entity_set,
+            self.workspace,
+            etype,
+            set_id,
+            member_ids
+        )
+        getter = partial(
+            getattr(
+                dog.WorkspaceManager,
+                'get_'+etype+'s'
+            ),
+            self.workspace
+        )
         if self.live:
             try:
-                self.cache['attributes'] = dog.WorkspaceManager.get_attributes(self.workspace)
-            except AssertionError:
+                with capture() as (stdout_buff, stderr_buff):
+                    result = setter()
+                    stdout_buff.seek(0,0)
+                    stderr_buff.seek(0,0)
+                    text = (stdout_buff.read() + stderr_buff.read()).lower()
+                if not ('successfully imported' in text or 'successfuly updated.' in text):
+                    raise APIException("Update appeared to fail")
+            except APIException:
+                # One of the update routes failed
                 self.go_offline()
-        if 'attributes' in self.cache and self.cache['attributes'] is not None:
-            return self.cache['attributes']
+        if not self.live:
+            # offline. Add operations
+            self.pending.append((
+                key,
+                setter,
+                getter
+            ))
+            self.pending.append((
+                'entity_types',
+                None,
+                lambda x=None:self._entities_live_update
+            ))
+        else:
+            try:
+                self.get_entities_df(etype+'_sets')
+            except APIException:
+                pass
+
+
+    @property
+    def attributes(self):
+        ws = self.firecloud_workspace
+        if 'workspace' in ws and 'attributes' in ws['workspace']:
+            return ws['workspace']['attributes']
         self.fail()
 
     def update_attributes(self, attrs):
-        if 'attributes' in self.cache:
-            if self.cache['attributes'] is None:
-                self.cache['attributes'] = {k:v for k,v in attrs.items()}
+        if 'workspace' in self.cache:
+            if self.cache['workspace'] is None:
+                self.cache['workspace'] = {
+                    'workspace': {
+                        'attributes': {k:v for k,v in attrs.items()}
+                    }
+                }
             else:
-                self.cache['attributes'].update(attrs)
-            self.dirty.add('attributes')
+                self.cache['workspace']['workspace']['attributes'].update(attrs)
+            self.dirty.add('workspace')
         if self.live:
             try:
                 dog.WorkspaceManager.update_attributes(self.workspace, attrs)
             except AssertionError:
                 self.go_offline()
                 self.pending.append((
-                    'attributes',
+                    'workspace',
                     partial(dog.WorkspaceManager.update_attributes, self.workspace, attrs),
-                    partial(dog.WorkspaceManager.get_attributes, self.workspace)
+                    partial(api.get_workspace, self.workspace.namespace, self.workspace.workspace)
                 ))
         else:
             self.pending.append((
-                'attributes',
+                'workspace',
                 partial(dog.WorkspaceManager.update_attributes, self.workspace, attrs),
-                partial(dog.WorkspaceManager.get_attributes, self.workspace)
+                partial(api.get_workspace, self.workspace.namespace, self.workspace.workspace)
             ))
         if self.live:
             try:
-                self.cache['attributes'] = dog.WorkspaceManager.get_attributes(self.workspace)
+                self.cache['workspace'] = api.get_workspace(self.workspace.namespace, self.workspace.workspace)
             except AssertionError:
                 pass
 

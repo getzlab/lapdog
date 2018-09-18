@@ -103,15 +103,14 @@ def list_workspaces():
 
 @cached(120)
 def workspace(namespace, name):
-    response = fc.get_workspace(namespace, name)
     ws = get_workspace_object(namespace, name)
-    data = response.json()
+    data = ws.operator.firecloud_workspace
     data['entities'] = [
         {**v, **{'type':k}}
         for k,v in ws.operator.entity_types.items()
     ]
     data['configs'] = get_configs(namespace, name)
-    return data, response.status_code
+    return data, 200
 
 @cached(600)
 def service_account():
@@ -260,12 +259,7 @@ def set_acl(namespace, name):
 
 @cached(10)
 def get_entities(namespace, name):
-    result = fc.__get('/api/workspaces/{}/{}/entities'.format(namespace, name))
-    if result.status_code >= 400:
-        return {
-            'failed': True,
-            'reason': result.txt
-        }, result.status_code
+    result = get_workspace_object(namespace, name).operator.entity_types
     return {
         'failed': False,
         'reason': 'success',
@@ -276,7 +270,7 @@ def get_entities(namespace, name):
                 'n': val['count'],
                 'id': val['idName'],
                 # 'cache': get_cache(namespace, name, key)
-            } for key, val in result.json().items()
+            } for key, val in result.items()
         ], key=lambda x:x['type'])
     }, 200
 
@@ -291,6 +285,8 @@ def get_cache(namespace, name):
 def sync_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
     was_live = ws.live
+    if not ws.live:
+        ws.sync()
     ws.get_attributes()
     for etype in ws.operator.entity_types:
         ws.operator.get_entities_df(etype)
@@ -342,7 +338,7 @@ def list_submissions(namespace, name):
     ws = get_workspace_object(namespace, name)
     return sorted(
         (
-            sub for sub in ws.list_submissions()
+            sub for sub in ws.list_submissions(lapdog_only=True)
             if 'identifier' in sub
         ),
         key=lambda s:(

@@ -154,7 +154,7 @@
           </span>
         </div>
         <div class="col s2">
-          <a class='btn blue' v-if="cache_state != 'up-to-date' && cache_state != 'sync'" v-on:click="sync_cache">Sync</a>
+          <a class='btn blue' v-if="cache_state != 'sync'" v-on:click="sync_cache">Sync</a>
         </div>
       </div>
       <div class="row">

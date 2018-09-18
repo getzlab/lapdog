@@ -335,7 +335,6 @@ class SubmissionAdapter(object):
                 timestamp_format
             )
             delta = delta.total_seconds() / 3600
-            print("Delta:", delta)
             if delta > maxTime:
                 maxTime = delta
         cost += mtypes['n1-standard-1'][0] * maxTime

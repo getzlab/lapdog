@@ -4,6 +4,7 @@ import lapdog
 from .api.__main__ import run as ui_main
 import os
 import tempfile
+import json
 import subprocess
 
 def main():
@@ -393,9 +394,9 @@ def cmd_method(args):
 
     if args.config is not None:
         args.config = json.load(args.config)
-    if args.method_name is None:
+    if args.method_name is None and args.wdl is not None:
         args.method_name = os.path.splitext(os.path.basename(args.wdl.name))[0]
-    args.workspace.update_configuration(args.config, args.wdl, args.method_name, args.namespaced)
+    args.workspace.update_configuration(args.config, args.wdl, args.method_name, args.namespace)
 
 def cmd_attrs(args):
     args.workspace.update_attributes(**json.load(args.source))

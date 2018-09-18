@@ -181,8 +181,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         return is_live, exceptions
 
     def get_bucket_id(self):
-        with dalmatian_api():
-            return super().get_bucket_id()
+        return self.operator.bucket_id
 
     def create_workspace(self, parent=None):
         with capture() as (stdout, stderr):
@@ -351,6 +350,9 @@ class WorkspaceManager(dog.WorkspaceManager):
     def get_attributes(self):
         return self.operator.attributes
 
+    def update_entity_set(self, etype, set_id, entity_ids):
+        return self.operator.update_entity_set(etype, set_id, entity_ids)
+
     def create_submission(self, config_name, entity, expression=None, etype=None, use_cache=True):
         """
         Validates config parameters then creates a submission in Firecloud
@@ -442,12 +444,14 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         return adapters.SubmissionAdapter(self.get_bucket_id(), submission_id)
 
-    def list_submissions(self, config=None):
+    def list_submissions(self, config=None, lapdog_only=False):
         """
         Lists submissions in the workspace
         """
-        with dalmatian_api():
-            results = super().list_submissions(config)
+        results = []
+        if not lapdog_only:
+            with dalmatian_api():
+                results = super().list_submissions(config)
         for submission in WorkspaceManager._get_multiple_executions(repeat(self), storage.Client().get_bucket(self.get_bucket_id()).list_blobs(prefix='lapdog-executions')):
             if submission is not None:
                 results.append(submission)
@@ -745,7 +749,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                             k = output_template[k]
                             if k.startswith('this.'):
                                 entity_data[k[5:]] = [v]
-                        submission_data = submission_data.append(entity_data)
+                        submission_data = submission_data.append(entity_data, sort=True)
                 with capture():
                     self.update_entity_attributes(
                         submission['workflowEntityType'],
