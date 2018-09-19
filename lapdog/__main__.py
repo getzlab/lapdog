@@ -532,7 +532,7 @@ def cmd_finish(args):
     lapdog.complete_execution(args.submission_id)
 
 def cmd_service_account(args):
-    from .controllers import service_account
+    from .api.controllers import service_account
     tempdir = tempfile.TemporaryDirectory()
     print("Enabling the Genomics API")
     cmd = "gcloud services enable genomics.googleapis.com"
