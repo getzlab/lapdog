@@ -813,3 +813,4 @@ definitions:
           - permissions # insufficient permissions to update acl
           - account # service account not registered
           - success # ACL set
+          - registration # Service account not registered

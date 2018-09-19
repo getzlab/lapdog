@@ -41,6 +41,10 @@ def get_workspace_object(namespace, name):
             current_app.config['storage']['cache'][namespace][name] = {}
         if readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager') is None:
             current_app.config['storage']['cache'][namespace][name]['manager'] = ws
+        workspaces = readvar(current_app.config, 'storage', 'cache', 'all_workspaces')
+        if workspaces is None:
+            current_app.config['storage']['cache']['all_workspaces'] = []
+        current_app.config['storage']['cache']['all_workspaces'].append((namespace, name))
     return ws
 
 @cached(120, 10)
@@ -89,17 +93,39 @@ def status():
 
 @cached(120)
 def list_workspaces():
-    return sorted([
-        {
-            'accessLevel': workspace['accessLevel'],
-            'owners': workspace['owners'],
-            'public': workspace['public'],
-            'namespace': workspace['workspace']['namespace'],
-            'name': workspace['workspace']['name'],
-            'bucket': workspace['workspace']['bucketName'],
-            'id': workspace['workspace']['workspaceId']
-        } for workspace in fc.list_workspaces().json()
-    ], key=lambda x:(x['namespace'], x['name'])), 200
+    try:
+        return sorted([
+            {
+                'accessLevel': workspace['accessLevel'],
+                'owners': workspace['owners'],
+                'public': workspace['public'],
+                'namespace': workspace['workspace']['namespace'],
+                'name': workspace['workspace']['name'],
+                'bucket': workspace['workspace']['bucketName'],
+                'id': workspace['workspace']['workspaceId']
+            } for workspace in fc.list_workspaces().json()
+        ], key=lambda x:(x['namespace'], x['name'])), 200
+    except:
+        print(traceback.format_tb())
+        all_workspaces = readvar(current_app.config, 'storage', 'cache', 'all_workspaces')
+        if all_workspaces is not None:
+            workspace_data = []
+            for ns, ws, in all_workspaces:
+                workspace_data = get_workspace_object(ns, ws).operator.firecloud_workspace
+                workspace_data.append({
+                    'accessLevel': workspace_data['accessLevel'],
+                    'owners': workspace_data['owners'],
+                    'public': False,
+                    'namespace': ns,
+                    'name': ws,
+                    'bucket': workspace_data['workspace']['bucketName'],
+                    'id': workspace_data['workspace']['workspaceId']
+                })
+            return sorted(all_workspaces, key=lambda x:(x['namespace'], x['name'])), 200
+    return {
+        'failed': True,
+        'reason': "The Firecloud api is currently offline, and there are no workspaces in the cache"
+    }, 500
 
 @cached(120)
 def workspace(namespace, name):
@@ -180,6 +206,18 @@ def service_acl(namespace, name):
             'failed': True,
             'reason': 'gcloud',
         }, 200
+    response = getattr(fc, '__get')('/api/proxyGroup/%s'%account)
+    if response.status_code == 404:
+        return {
+            'failed': True,
+            'reason': 'registration'
+        }, 200
+    elif response.status_code != 200:
+        print(response.text)
+        return {
+            'failed': True,
+            'reason': 'firecloud'
+        }, 200
     ws, code = workspace(namespace, name)
     if code != 200:
         print(ws)
@@ -191,11 +229,11 @@ def service_acl(namespace, name):
     account_data = [acct for acct in data['accounts'] if acct['email'] == account] if 'accounts' in data else []
 
     return {
-        'failed': False,
+        'failed': perms,
         'reason': 'success' if not perms else 'permissions',
         'share': ws['canShare'],
-        'service_account': len(account_data) and len({acct['access'] for acct in account_data} & {'READER', 'WRITER', 'OWNER', 'ADMIN', 'PROJECT_OWNER'})
-    }
+        'service_account': len(account_data) and len({acct['access'] for acct in account_data} & {'WRITER', 'OWNER', 'ADMIN', 'PROJECT_OWNER'})
+    }, 200
 
 def set_acl(namespace, name):
     account, code = service_account()
@@ -205,8 +243,21 @@ def set_acl(namespace, name):
             'failed': True,
             'reason': 'gcloud',
         }, 200
+    response = getattr(fc, '__get')('/api/proxyGroup/%s'%account)
+    if response.status_code == 404:
+        return {
+            'failed': True,
+            'reason': 'registration'
+        }, 200
+    elif response.status_code != 200:
+        print(response.text)
+        return {
+            'failed': True,
+            'reason': 'firecloud'
+        }, 200
     acl, code = service_acl(namespace, name)
     if code != 200 or acl['failed']:
+        print(acl, code)
         return {
             'failed': True,
             'reason': 'acl-read',
@@ -238,7 +289,7 @@ def set_acl(namespace, name):
             if 'usersNotFound' in data and account in {acct['email'] for acct in data['usersNotFound']}:
                 return {
                     'failed': True,
-                    'reason': 'account'
+                    'reason': 'registration'
                 }, 200
             elif 'usersUpdated' not in data or account not in {acct['email'] for acct in data['usersUpdated']}:
                 return {
@@ -320,7 +371,7 @@ def create_workspace(namespace, name, parent):
     try:
         text = json.loads(text.strip())['message']
     except:
-        print("Failed to decode json:", text)
+        pass
     if not result:
         return {
             'failed': True,

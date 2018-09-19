@@ -11,13 +11,15 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
 1. Install lapdog via pip: `pip install lapdog`
     - If you already have lapdog installed, you can upgrade it with
     `pip install --upgrade lapdog`
-2. (Optional) Install additional dependencies for the user interface:
+2. (Optional) Enable the Lapdog User Interface:
     - Install `node` and `npm` if you don't already have them installed
     - Run `lapdog ui --install`. This may take a while
-3. (Optional) Configure your GCloud account to use lapdog
-    - Register your service account in firecloud
-        * `lapdog register-service-account {your account email}`
+3. (Optional) Enable the Lapdog Execution Service
+    - Run `lapdog init {your account email}`
         * `{your account email}` should be the email registered to your account in firecloud
+        * This requires that you have "Services Admin", "Compute Admin", and "Genomics Admin" on your current Google Cloud Project
+    - If this succeeds, the Lapdog Execution Service will be enabled on your current Google Cloud Project
+    - Execution must be enabled on each Firecloud workspace by granting WRITER access to your service account
 
 ## Usage
 1. `lapdog` may be imported within python as a drop-in replacement for `dalmatian`

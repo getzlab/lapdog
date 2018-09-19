@@ -84,9 +84,6 @@
           <span v-if="!acl" class="orange-text text-darken-4">
             Pending...
           </span>
-          <span v-else-if="acl.reason == 'permissions'" class="red-text">
-            Insufficient permissions to check ACL
-          </span>
           <span v-else-if="acl.failed" class="red-text">
             <span v-if="acl.reason == 'firecloud'">
               Firecloud API Error
@@ -94,35 +91,21 @@
             <span v-else-if="acl.reason == 'acl-read'">
               Unable to parse workspace ACL
             </span>
+            <span v-else-if="acl.reason == 'permissions'">
+              Insufficient permissions access ACL
+            </span>
+            <span v-else-if="acl.reason == 'registration'">
+              Lapdog Execution not initialized
+            </span>
+            <span v-else>
+              Unknown error: {{acl.reason}}
+            </span>
           </span>
           <span v-else-if="acl.service_account" class="green-text">
             Ready to Execute
           </span>
           <span v-else-if="!acl.service_account">
-            <a class='btn blue disabled'>Add Service Account</a>
-          </span>
-          <span v-else-if="acl_update && acl_update.reason=='success'" class="green-text">
-            Ready to Execute
-          </span>
-          <span v-else-if="acl_update && acl_update.reason == 'gcloud'" class="red-text">
-            Unable to access Gcloud Service Account
-          </span>
-          <span v-else-if="acl_update && acl_update.reason == 'firecloud'" class="red-text">
-            Firecloud API Error
-          </span>
-          <span v-else-if="acl_update && acl_update.reason == 'acl-read'" class="red-text">
-            Unable to parse workspace ACL
-          </span>
-          <span v-else-if="acl_update && acl_update.reason == 'permissions'" class="red-text">
-            Insufficient permissions to add service account
-          </span>
-          <span v-else-if="acl_update.reason == 'account'">
-            <a class="red-text" href="https://github.com/broadinstitute/firecloud-tools/tree/master/scripts/register_service_account">
-              Register your service account with firecloud
-            </a>
-          </span>
-          <span v-else class="red-text">
-            Unknown error
+            <a v-on:click="set_acl(namespace, workspace)" class='btn blue'>Enable for this workspace</a>
           </span>
         </div>
       </div>
@@ -252,7 +235,6 @@
       return {
         ws: null,
         acl: null,
-        acl_update: null,
         cache_state: null,
         method_configs:null,
         entity_types: null,
@@ -420,6 +402,20 @@
             console.error(error)
           })
       },
+      set_acl(namespace, workspace) {
+        console.log("UPDATING ACL");
+        this.acl = null;
+         axios.post(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/acl')
+           .then(response => {
+             console.log("RESPONSE");
+             console.log(response.data);
+             this.acl = response.data
+           })
+           .catch(error => {
+             console.error("FAIL")
+             console.error(error);
+           })
+       },
 
       // get_entities(namespace, workspace) {
       //   axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/entities')
@@ -476,7 +472,6 @@
     beforeRouteUpdate(to, from, next) {
       this.ws = null;
       this.acl = null;
-      this.acl_update = null;
       this.entities = null;
       this.method_configs = null;
       this.submit_okay = false;
