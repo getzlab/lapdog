@@ -123,7 +123,7 @@ def service_account():
     except:
         return {
             'msg': 'Unable to read active service account',
-            'error': repr(sys.exc_info())
+            'error': traceback.format_tb()
         }, 500
     try:
         return pd.read_fwf(buff).loc[0]['EMAIL'], 200
