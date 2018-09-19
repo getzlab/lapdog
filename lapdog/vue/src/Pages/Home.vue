@@ -1,8 +1,10 @@
 <template>
   <div id="home">
     <div class="row">
-      <div class="col s12">
-        <h3>Firecloud Status</h3>
+      <div class="col s6">
+        <h3>
+          Firecloud Status
+        </h3>
       </div>
     </div>
     <div class="row">
@@ -34,6 +36,7 @@
 
 <script type="text/javascript">
   import axios from'axios'
+  import _ from 'lodash'
   export default {
     data() {
       return {
@@ -43,6 +46,16 @@
 
     created() {
       this.getStatus();
+    },
+
+    computed: {
+      health() {
+        return _.reduce(
+          this.systems,
+          (current, system) => current && system.status,
+          true
+        )
+      }
     },
 
     methods: {

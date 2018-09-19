@@ -84,11 +84,13 @@ def status():
     }
     try:
         for key, val in requests.get('https://api.firecloud.org/status').json()['systems'].items():
-            obj['systems'][key] = bool(val['ok'])
+            obj['systems'][key] = 'ok' in val and val['ok']
+        for key, val in requests.get('https://rawls.dsde-prod.broadinstitute.org/status').json()['systems'].items():
+            obj['systems'][key] = 'ok' in val and val['ok']
         obj['failed'] = False
     except:
         obj['failed'] = True
-        print(sys.exc_info())
+        print(traceback.format_tb())
     return obj, 200
 
 @cached(120)
@@ -348,10 +350,6 @@ def sync_cache(namespace, name):
                 config['methodRepoMethod']['methodNamespace'],
                 config['methodRepoMethod']['methodName'],
                 config['methodRepoMethod']['methodVersion']
-            )
-            ws.operator.get_wdl(
-                config['methodRepoMethod']['methodNamespace'],
-                config['methodRepoMethod']['methodName'],
             )
         except NameError:
             # WDL Doesnt exist

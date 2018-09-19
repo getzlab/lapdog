@@ -602,7 +602,8 @@ class WorkspaceManager(dog.WorkspaceManager):
             with dalmatian_api():
                 w.write(self.operator.get_wdl(
                     config['methodRepoMethod']['methodNamespace'],
-                    config['methodRepoMethod']['methodName']
+                    config['methodRepoMethod']['methodName'],
+                    config['methodRepoMethod']['methodVersion']
                 ))
         with open(os.path.join(tempdir.name, 'options.json'), 'w') as w:
             json.dump(
