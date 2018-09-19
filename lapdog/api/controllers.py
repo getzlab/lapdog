@@ -298,6 +298,10 @@ def sync_cache(namespace, name):
                 config['methodRepoMethod']['methodName'],
                 config['methodRepoMethod']['methodVersion']
             )
+            ws.operator.get_wdl(
+                config['methodRepoMethod']['methodNamespace'],
+                config['methodRepoMethod']['methodName'],
+            )
         except NameError:
             # WDL Doesnt exist
             pass

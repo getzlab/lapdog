@@ -6,6 +6,7 @@ import os
 import tempfile
 import json
 import subprocess
+import sys
 
 def main():
     parent = argparse.ArgumentParser(add_help=False)
