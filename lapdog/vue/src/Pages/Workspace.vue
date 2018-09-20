@@ -89,10 +89,10 @@
               Firecloud API Error
             </span>
             <span v-else-if="acl.reason == 'acl-read'">
-              Unable to parse workspace ACL
+              Unknown (Unable to parse workspace ACL)
             </span>
             <span v-else-if="acl.reason == 'permissions'">
-              Insufficient permissions access ACL
+              Unknown (Insufficient permissions access ACL)
             </span>
             <span v-else-if="acl.reason == 'registration'">
               Lapdog Execution not initialized
@@ -124,13 +124,13 @@
             Fetching...
           </span>
           <span v-else-if="cache_state == 'up-to-date'" class="green-text">
-            Up to date
+            Online
           </span>
           <span v-else-if="cache_state == 'sync'" class="cyan-text">
             Syncing...
           </span>
           <span v-else-if="cache_state == 'outdated'" class="amber-text text-darken-3">
-            Out of date
+            Offline
           </span>
           <span v-else-if="cache_state == 'not-loaded'" class="red-text">
             Not Loaded

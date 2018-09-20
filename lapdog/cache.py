@@ -101,13 +101,9 @@ def cache_fetch(object_type, *args, dtype='data', ext='', decode=True, **kwargs)
     decode = 'r' if decode else 'rb'
     path = cache_path(object_type)(*args, dtype=dtype, ext=ext, **kwargs)
     if os.path.isfile(path):
-        if os.path.exists(path+'.tag'):
-            with open(path+'.tag') as reader:
-                expires = int(reader.read().strip())
-            if expires > time.time():
-                os.remove(path)
-                os.remove(path+'.tag')
-                return None
+        if time.time() - os.stat(path).st_mtime > 2628001: # Expires after 1 month
+            os.remove(path)
+            return None
         # print("<CACHE> Read data from", path)
         with open(path, decode) as r:
             return r.read()
@@ -123,6 +119,3 @@ def cache_write(data, object_type, *args, dtype='data', ext='', decode=True, **k
     decode = 'w' if decode else 'wb'
     with open(path, decode) as w:
         w.write(data)
-    if len(data) >= (512 * 1024):
-        with open(path+'.tag', 'w') as w:
-            w.write(str(time.time()))

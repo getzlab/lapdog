@@ -58,7 +58,7 @@
                 <label for="search_bar">Search Workspaces</label>
               </div>
             </div>
-            <router-link class="blue-text text-darken-4 collection-item sidenav-close" v-for="workspace in filtered_workspaces" active-class="active blue lighten-1"
+            <router-link class="blue-text text-darken-4 collection-item sidenav-close" v-for="workspace in filtered_workspaces" active-class="active blue lighten-1t"
               :to="{name: 'workspace', params: {namespace: workspace.namespace, workspace: workspace.name}}" :key="workspace.namespace+'/'+workspace.name">
               {{workspace.namespace}}/{{workspace.name}}
             </router-link>

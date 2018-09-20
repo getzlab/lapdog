@@ -512,7 +512,7 @@ class Operator(object):
                     stdout_buff.seek(0,0)
                     stderr_buff.seek(0,0)
                     text = (stdout_buff.read() + stderr_buff.read()).lower()
-                if not ('successfully imported' in text or 'successfuly updated.' in text):
+                if not ('successfully imported' in text or 'successfully updated.' in text):
                     raise APIException("Update appeared to fail")
             except APIException:
                 # One of the update routes failed
@@ -531,7 +531,7 @@ class Operator(object):
             ))
         else:
             try:
-                self.get_entities_df(etype+'_sets')
+                self.get_entities_df(etype+'_set')
             except APIException:
                 pass
 

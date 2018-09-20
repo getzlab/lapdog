@@ -23,21 +23,21 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
 
 ## Usage
 1. `lapdog` may be imported within python as a drop-in replacement for `dalmatian`
-  - lapdog presents a superset of features available in dalmatian
-  - `WorkspaceManager`s in lapdog cache data when communicating with Firecloud.
-  If Firecloud experiences an intermittent failure, the `WorkspaceManager` may be
-  able to continue running in offline mode. Calling `WorkspaceManager.sync()` will
-  reconnect to Firecloud, pushing out any data updates that were queued while in offline mode
-  - `WorkspaceManager`s in lapdog present the execution api via `WorkspaceManager.execute()`.
-  Executions differ from submissions in that they run directly on Google and results are
-  uploaded back to Firecloud afterwards
+    - lapdog presents a superset of features available in dalmatian
+    - `WorkspaceManager`s in lapdog cache data when communicating with Firecloud.
+    If Firecloud experiences an intermittent failure, the `WorkspaceManager` may be
+    able to continue running in offline mode. Calling `WorkspaceManager.sync()` will
+    reconnect to Firecloud, pushing out any data updates that were queued while in offline mode
+    - `WorkspaceManager`s in lapdog present the execution api via `WorkspaceManager.execute()`.
+    Executions differ from submissions in that they run directly on Google and results are
+    uploaded back to Firecloud afterwards
 2. `lapdog` may be used as a command line tool.
-  - The tool provides the necessary functions to create a workspace, fill it with data,
-  import or upload methods and configurations, and submit jobs (or execute them directly)
-  - Run `lapdog --help` to get the list of available commands
+    - The tool provides the necessary functions to create a workspace, fill it with data,
+    import or upload methods and configurations, and submit jobs (or execute them directly)
+    - Run `lapdog --help` to get the list of available commands
 3. `lapdog` may be used via an interactive user interface which serves to run and
   monitor lapdog executions
-  - Run `lapdog ui` to launch the user interface
+    - Run `lapdog ui` to launch the user interface
 
 ---
 
