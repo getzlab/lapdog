@@ -23,6 +23,7 @@ from .cache import cache_init
 from .operations import APIException, Operator, capture
 from itertools import repeat
 import pandas as pd
+from socket import gethostname
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -542,7 +543,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             else:
                 print("The following inputs are invalid on this configuation: %s" % repr(list(invalid_inputs)), file=sys.stderr)
 
-        submission_id = md5((str(time.time()) + config['name'] + entity).encode()).hexdigest()
+        submission_id = md5((gethostname() + str(time.time()) + config['name'] + entity).encode()).hexdigest()
         global_id = 'lapdog/'+base64.b64encode(
             ('%s/%s/%s' % (self.namespace, self.workspace, submission_id)).encode()
         ).decode()
@@ -598,13 +599,20 @@ class WorkspaceManager(dog.WorkspaceManager):
             return wf_template
 
         tempdir = tempfile.TemporaryDirectory()
-        with open(os.path.join(tempdir.name, 'method.wdl'),'w') as w:
-            with dalmatian_api():
-                w.write(self.operator.get_wdl(
+        wdl_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/method.wdl".format(
+            bucket_id=self.get_bucket_id(),
+            submission_id=submission_id
+        )
+        with dalmatian_api():
+            getblob(wdl_path).upload_from_string(
+                self.operator.get_wdl(
                     config['methodRepoMethod']['methodNamespace'],
                     config['methodRepoMethod']['methodName'],
                     config['methodRepoMethod']['methodVersion']
-                ))
+                ).encode()
+            )
+
+
         with open(os.path.join(tempdir.name, 'options.json'), 'w') as w:
             json.dump(
                 {
@@ -623,12 +631,14 @@ class WorkspaceManager(dog.WorkspaceManager):
             prepend="Preparing Workflows... "
         )]
 
-        with open(os.path.join(tempdir.name, 'config.json'), 'w') as w:
-            json.dump(
-                workflow_inputs,
-                w,
-                # indent='\t'
-            )
+        config_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/config.json".format(
+            bucket_id=self.get_bucket_id(),
+            submission_id=submission_id
+        )
+        getblob(config_path).upload_from_string(
+            json.dumps(workflow_inputs).encode()
+        )
+
 
         submission_data['workflows'] = [
             {
@@ -649,8 +659,8 @@ class WorkspaceManager(dog.WorkspaceManager):
             'gcloud alpha genomics pipelines run '
             '--pipeline-file {source_dir}/wdl_pipeline.yaml '
             '--zones {zone} '
-            '--inputs-from-file WDL={wdl_text} '
-            '--inputs-from-file WORKFLOW_INPUTS={workflow_template} '
+            '--inputs WDL={wdl_text} '
+            '--inputs WORKFLOW_INPUTS={workflow_template} '
             '--inputs-from-file WORKFLOW_OPTIONS={options_template} '
             '--inputs LAPDOG_SUBMISSION_ID={submission_id} '
             '--inputs WORKSPACE=gs://{bucket_id}/lapdog-executions/{submission_id}/workspace '
@@ -662,8 +672,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         ).format(
             source_dir=os.path.dirname(__file__),
             zone=zone,
-            wdl_text=os.path.join(tempdir.name, 'method.wdl'),
-            workflow_template=os.path.join(tempdir.name, 'config.json'),
+            wdl_text=wdl_path,
+            workflow_template=config_path,
             options_template=os.path.join(tempdir.name, 'options.json'),
             bucket_id=self.get_bucket_id(),
             submission_id=submission_id,

@@ -542,6 +542,7 @@ export default {
         })
     },
     beforeRouteUpdate(to, from, next) {
+      console.log("Update!");
       this.submission = null;
       this.workflows = null;
       this.display_cromwell = false;

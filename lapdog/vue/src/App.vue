@@ -248,6 +248,12 @@ export default {
         })
     },
     get_submission() {
+      if (!this.submission.startsWith('lapdog/')) {
+        return window.materialize.toast({
+          html: "Not a valid submission ID (must start with 'lapdog/')",
+          displayLength: 5000,
+        });
+      }
       axios.get(API_URL+'/api/v1/submissions/decode?submission_id='+encodeURIComponent(this.submission))
         .then(response => {
           console.log("Decoded submission");
