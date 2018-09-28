@@ -77,8 +77,9 @@ def upload(bucket, path, source):
     if os.path.isfile(source) and os.path.getsize(source) >= 3865470566:
         # 4Gib, must do a composite upload
         result = execute_command(
-            'gsutil -o GSUtil:parallel_composite_upload_threshold=150M cp {} {}'.format(
+            'gsutil -o GSUtil:parallel_composite_upload_threshold=150M cp {} gs://{}/{}'.format(
                 source,
+                bucket.name,
                 path
             ),
             False
