@@ -118,7 +118,7 @@
           </div>
         </div>
         <div class="row" style="margin-top: 10px; border: 2px solid orange;">
-          <div class="col s10 offset s1 amber-text pushpin">
+          <div class="col s10 offset s1 orange-text pushpin">
             Lapdog is still in beta. Please submit any bug reports to the
             <a href="https://github.com/agraubert/lapdog/issues">Lapdog Github repository</a>
           </div>

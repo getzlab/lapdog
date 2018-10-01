@@ -54,7 +54,7 @@
     </div>
     <div class="row">
       <div class="col s6">
-        <h5><a target="_blank" v-bind:href="'https://portal.firecloud.org/#workspaces/'+namespace+'/'+workspace">Visit Workspace in Firecloud</a></h5>
+        <h5><a rel="noopener" target="_blank" v-bind:href="'https://portal.firecloud.org/#workspaces/'+namespace+'/'+workspace">Visit Workspace in Firecloud</a></h5>
       </div>
       <div class="col s6">
         <h5>Lapdog Status</h5>

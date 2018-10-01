@@ -73,6 +73,12 @@ def build_input_key(template):
 
 @parallelize2()
 def upload(bucket, path, source):
+    """
+    Uploads {source} to google cloud.
+    Result google cloud path is gs://{bucket}/{path}.
+    If the file to upload is larger than 4Gib, the file will be uploaded via
+    the gsutil command (the public python module can't upload files larger than this limit)
+    """
     #4294967296
     if os.path.isfile(source) and os.path.getsize(source) >= 3865470566:
         # 4Gib, must do a composite upload
@@ -98,12 +104,30 @@ def purge_cache():
 
 
 class BucketUploader(object):
+    """
+    Class for automating uploads to gcloud buckets
+    """
     def __init__(self, bucket, prefix, key):
+        """
+        Constructor
+        bucket : The bucket id (do not include "gs://")
+        prefix : A fixed path within the bucket to store all uploaded files
+        key : A dictionary key to access on each object to specify additional path components.
+        Set as None to use the str value of the object
+        """
         self.bucket = bucket
         self.prefix = prefix
         self.key = key
 
     def upload(self, path, parent):
+        """
+        Upload an arbitrary object. Result path becomes:
+        gs://{self.bucket}/{self.prefix, is prefix is not empty}/{parent[self.key]}/{basename(path)}
+        if self.key is None:
+        gs://{self.bucket}/{self.prefix, is prefix is not empty}/{parent}/{basename(path)}
+
+        Returns the final gsutil path and a callback to wait for the upload to finish
+        """
         bucket_path = os.path.join(
             self.prefix,
             parent[self.key] if self.key is not None else parent,
@@ -115,6 +139,13 @@ class BucketUploader(object):
         )
 
     def upload_df(self, df):
+        """
+        Iterates over dataframe rows
+        Every cell value which is a valid local filepath is uploaded to:
+        gs://{self.bucket}/{self.prefix, if prefix is not empty}/{row[self.key]}/{basename(filepath)}
+
+        Returns a new dataframe with any uplpoaded files replaced with gsutil paths, and an array of callbacks to wait for each upload
+        """
 
         uploads = []
 

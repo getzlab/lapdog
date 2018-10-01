@@ -627,68 +627,6 @@ def cmd_service_account(args):
         "access to",
         crayons.black(acct, bold=True)
     )
-    # if args.status:
-    #     if done:
-    #         ws = dalmatian.WorkspaceManager(
-    #             submission['namespace'],
-    #             submission['workspace']
-    #         )
-    #         try:
-    #             workflow_metadata = json.loads(getblob(
-    #                 'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
-    #                     bucket_id=ws.get_bucket_id(),
-    #                     submission_id=args.submission
-    #                 )
-    #             ).download_as_string())
-    #         except:
-    #             sys.exit("Unable to locate tracking file for this submission. It may have been aborted")
-    #         mtypes = {
-    #             'n1-standard-%d'%(2**i): (0.0475*(2**i), 0.01*(2**i)) for i in range(7)
-    #         }
-    #         mtypes.update({
-    #             'n1-highmem-%d'%(2**i): (.0592*(2**i), .0125*(2**i)) for i in range(1,7)
-    #         })
-    #         mtypes.update({
-    #             'n1-highcpu-%d'%(2**i): (.03545*(2**i), .0075*(2**1)) for i in range(1,7)
-    #         })
-    #         mtypes.update({
-    #             'f1-micro': (0.0076, 0.0035),
-    #             'g1-small': (0.0257, 0.007)
-    #         })
-    #         cost = 0
-    #         maxTime = 0
-    #         total = 0
-    #         for wf in workflow_metadata:
-    #             for calls in wf['workflow_metadata']['calls'].values():
-    #                 for call in calls:
-    #                     if 'end' in call:
-    #                         delta = datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
-    #                         delta = (delta.days*24) + (delta.seconds/3600)
-    #                         if delta > maxTime:
-    #                             maxTime = delta
-    #                         total += delta
-    #                         if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
-    #                             cost += mtypes[call['jes']['machineType'].split('/')[-1]][int('preemptible' in call and call['preemptible'])]*delta
-    #         cost += mtypes['n1-standard-1'][0] * maxTime
-    #         print("Total Runtime: %0.2f hours" % maxTime)
-    #         print("Total CPU hours: %0.2f" % total)
-    #         print("Estimated Cost: $%0.2f" %cost)
-    #     return
-    # if args.abort:
-    #     result = abort_operation(submission['operation'])
-    #     #If we can successfully place lapdog-submission-id and lapdog-execution-role labels
-    #     #on worker VMs, then we can run:
-    #     #gcloud compute instances delte (
-    #     # gcloud compute instances list --filter="label:lapdog-execution-role=worker AND label:lapdod-submission-id={submission_id}" \
-    #     # | awk 'NR>1{print $1}'
-    #     # )
-    #     #Alternatively, have cromwell_driver write a list of workflow ids to gs://.../workspace/workflow_ids.json
-    #     #["id",...]
-    #     #Then abort by getting instances with --filter="label:cromwell-workflow-id=cromwell-{workflow_id}"
-    #     if result.returncode and not ('done' in status and status['done']):
-    #         print("Failed to abort:", result.stdout.decode())
-    #     print("Workflow(s) aborted")
-    #     return
 
 if __name__ == '__main__':
     main()
