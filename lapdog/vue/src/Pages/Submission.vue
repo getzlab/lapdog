@@ -380,9 +380,23 @@ export default {
     this.init(this.namespace, this.workspace, this.submission_id);
     window.$('.modal').modal();
   },
+  watch: {
+    submission_id(value) {
+      console.log("Watch change!");
+      this.init(this.namespace, this.workspace, this.submission_id)
+    }
+  },
   methods: {
     init(namespace, workspace, sid) {
       this.submission = null;
+      this.workflows = null;
+      this.display_cromwell = false;
+      this.cromwell_lines = null;
+      this.active_workflow = null;
+      this.active_operation = null;
+      this.active_log = null;
+      this.sort_key = null;
+      this.reversed = false;
       axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid)
         .then(response => {
           console.log("Got submission");
@@ -543,15 +557,6 @@ export default {
     },
     beforeRouteUpdate(to, from, next) {
       console.log("Update!");
-      this.submission = null;
-      this.workflows = null;
-      this.display_cromwell = false;
-      this.cromwell_lines = null;
-      this.active_workflow = null;
-      this.active_operation = null;
-      this.active_log = null;
-      this.sort_key = null;
-      this.reversed = false;
       this.init(to.params.namespace, to.params.workspace, to.params.submission_id)
       next();
     }
