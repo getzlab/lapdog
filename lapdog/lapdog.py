@@ -740,6 +740,62 @@ class WorkspaceManager(dog.WorkspaceManager):
             return self.get_adapter(submission_id).cost()
         raise TypeError("complete_execution not available for firecloud submissions")
 
+    def submission_output_df(self, submission_id):
+        """
+        Checks a GCP job status and returns a dataframe of outputs
+        """
+        if submission_id.startswith('lapdog/'):
+            ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+            return WorkspaceManager(ns, ws).complete_execution(sid)
+        elif lapdog_id_pattern.match(submission_id):
+            submission = self.get_adapter(submission_id).data
+            status = get_operation_status(submission['operation'])
+            done = 'done' in status and status['done']
+            if done:
+                print("All workflows completed. Uploading results...")
+                output_template = check_api(dog.firecloud.api.get_workspace_config(
+                    submission['namespace'],
+                    submission['workspace'],
+                    submission['methodConfigurationNamespace'],
+                    submission['methodConfigurationName']
+                )).json()['outputs']
+
+                output_data = {}
+                try:
+                    workflow_metadata = json.loads(getblob(
+                        'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
+                            bucket_id=self.get_bucket_id(),
+                            submission_id=submission_id
+                        )
+                    ).download_as_string())
+                except:
+                    raise FileNotFoundError("Unable to locate the tracking file for this submission. It may not have finished")
+
+                workflow_metadata = {
+                    build_input_key(meta['workflow_metadata']['inputs']):meta
+                    for meta in workflow_metadata
+                }
+                submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
+                submission_data = pd.DataFrame()
+                for key, entity in status_bar.iter(submission_workflows.items(), prepend="Uploading results... "):
+                    if key not in workflow_metadata:
+                        print("Entity", entity, "has no output metadata")
+                    elif workflow_metadata[key]['workflow_status'] != 'Succeeded':
+                        print("Entity", entity, "failed")
+                        print("Errors:")
+                        for call, calldata in workflow_metadata[key]['workflow_metadata']['calls'].items():
+                            print("Call", call, "failed with error:", get_operation_status(calldata['jobId'])['error'])
+                    else:
+                        output_data = workflow_metadata[key]['workflow_output']
+                        entity_data = pd.DataFrame(index=[entity])
+                        for k,v in output_data['outputs'].items():
+                            k = output_template[k]
+                            if k.startswith('this.'):
+                                entity_data[k[5:]] = [v]
+                        submission_data = submission_data.append(entity_data, sort=True)
+                return submission_data
+        return pd.DataFrame()
+
     def complete_execution(self, submission_id):
         """
         Checks a GCP job status and returns results to firecloud, if possible

@@ -90,7 +90,7 @@ def status():
         obj['failed'] = False
     except:
         obj['failed'] = True
-        print(traceback.format_tb())
+        print(traceback.format_exc())
     return obj, 200
 
 @cached(120)
@@ -108,22 +108,22 @@ def list_workspaces():
             } for workspace in fc.list_workspaces().json()
         ], key=lambda x:(x['namespace'], x['name'])), 200
     except:
-        print(traceback.format_tb())
+        print(traceback.format_exc())
         all_workspaces = readvar(current_app.config, 'storage', 'cache', 'all_workspaces')
         if all_workspaces is not None:
             workspace_data = []
             for ns, ws, in all_workspaces:
-                workspace_data = get_workspace_object(ns, ws).operator.firecloud_workspace
+                workspace = get_workspace_object(ns, ws).operator.firecloud_workspace
                 workspace_data.append({
-                    'accessLevel': workspace_data['accessLevel'],
-                    'owners': workspace_data['owners'],
+                    'accessLevel': workspace['accessLevel'],
+                    'owners': workspace['owners'],
                     'public': False,
                     'namespace': ns,
                     'name': ws,
-                    'bucket': workspace_data['workspace']['bucketName'],
-                    'id': workspace_data['workspace']['workspaceId']
+                    'bucket': workspace['workspace']['bucketName'],
+                    'id': workspace['workspace']['workspaceId']
                 })
-            return sorted(all_workspaces, key=lambda x:(x['namespace'], x['name'])), 200
+            return sorted(workspace_data, key=lambda x:(x['namespace'], x['name'])), 200
     return {
         'failed': True,
         'reason': "The Firecloud api is currently offline, and there are no workspaces in the cache"
@@ -151,7 +151,7 @@ def service_account():
     except:
         return {
             'msg': 'Unable to read active service account',
-            'error': traceback.format_tb()
+            'error': traceback.format_exc()
         }, 500
     try:
         return pd.read_fwf(buff).loc[0]['EMAIL'], 200

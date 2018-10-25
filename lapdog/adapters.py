@@ -69,12 +69,12 @@ def safe_getblob(gs_path):
         raise FileNotFoundError("No such blob: "+gs_path)
     return blob
 
-def getblob(gs_path):
+def getblob(gs_path, user_project=None):
     bucket_id = gs_path[5:].split('/')[0]
     bucket_path = '/'.join(gs_path[5:].split('/')[1:])
     return storage.Blob(
         bucket_path,
-        storage.Client().get_bucket(bucket_id)
+        storage.Client().bucket(bucket_id, user_project)
     )
 
 def do_select(reader, t):
