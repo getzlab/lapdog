@@ -117,6 +117,14 @@ def main():
     )
     method_parser.set_defaults(func=cmd_method)
     method_parser.add_argument(
+        'config',
+        type=argparse.FileType('r'),
+        help="Configuration to upload. If methodRepoMethod.methodVersion"
+        " is set to 'latest', the version will be set to the latest method snapshot"
+        " including a new upload with the --wdl argument",
+        default=None
+    )
+    method_parser.add_argument(
         '-w', '--wdl',
         type=argparse.FileType('r'),
         help="WDL to upload",
@@ -125,27 +133,14 @@ def main():
     method_parser.add_argument(
         '-n', '--method-name',
         help="The name of the uploaded method. This argument is ignored if the"
-        " --wdl argument is not provided. By default, if a method configuration"
-        " is provided, this equals the methodRepoMethod.methodName key."
-        " If no method configuration is provided, this will default to the"
-        " filename (without extensions) of the provided WDL",
+        " --wdl argument is not provided. By default, this equals the methodRepoMethod.methodName key.",
         default=None
     )
     method_parser.add_argument(
         '-a', '--namespace',
         help="The namespace to upload the method and configuration."
-        " By default, if a method configuration is provided, this equals"
-        " the namespace from the methodRepoMethod.methodNamespace key."
-        " If no method configuration is provided, this will default to the"
-        " same namespace as the current workspace",
-        default=None
-    )
-    method_parser.add_argument(
-        '-c', '--config',
-        type=argparse.FileType('r'),
-        help="Configuration to upload. If methodRepoMethod.methodVersion"
-        " is set to 'latest', the version will be set to the latest method snapshot"
-        " including a new upload with the --wdl argument",
+        " By default, this equals"
+        " the namespace from the methodRepoMethod.methodNamespace key.",
         default=None
     )
 
@@ -395,10 +390,7 @@ def cmd_method(args):
     if args.wdl is None and args.config is None:
         sys.exit("Must provide either a method or configuration")
 
-    if args.config is not None:
-        args.config = json.load(args.config)
-    if args.method_name is None and args.wdl is not None:
-        args.method_name = os.path.splitext(os.path.basename(args.wdl.name))[0]
+    args.config = json.load(args.config)
     args.workspace.update_configuration(args.config, args.wdl, args.method_name, args.namespace)
 
 def cmd_attrs(args):

@@ -701,3 +701,39 @@ def quotas(region):
         'alerts': alerts,
         'raw': data
     }, 200
+
+@cached(60)
+def get_config(namespace, name, config_namespace, config_name):
+    ws = get_workspace_object(namespace, name)
+    try:
+         config = ws.operator.get_config_detail(config_namespace, config_name)
+    except:
+        ws.sync()
+        return ("No such config", 404)
+    try:
+        return {
+            'config':config,
+            'wdl': ws.operator.get_wdl(
+                config['methodRepoMethod']['methodNamespace'],
+                config['methodRepoMethod']['methodName'],
+                config['methodRepoMethod']['methodVersion']
+            )
+        }, 200
+    except:
+        traceback.print_exc()
+        return {
+            'config':config,
+            'wdl': None
+        }, 404
+
+def update_config(namespace, name, config):
+    ws = get_workspace_object(namespace, name)
+    ws.update_configuration(config)
+    get_config.cache_clear()
+    return ("OK", 200)
+
+def delete_config(namespace, name, config_namespace, config_name):
+    ws = get_workspace_object(namespace, name)
+    ws.delete_config(config_namespace, config_name)
+    get_config.cache_clear()
+    return ("OK", 200)

@@ -314,6 +314,110 @@ paths:
             type: array
             items:
               type: object
+    put:
+      consumes:
+        - application/json
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: body
+          name: config
+          required: true
+          description: JSON config object
+          schema:
+            type: object
+
+      summary: Gets config and wdl details
+      operationId: lapdog.api.controllers.update_config
+      responses:
+        default:
+          description: Error
+        200:
+          description: Config
+          schema:
+            type: object
+  /api/v1/workspaces/{namespace}/{name}/configs/{config_namespace}/{config_name}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: path
+          name: config_namespace
+          required: true
+          type: string
+          description: Config namespace
+        -
+          in: path
+          name: config_name
+          required: true
+          type: string
+          description: Config name
+      summary: Gets config and wdl details
+      operationId: lapdog.api.controllers.get_config
+      responses:
+        default:
+          description: Error
+        200:
+          description: Config
+          schema:
+            type: object
+    delete:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: path
+          name: config_namespace
+          required: true
+          type: string
+          description: Config namespace
+        -
+          in: path
+          name: config_name
+          required: true
+          type: string
+          description: Config name
+      summary: Deletes a config
+      operationId: lapdog.api.controllers.delete_config
+      responses:
+        default:
+          description: Error
+        200:
+          description: Config
+          schema:
+            type: object
   /api/v1/submissions/decode:
     get:
       parameters:

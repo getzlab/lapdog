@@ -24,6 +24,7 @@ from .operations import APIException, Operator, capture
 from itertools import repeat
 import pandas as pd
 from socket import gethostname
+from functools import wraps
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -53,7 +54,7 @@ def dump_if_file(obj):
         yield obj
     else:
         data = obj.read()
-        mode = 'w' + ('b' if isinstance(data, Bytes) else '')
+        mode = 'w' + ('b' if isinstance(data, bytes) else '')
         with tempfile.NamedTemporaryFile(mode) as tmp:
             tmp.write(data)
             tmp.flush()
@@ -78,9 +79,14 @@ def upload(bucket, path, source):
     Result google cloud path is gs://{bucket}/{path}.
     If the file to upload is larger than 4Gib, the file will be uploaded via
     the gsutil command (the public python module can't upload files larger than this limit)
+
+    This function starts the upload on a background thread and returns a callable
+    object which can be used to wait for the upload to complete. Calling the object
+    blocks until the upload finishes, and will raise any exceptions encountered
+    by the background thread
     """
     #4294967296
-    if os.path.isfile(source) and os.path.getsize(source) >= 3865470566:
+    if os.path.isfile(source) and os.path.getsize(source) >= 2865470566:
         # 4Gib, must do a composite upload
         result = execute_command(
             'gsutil -o GSUtil:parallel_composite_upload_threshold=150M cp {} gs://{}/{}'.format(
@@ -93,14 +99,21 @@ def upload(bucket, path, source):
         if result.returncode:
             print(result.buffer)
             raise ValueError("Large file upload failed")
-    blob = bucket.blob(path)
-    # print("Commencing upload:", source)
-    blob.upload_from_filename(source)
+    else:
+        blob = bucket.blob(path)
+        # print("Commencing upload:", source)
+        blob.upload_from_filename(source)
 
 
 def purge_cache():
     for path in glob(cache_init()+'/*'):
         os.remove(path)
+
+
+def alias(func):
+    def wrapper(alias_func):
+        return func
+    return wrapper
 
 
 class BucketUploader(object):
@@ -208,15 +221,29 @@ class WorkspaceManager(dog.WorkspaceManager):
         return self.operator.live
 
     def sync(self):
+        """
+        Synchronize the workspace with Firecloud
+        Any data updates since the workspace went offline are pushed to Firecloud
+        Any external updates to the workspace are pulled in from Firecloud
+        """
         is_live, exceptions = self.operator.go_live()
         if len(exceptions):
             print("There were", len(exceptions), "exceptions while attempting to sync with firecloud")
         return is_live, exceptions
 
     def get_bucket_id(self):
+        """
+        Returns the bucket ID of the workspace
+        """
         return self.operator.bucket_id
 
+    bucket_id = property(get_bucket_id)
+
     def create_workspace(self, parent=None):
+        """
+        Creates the workspace.
+        You may provide a WorkspaceManager as the parent to clone from
+        """
         with capture() as (stdout, stderr):
             with dalmatian_api():
                 super().create_workspace(parent)
@@ -226,25 +253,58 @@ class WorkspaceManager(dog.WorkspaceManager):
         return bool(creation_success_pattern.search(text))
 
     def upload_entities(self, etype, df, index=True):
+        """
+        Upload/Update entities in the workspace
+        """
         return self.operator.update_entities_df(etype, df, index)
 
     def get_samples(self):
+        """
+        Gets the dataframe of samples from the workspace
+        """
         return self.operator.get_entities_df('sample')
 
+    samples = property(get_samples)
+
     def get_participants(self):
+        """
+        Gets the dataframe of participants from the workspace
+        """
         return self.operator.get_entities_df('participant')
 
+    participants = property(get_participants)
+
     def get_pairs(self):
+        """
+        Gets the dataframe of pairs from the workspace
+        """
         return self.operator.get_entities_df('pair')
 
+    pairs = property(get_pairs)
+
     def get_sample_sets(self):
+        """
+        Gets the dataframe of sample sets from the workspace
+        """
         return self.operator.get_entities_df('sample_set')
 
+    sample_sets = property(get_sample_sets)
+
     def get_participant_sets(self):
+        """
+        Gets the dataframe of participant sets from the workspace
+        """
         return self.operator.get_entities_df('participant_set')
 
+    participant_sets = property(get_participant_sets)
+
     def get_pair_sets(self):
+        """
+        Gets the dataframe of pair sets from the workspace
+        """
         return self.operator.get_entities_df('pair_set')
+
+    pair_sets = property(get_pair_sets)
 
     def prepare_entity_df(self, etype, df):
         """
@@ -304,9 +364,15 @@ class WorkspaceManager(dog.WorkspaceManager):
         return self.prepare_entity_df('participant_set', df)
 
     def upload_entities(self, etype, df, index=True):
+        """
+        Upload/Update entities in the workspace
+        """
         return self.operator.update_entities_df(etype, df, index)
 
     def update_entity_attributes(self, etype, df):
+        """
+        Update attributes of existing entities
+        """
         if isinstance(df, pd.DataFrame):
             return self.operator.update_entities_df_attributes(etype, df)
         else:
@@ -353,9 +419,16 @@ class WorkspaceManager(dog.WorkspaceManager):
             config['methodRepoMethod']['methodVersion'] = version
         return self.operator.add_config(config)
 
+    @alias(update_configuration)
+    def update_config(self):
+        # alias for update_configuration
+        pass
+
+
     def update_attributes(self, attr_dict=None, **attrs):
         """
-        Updates workspace attributes using the keyword arguments to this function
+        Accepts a dictionary of attribute:value pairs and/or keyword arguments.
+        Updates workspace attributes using the combination of the attr_dict and any keyword arguments
         Any values which reference valid filepaths will be uploaded to the workspace
         """
         if attr_dict is None:
@@ -381,9 +454,17 @@ class WorkspaceManager(dog.WorkspaceManager):
         return attrs
 
     def get_attributes(self):
+        """
+        Returns a dictionary of workspace attributes
+        """
         return self.operator.attributes
 
+    attributes = property(get_attributes)
+
     def update_entity_set(self, etype, set_id, entity_ids):
+        """
+        Updates entity set membership
+        """
         return self.operator.update_entity_set(etype, set_id, entity_ids)
 
     def create_submission(self, config_name, entity, expression=None, etype=None, use_cache=True):
@@ -469,7 +550,13 @@ class WorkspaceManager(dog.WorkspaceManager):
 
 
     def list_configs(self):
+        """
+        Lists configurations in the workspace
+        """
         return self.operator.configs
+
+    configs = property(list_configs)
+    configurations = configs
 
     def get_adapter(self, submission_id):
         """
@@ -733,6 +820,9 @@ class WorkspaceManager(dog.WorkspaceManager):
         return global_id, submission_id, submission_data['operation']
 
     def get_submission_cost(self, submission_id):
+        """
+        Estimates the cost of a submission
+        """
         if submission_id.startswith('lapdog/'):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
             return WorkspaceManager(ns, ws).get_submission_cost(sid)

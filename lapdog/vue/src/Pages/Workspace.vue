@@ -148,20 +148,23 @@
           {{ws.owners.join(', ')}}
         </div>
         <div class="col s6">
-          <a href="#submission-modal" class='btn blue modal-trigger' >Execute new job</a>
+          <router-link class="blue btn"
+            :to="{name: 'methods', params: {namespace: namespace, workspace: workspace}}">
+            View/Edit Method configurations
+          </router-link>
         </div>
       </div>
       <div class="row">
-        <div class="col s2">
-          Active Submissions:
+        <div class="col s3">
+          Active Firecloud Submissions:
         </div>
-        <div class="col s4">
-          {{ws.workspaceSubmissionStats.runningSubmissionsCount}}
+        <div class="col s3">
+          <a v-bind:href="'https://portal.firecloud.org/#workspaces/'+namespace+'/'+workspace+'/monitor'" target="_blank" rel="noopener">
+            {{ws.workspaceSubmissionStats.runningSubmissionsCount}}
+          </a>
         </div>
         <div class="col s6">
-          <a v-bind:href="'https://portal.firecloud.org/#workspaces/'+namespace+'/'+workspace+'/monitor'" class="btn blue">
-            View your Firecloud Submissions
-          </a>
+          <a href="#submission-modal" class='btn blue modal-trigger' >Execute new job</a>
         </div>
       </div>
     </div>

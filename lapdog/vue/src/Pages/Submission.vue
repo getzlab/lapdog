@@ -554,12 +554,12 @@ export default {
             displayLength: 10000,
           });
         })
-    },
-    beforeRouteUpdate(to, from, next) {
-      console.log("Update!");
-      this.init(to.params.namespace, to.params.workspace, to.params.submission_id)
-      next();
     }
+  },
+  beforeRouteUpdate(to, from, next) {
+    console.log("Update!");
+    this.init(to.params.namespace, to.params.workspace, to.params.submission_id)
+    next();
   }
 }
 </script>

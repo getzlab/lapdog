@@ -92,6 +92,7 @@ class Operator(object):
                 except Exception as e:
                     failures.append((key, None, getter))
                     exceptions.append(e)
+                    traceback.print_exc()
         self.pending = [item for item in failures]
         self.live = not len(self.pending)
         return self.live, exceptions
@@ -167,7 +168,7 @@ class Operator(object):
 
     def _upload_config(self, config):
         with capture() as (stdout, stderr):
-            dog.WorkspaceManager.update_configuration(
+            dog.WorkspaceManager.update_config(
                 self.workspace,
                 config
             )
