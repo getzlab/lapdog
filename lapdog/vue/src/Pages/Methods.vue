@@ -126,7 +126,7 @@
         </div>
       </div>
     </div>
-    <div class="moda" id="new-modal">
+    <div class="modal" id="upload-modal">
       <div class="modal-content">
         <h5>Upload new configuration</h5>
         <div class="row">
@@ -184,8 +184,8 @@
       </router-link>
     </h4>
     <h3>Methods</h3>
-    <strong>(Placeholder button: Add new configuration)</strong>
-    <table>
+    <a href="#" class="btn blue modal-trigger" data-target="upload-modal" v-on:click="reset_uploads">Upload new configuration</a>
+    <table v-if="configs">
       <thead>
         <tr>
           <th>Configuration</th>
@@ -206,6 +206,16 @@
         </tr>
       </tbody>
     </table>
+    <div v-else>
+      <div class="row">
+        <div class="col s12">
+          Loading method configurations...
+        </div>
+      </div>
+      <div class="progress">
+        <div class="indeterminate blue"></div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -217,6 +227,7 @@ export default {
   data() {
     return {
       jq:window.$,
+
       lodash:_,
       configs: null,
       active_cfg: null,
@@ -337,17 +348,34 @@ export default {
         window.$("#delete-modal").modal('open');
       }, 250)
     },
+    display_upload() {
+      this.reset_uploads();
+      window.$("#upload-modal").modal();
+      window.materialize.updateTextFields();
+      window.$("#upload-modal").modal('open');
+    },
     upload_config() {
+      window.materialize.toast({
+        html: "Uploading configuration...",
+        displayLength: 1000
+      })
       let data = new FormData();
       data.append('config_filepath', this.config_filepath, this.config_filepath.name);
-      data.append('method_filepath', this.method_filepath, this.method_filepath.name);
+      if (this.method_filepath) data.append('method_filepath', this.method_filepath, this.method_filepath.name);
       axios.post(
         API_URL + '/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/configs',
         data
       )
         .then(response => {
           console.log(response.data);
+          if (response.data.failed) {
+            window.materialize.toast('Unable to update method configuration: '+response.data.reason)
+          }
           this.reset_uploads();
+          window.$('.modal').modal();
+          window.$('.modal').modal('close');
+          // window.$('.modal').modal('close');
+          this.init(this.namespace, this.workspace);
         })
         .catch(error => {
           console.error(error)
@@ -367,7 +395,7 @@ export default {
           window.$('.modal').modal();
           window.$('.modal').modal('close');
           // window.$('.modal').modal('close');
-          this.init(namespace, workspace);
+          this.init(this.namespace, this.workspace);
         })
         .catch(error => {
           console.error(error);

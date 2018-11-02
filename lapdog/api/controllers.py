@@ -765,6 +765,32 @@ def delete_config(namespace, name, config_namespace, config_name):
     return ("OK", 200)
 
 def upload_config(namespace, name, config_filepath, method_filepath=None):
-    print(config_filepath)
-    print(method_filepath)
-    return ("OK", 200)
+    try:
+        config = json.load(config_filepath)
+    except:
+        traceback.print_exc()
+        return {
+            'failed': True,
+            'reason': "Unable to parse config json"
+        }, 200
+    try:
+        result = get_workspace_object(namespace, name).update_configuration(
+            config,
+            method_filepath # Either it's a file-object or None
+        )
+        return {
+            'failed': not result,
+            'reason': 'Success' if result else 'API rejected update'
+        }
+    except KeyError:
+        traceback.print_exc()
+        return {
+            'failed': True,
+            'reason': "Configuration missing required keys"
+        }, 200
+    except:
+        traceback.print_exc()
+        return {
+            'failed': True,
+            'reason': "Unhandled exception. Check Lapdog terminal output for details"
+        }, 200
