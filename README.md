@@ -50,3 +50,25 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
 2. Improve caching latency
 3. Sort out adapter cache hierarchy
 4. Enable call caching
+
+
+### Pro/Con with Firecloud
+
+##### Pros
+* Each submission has a dedicated Cromwell instance. Your jobs will never queue, unless you hit a Google usage quota
+* Workspace cache: Lapdog caches most data received from Firecloud.
+    * In the event of a Firecloud error, Lapdog will attempt to keep running by using it's cached data. Any data updates will by pushed back to Firecloud when the workspace is synced
+* Data caches: The Lapdog API caches data sent to the UI and read from Google
+    * These caches greatly improve UI performance by storing results whenever possible
+* Streamlined UI: The Lapdog UI was built with efficiency in mind
+* Quality of life features:
+    * Save time updating methods. Set `methodRepoMethod.methodVersion` to "latest" and let Lapdog figure out what the snapshot ID is
+    * Easy data uploads. Call `prepare_entity_df` on a DataFrame before uploading to Firecloud. Any local filepaths will be uploaded to the workspace's bucket in the background and a new DataFrame will be returned containing the new `gs://` paths
+    * Automatic reference uploads. When you call `update_attributes`, any values which refer to local filepaths will be uploaded in the background (just like `prepare_entity_df`). `update_attributes` now returns a dictionary containing the attributes exactly as uploaded
+
+##### Cons
+* **Lapdog uses your personal GCloud account**. Lapdog does not operate using the billing account of the workspace
+  * In the future, Lapdog will use a dedicated service account for each Firecloud billing account, but this is still in development and is a 'far-future' feature
+* You pay an additional 5¢/hour fee for each submission to run the Cromwell server
+* There is no call cache in Lapdog yet. This is still in development
+* Submission results must be manually uploaded to Firecloud by clicking the `Upload Results` button in the UI.

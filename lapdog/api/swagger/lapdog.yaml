@@ -347,6 +347,44 @@ paths:
           description: Config
           schema:
             type: object
+    post:
+      consumes:
+        - multipart/form-data
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: formData
+          name: config_filepath
+          type: file
+          required: true
+          description: Config JSON file
+        -
+          in: formData
+          name: method_filepath
+          type: file
+          required: false
+          description: Optional method WDL
+          # default: null
+      summary: Uploads a new method configuration
+      operationId: lapdog.api.controllers.upload_config
+      responses:
+        default:
+          description: Error
+        200:
+          description: Ok
+          schema:
+            type: string
   /api/v1/workspaces/{namespace}/{name}/configs/{config_namespace}/{config_name}:
     get:
       parameters:

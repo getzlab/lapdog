@@ -711,8 +711,34 @@ def get_config(namespace, name, config_namespace, config_name):
         ws.sync()
         return ("No such config", 404)
     try:
+        data = getattr(fc, '__post')(
+            '/api/inputsOutputs',
+            data=json.dumps({
+                'methodNamespace': config['methodRepoMethod']['methodNamespace'],
+                'methodName': config['methodRepoMethod']['methodName'],
+                'methodVersion': config['methodRepoMethod']['methodVersion']
+            })
+        ).json()
+        io_types = {
+            'inputs': {
+                param['name']:{
+                    'type': param['inputType'],
+                    'required': not param['optional']
+                }
+                for param in data['inputs']
+            },
+            'outputs': {
+                param['name']:param['outputType']
+                for param in data['outputs']
+            }
+        }
+    except:
+        traceback.princ_exc()
+        io_types = None
+    try:
         return {
             'config':config,
+            'io': io_types,
             'wdl': ws.operator.get_wdl(
                 config['methodRepoMethod']['methodNamespace'],
                 config['methodRepoMethod']['methodName'],
@@ -736,4 +762,9 @@ def delete_config(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
     ws.delete_config(config_namespace, config_name)
     get_config.cache_clear()
+    return ("OK", 200)
+
+def upload_config(namespace, name, config_filepath, method_filepath=None):
+    print(config_filepath)
+    print(method_filepath)
     return ("OK", 200)

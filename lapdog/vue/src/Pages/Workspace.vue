@@ -202,7 +202,11 @@
             </thead>
             <tbody>
               <tr v-for="sub in submissions">
-                <td>{{sub.methodConfigurationName}}</td>
+                <td>
+                  <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace} }">
+                    {{sub.methodConfigurationName}}
+                  </router-link>
+                </td>
                 <td>{{sub.submissionEntity.entityName}}</td>
                 <td v-bind:class="sub.status == 'Failed' || sub.status == 'Error' ? 'red-text' : (sub.status == 'Succeeded' ? 'green-text' : '')">
                   {{sub.status}}
