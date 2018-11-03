@@ -458,7 +458,7 @@ export default {
         html: "Checking operation "+operation_id+"...",
         displayLength: 2000,
       });
-      axios.get(API_URL+'/api/v1/operations/'+encodeURIComponent(operation_id.substring(11)))
+      axios.get(API_URL+'/api/v1/operations?operation_id='+encodeURIComponent(operation_id))
         .then(response => {
           this.active_operation = response.data;
           window.$('#operation-modal').modal();

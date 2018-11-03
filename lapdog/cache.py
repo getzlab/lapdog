@@ -110,6 +110,8 @@ def cache_fetch(object_type, *args, dtype='data', ext='', decode=True, **kwargs)
     return None
 
 def cache_write(data, object_type, *args, dtype='data', ext='', decode=True, **kwargs):
+    args = [str(arg).replace('/', '_') for arg in args]
+    kwargs = {k:str(v).replace('/', '_' ) for k,v in kwargs.items()}
     if len(ext) and not ext.startswith('.'):
         ext = '.' + ext
     path = cache_path(object_type)(*args, dtype, ext, **kwargs)

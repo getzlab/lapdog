@@ -59,13 +59,13 @@ paths:
             type: array
             items:
               $ref: "#/definitions/WorkspaceSummary"
-  /api/v1/operations/{operation_id}:
+  /api/v1/operations:
     get:
       operationId: lapdog.api.controllers.operation_status
       summary: Gets the status of a gcloud operation
       parameters:
         -
-          in: path
+          in: query
           name: operation_id
           required: true
           type: string

@@ -621,6 +621,7 @@ def read_logs(namespace, name, id, workflow_id, log, call):
                     call.path,
                     filename
                 )
+                print("Trying", path)
                 try:
                     blob = safe_getblob(path)
                 except FileNotFoundError:
@@ -630,6 +631,7 @@ def read_logs(namespace, name, id, workflow_id, log, call):
                     call.path,
                     call.task + suffix
                 )
+                print("Trying", path)
                 try:
                     blob = safe_getblob(path)
                 except FileNotFoundError:
@@ -756,12 +758,14 @@ def update_config(namespace, name, config):
     ws = get_workspace_object(namespace, name)
     ws.update_configuration(config)
     get_config.cache_clear()
+    get_configs.cache_clear()
     return ("OK", 200)
 
 def delete_config(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
     ws.delete_config(config_namespace, config_name)
     get_config.cache_clear()
+    get_configs.cache_clear()
     return ("OK", 200)
 
 def upload_config(namespace, name, config_filepath, method_filepath=None):
@@ -778,6 +782,8 @@ def upload_config(namespace, name, config_filepath, method_filepath=None):
             config,
             method_filepath # Either it's a file-object or None
         )
+        get_config.cache_clear()
+        get_configs.cache_clear()
         return {
             'failed': not result,
             'reason': 'Success' if result else 'API rejected update'

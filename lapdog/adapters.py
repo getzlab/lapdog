@@ -33,7 +33,7 @@ def sleep_until(dt):
 
 workflow_dispatch_pattern = re.compile(r'Workflows(( [a-z0-9\-]+,?)+) submitted.')
 workflow_start_pattern = re.compile(r'WorkflowManagerActor Successfully started WorkflowActor-([a-z0-9\-]+)')
-task_start_pattern = re.compile(r'\[UUID\((\w{8})\)(\w+)\.(\w+):(\w+):(\d+)\]: job id: (operations/\S+)')
+task_start_pattern = re.compile(r'\[UUID\((\w{8})\)(\w+)\.(\w+):(\w+):(\d+)\]: job id: ((?:projects/.+/)operations/\S+)')
 #(short code), (workflow name), (task name), (? 'NA'), (call id), (operation)
 msg_pattern = re.compile(r'\[UUID\((\w{8})\)\]')
 #(short code), message
@@ -123,15 +123,17 @@ def get_operation_status(opid, parse=True):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         ).stdout.decode()
+        if not parse:
+            return text
         try:
             data = yaml.load(StringIO(text))
+            if 'done' in data and data['done']:
+                cache_write(text, 'operation', opid)
         except yaml.scanner.ScannerError:
             if 'Permission denied' in text:
                 raise ValueError("Permission Denied")
             print(text)
             raise
-        if 'done' in data and data['done']:
-            cache_write(text, 'operation', opid)
     else:
         data = yaml.load(StringIO(text))
     if not parse:
@@ -302,13 +304,13 @@ class SubmissionAdapter(object):
                     call = get_operation_status(call.operation)
                     delta = (
                         datetime.datetime.strptime(
-                            call['metadata']['endTime'],
+                            call['metadata']['endTime'].split('.')[0]+'Z',
                             timestamp_format
                         )
                         if 'endTime' in call['metadata']
                         else datetime.datetime.utcnow()
                     ) - datetime.datetime.strptime(
-                        call['metadata']['startTime'],
+                        call['metadata']['startTime'].split('.')[0]+'Z',
                         timestamp_format
                     )
                     delta = delta.total_seconds() / 3600

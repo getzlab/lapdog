@@ -184,7 +184,7 @@
       </router-link>
     </h4>
     <h3>Methods</h3>
-    <a href="#" class="btn blue modal-trigger" data-target="upload-modal" v-on:click="reset_uploads">Upload new configuration</a>
+    <a href="#" class="btn blue modal-trigger" data-target="upload-modal" v-on:click.prevent="display_upload">Upload new configuration</a>
     <table v-if="configs">
       <thead>
         <tr>
@@ -295,12 +295,14 @@ export default {
     },
     save_config() {
       // First check that all outputs are filled, and that if IO is defined, all required inputs exist too
+      let error = false;
       _.forIn(this.active_cfg.config.outputs, (value, key) => {
         if (_.trim(value).length == 0) {
           window.materialize.toast({
             html: 'Output "'+key+'" requires a value',
             classes: "red-text"
           })
+          error = true;
           return false;
         }
       });
@@ -314,10 +316,12 @@ export default {
               html: 'Input "'+key+'" requires a value',
               classes: "red-text"
             })
+            error = true;
             return false;
           }
         });
       }
+      if (error) return;
       window.materialize.toast({
         html: "Updating configuration",
         displayLength: 1000
