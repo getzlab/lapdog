@@ -190,7 +190,7 @@
 
       <div v-if="submissions" class="row">
         <div class="col s12">
-          <table>
+          <table class="highlight">
             <thead>
               <tr>
                 <th>Configuration</th>

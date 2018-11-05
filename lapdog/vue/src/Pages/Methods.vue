@@ -20,7 +20,7 @@
               </div>
               <div class="col s10">
                 <a v-bind:href="'https://portal.firecloud.org/#methods/'+active_cfg.config.methodRepoMethod.methodNamespace+'/'+active_cfg.config.methodRepoMethod.methodName+'/'+active_cfg.config.methodRepoMethod.methodVersion" target="_blank" rel="noopener">
-                  {{active_cfg.config.methodRepoMethod.methodNamespace}}/{{active_cfg.config.methodRepoMethod.methodName}}
+                  {{active_cfg.config.methodRepoMethod.methodNamespace}}/{{active_cfg.config.methodRepoMethod.methodName}}:{{active_cfg.config.methodRepoMethod.methodVersion}}
                 </a>
               </div>
             </div>
@@ -173,14 +173,14 @@
         <div class="row">
           <div class="col s6 offset-s3">
             <a class="red-text left modal-close" v-on:click="reset_uploads">CANCEL</a>
-            <a class="green-text right modal-close" v-on:click="upload_config">UPLOAD</a>
+            <a class="green-text right" v-on:click="upload_config">UPLOAD</a>
           </div>
         </div>
       </div>
     </div>
     <h4>
       <router-link :to="{name: 'workspace', params: {namespace: namespace, workspace: workspace}}">
-        {{namespace}}/{{workspace}}
+        <i class="material-icons tiny">arrow_back</i>  {{namespace}}/{{workspace}}
       </router-link>
     </h4>
     <h3>Methods</h3>
@@ -359,6 +359,14 @@ export default {
       window.$("#upload-modal").modal('open');
     },
     upload_config() {
+      if (!this.config_filepath) {
+        window.materialize.toast({
+          html: "Must provide a method configuration"
+        });
+        return;
+      }
+      window.$('#upload-modal').modal();
+      window.$('#upload-modal').modal('close');
       window.materialize.toast({
         html: "Uploading configuration...",
         displayLength: 1000

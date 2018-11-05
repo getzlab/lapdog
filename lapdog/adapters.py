@@ -42,6 +42,8 @@ fail_pattern = re.compile(r"ERROR - WorkflowManagerActor Workflow ([a-z0-9\-]+) 
 status_pattern = re.compile(r'PipelinesApiAsyncBackendJobExecutionActor \[UUID\(([a-z0-9\-]+)\)(\w+)\.(\w+):(\w+):(\d+)]: Status change from (.+) to (.+)')
 #(short code), (workflow name), (task name), (? 'NA'), (call id), (old status), (new status)
 
+instance_name_pattern = re.compile(r'instance(?:Name)?:\s+(.+)')
+
 mtypes = {
     'n1-standard-%d'%(2**i): (0.0475*(2**i), 0.01*(2**i)) for i in range(7)
 }
@@ -151,28 +153,32 @@ def abort_operation(opid):
         stderr=subprocess.STDOUT,
     )
 
-def kill_machines(label):
-    machines = subprocess.run(
-        'gcloud compute instances list --filter="labels.%s"' % (
-            label
+def kill_machines(instance_name):
+    # subprocess.check_call(
+    #     'gcloud compute instances stop %s --async' % instance_name,
+    #     shell=True
+    # )
+    # machines = subprocess.run(
+    #     'gcloud compute instances list --filter="labels.%s"' % (
+    #         label
+    #     ),
+    #     shell=True,
+    #     executable='/bin/bash',
+    #     stdout=subprocess.PIPE,
+    #     stderr=subprocess.STDOUT,
+    # ).stdout.decode().split('\n')
+    # if len(machines) > 1:
+    #     machines = ' '.join(line.split()[0] for line in machines[1:] if len(line.strip()))
+    # if len(machines):
+    return subprocess.run(
+        'yes | gcloud compute instances delete %s' % (
+            instance_name
         ),
         shell=True,
         executable='/bin/bash',
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-    ).stdout.decode().split('\n')
-    if len(machines) > 1:
-        machines = ' '.join(line.split()[0] for line in machines[1:] if len(line.strip()))
-    if len(machines):
-        return subprocess.run(
-            'yes | gcloud compute instances delete %s' % (
-                machines
-            ),
-            shell=True,
-            executable='/bin/bash',
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
+    )
 
 class CommandReader(object):
     def __init__(self, cmd, *args, __insert_text=None, **kwargs):
@@ -612,11 +618,18 @@ class WorkflowAdapter(object):
             # print("Discard status", old,'->', new)
 
     def abort(self):
-        if len(self.calls):
-            # print("Aborting", self.calls[-1].operation)
-            abort_operation(self.calls[-1].operation)
-        if self.long_id is not None:
-            kill_machines('cromwell-workflow-id=cromwell-'+self.long_id)
+        for call in self.calls:
+            print("Aborting", call.operation)
+            abort_operation(call)
+            status = get_operation_status(call.operation, False)
+            result = instance_name_pattern.search(status)
+            if result:
+                kill_machines(result.group(1).strip())
+        # if len(self.calls):
+        #     # print("Aborting", self.calls[-1].operation)
+        #     abort_operation(self.calls[-1].operation)
+        # if self.long_id is not None:
+        #     kill_machines('cromwell-workflow-id=cromwell-'+self.long_id)
 
 
 

@@ -137,7 +137,7 @@ Other: error_outline
     </div>
     <h4>
       <router-link :to="{name: 'workspace', params: {namespace: namespace, workspace: workspace}}">
-        {{namespace}}/{{workspace}}
+        <i class="material-icons tiny">arrow_back</i>  {{namespace}}/{{workspace}}
       </router-link>
     </h4>
     <h3>Submission</h3>
