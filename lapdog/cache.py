@@ -114,7 +114,7 @@ def cache_write(data, object_type, *args, dtype='data', ext='', decode=True, **k
     kwargs = {k:str(v).replace('/', '_' ) for k,v in kwargs.items()}
     if len(ext) and not ext.startswith('.'):
         ext = '.' + ext
-    path = cache_path(object_type)(*args, dtype, ext, **kwargs)
+    path = cache_path(object_type)(*args, dtype=dtype, ext=ext, **kwargs)
     # print("<CACHE> Write data to", path)
     if decode:
         data = str(data)

@@ -4,7 +4,8 @@ setup(
     version = '0.7.2',
     packages = [
         'lapdog',
-        'lapdog.api'
+        'lapdog.api',
+        'lapdog.cloud'
     ],
     package_data={
         '':[
