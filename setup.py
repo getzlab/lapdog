@@ -1,7 +1,7 @@
 from setuptools import setup
 setup(
     name = 'lapdog',
-    version = '0.7.1',
+    version = '0.7.2',
     packages = [
         'lapdog',
         'lapdog.api'

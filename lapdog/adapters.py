@@ -33,7 +33,7 @@ def sleep_until(dt):
 
 workflow_dispatch_pattern = re.compile(r'Workflows(( [a-z0-9\-]+,?)+) submitted.')
 workflow_start_pattern = re.compile(r'WorkflowManagerActor Successfully started WorkflowActor-([a-z0-9\-]+)')
-task_start_pattern = re.compile(r'\[UUID\((\w{8})\)(\w+)\.(\w+):(\w+):(\d+)\]: job id: ((?:projects/.+/)operations/\S+)')
+task_start_pattern = re.compile(r'\[UUID\((\w{8})\)(\w+)\.(\w+):(\w+):(\d+)\]: job id: ((?:projects/.+/)?operations/\S+)')
 #(short code), (workflow name), (task name), (? 'NA'), (call id), (operation)
 msg_pattern = re.compile(r'\[UUID\((\w{8})\)\]')
 #(short code), message
