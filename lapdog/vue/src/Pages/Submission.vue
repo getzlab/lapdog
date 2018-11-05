@@ -297,7 +297,7 @@ Other: error_outline
           </div>
         </li>
       </ul> -->
-      <table>
+      <table class="highlight">
         <thead>
           <tr>
             <th v-on:click="sort_workflows('entity')">

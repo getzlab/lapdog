@@ -154,7 +154,7 @@ def service_account():
             'error': traceback.format_exc()
         }, 500
     try:
-        return pd.read_fwf(buff).loc[0]['EMAIL'], 200
+        return pd.read_fwf(buff, index_col=0).loc['Compute Engine default service account']['EMAIL'], 200
     except:
         buff.seek(0,0)
         return {

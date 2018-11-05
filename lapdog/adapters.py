@@ -310,13 +310,13 @@ class SubmissionAdapter(object):
                     call = get_operation_status(call.operation)
                     delta = (
                         datetime.datetime.strptime(
-                            call['metadata']['endTime'].split('.')[0]+'Z',
+                            (call['metadata']['endTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
                             timestamp_format
                         )
                         if 'endTime' in call['metadata']
                         else datetime.datetime.utcnow()
                     ) - datetime.datetime.strptime(
-                        call['metadata']['startTime'].split('.')[0]+'Z',
+                        (call['metadata']['startTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
                         timestamp_format
                     )
                     delta = delta.total_seconds() / 3600
