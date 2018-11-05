@@ -7,6 +7,7 @@ import csv
 from google.cloud import storage
 from agutil.parallel import parallelize, parallelize2
 from agutil import status_bar, byteSize, cmd as execute_command
+from threading import Lock
 import sys
 import re
 import tempfile
@@ -24,6 +25,7 @@ from .operations import APIException, Operator, capture
 from itertools import repeat
 import pandas as pd
 from socket import gethostname
+from math import ceil
 from functools import wraps
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
@@ -72,37 +74,59 @@ def build_input_key(template):
             data += str(template[k])
     return md5(data.encode()).hexdigest()
 
+def _composite_upload(src, dest, size):
+
+    @parallelize(5)
+    def upload_component(component_path, i, text):
+        blob = getblob(component_path+str(i))
+        blob.upload_from_string(text)
+        return blob
+
+    n_chunks = ceil(os.path.getsize(src) / size)
+    with open(src, 'rb') as reader:
+        blobs = list(
+            blob for blob in
+            upload_component(
+                repeat(dest+'.composite_upload/'),
+                range(n_chunks),
+                (reader.read(size) for i in range(n_chunks))
+            )
+        )
+    composite_blob = getblob(dest)
+    composite_blob.content_type = 'application/octet-stream'
+    composite_blob.compose(blobs)
+    for blob in blobs:
+        blob.delete()
+    return composite_blob
+
+
 @parallelize2()
 def upload(bucket, path, source):
     """
     Uploads {source} to google cloud.
     Result google cloud path is gs://{bucket}/{path}.
     If the file to upload is larger than 4Gib, the file will be uploaded via
-    the gsutil command (the public python module can't upload files larger than this limit)
+    a composite upload. A temporary folder will be created at {gs path}.composite_upload/
+    which will contain 1GB blobs from the file. The blobs will be concatenated into
+    a single large file afterwards and the temporary folder deleted.
 
     This function starts the upload on a background thread and returns a callable
     object which can be used to wait for the upload to complete. Calling the object
     blocks until the upload finishes, and will raise any exceptions encountered
     by the background thread
     """
-    #4294967296
-    if os.path.isfile(source) and os.path.getsize(source) >= 2865470566:
-        # 4Gib, must do a composite upload
-        result = execute_command(
-            'gsutil -o GSUtil:parallel_composite_upload_threshold=150M cp {} gs://{}/{}'.format(
-                source,
-                bucket.name,
-                path
-            ),
-            False
+    # 4294967296
+    if os.path.isfile(source) and os.path.getsize(source) >= 2865470566: #2.7gib
+        _composite_upload(
+            source,
+            'gs://{}/{}'.format(bucket.name, path),
+            1074000000 # 1 gib
         )
-        if result.returncode:
-            print(result.buffer)
-            raise ValueError("Large file upload failed")
     else:
         blob = bucket.blob(path)
         # print("Commencing upload:", source)
         blob.upload_from_filename(source)
+        return blob
 
 
 def purge_cache():
