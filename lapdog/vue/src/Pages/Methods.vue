@@ -184,7 +184,16 @@
       </router-link>
     </h4>
     <h3>Methods</h3>
-    <a href="#" class="btn blue modal-trigger" data-target="upload-modal" v-on:click.prevent="display_upload">Upload new configuration</a>
+    <div class="row">
+      <div class="col s3">
+        <a href="#" class="btn blue modal-trigger" data-target="upload-modal" v-on:click.prevent="display_upload">Upload new configuration</a>
+      </div>
+      <div class="col s5">
+        <a target="_blank" rel="noopener" href="https://portal.firecloud.org/#methods" class="btn blue">
+          Import existing configuration in Firecloud
+        </a>
+      </div>
+    </div>
     <table v-if="configs">
       <thead>
         <tr>
