@@ -8,6 +8,19 @@ Other: error_outline
 -->
 <template lang="html">
   <div id="submission">
+    <div class="modal" id="abort-modal">
+      <div class="modal-content">
+        <h4>Abort Submission?</h4>
+      </div>
+      <div class="modal-footer">
+        <div class="row">
+          <div class="col s6 offset-s3">
+            <a class="modal-close red-text left" v-on:click="abort_sub">YES</a>
+            <a class="modal-close right">NO</a>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="modal" id="operation-modal">
       <div class="modal-content">
         <div class="containe">
@@ -245,7 +258,7 @@ Other: error_outline
         <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
       </div>
       <div class="col s6" v-if="submission.status == 'Running'">
-        <a class='btn red darken-3' v-on:click.prevent="abort_sub">Abort Submission</a>
+        <button class='btn red darken-3 modal-trigger' data-target="abort-modal">Abort Submission</button>
       </div>
     </div>
     <div class="row">
@@ -416,11 +429,24 @@ export default {
             .catch(error => {
               console.error("Failed");
               console.error(error);
+              window.materialize.toast({
+                html: "Unable to load workflows"
+              })
             })
         })
         .catch(response => {
           console.error("Failed");
           console.error(response)
+          console.log(response.response.data);
+          if (_.has(response.response, 'data') && response.response.data == "No Such Submission")
+            window.materialize.toast({
+              html: "Submission not found",
+              displayLength: 10000
+            })
+          else window.materialize.toast({
+            html: "Unable to load the submission: "+response.response.data.detail,
+            displayLength: 10000
+          })
         })
     },
     sort_workflows(key) {
@@ -532,7 +558,7 @@ export default {
     upload() {
       window.materialize.toast({
         html: "Uploading results to Firecloud...",
-        displayLength: 2000,
+        displayLength: 5000,
       });
       axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
         .then(response => {

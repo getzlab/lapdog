@@ -28,7 +28,7 @@
               <div class="col s2">
                 Entity Type:
               </div>
-              <div class="col s9">
+              <div class="col s9" v-bind:class="active_cfg.config.rootEntityType.match(etype_pattern)?'':'red-text'">
                 {{active_cfg.config.rootEntityType}}
               </div>
             </div>
@@ -43,7 +43,7 @@
               </div>
             </div>
           </div>
-          <div style="margin-top: 15px; margin-bottom: 0px;" class="row" v-on:click.prevent="toggle_wdl">
+          <div v-if="active_cfg.wdl" style="margin-top: 15px; margin-bottom: 0px;" class="row" v-on:click.prevent="toggle_wdl">
             <div v-if="!show_wdl" class="col s4" >
               <span>
                 <i class="material-icons">keyboard_arrow_right</i>
@@ -163,8 +163,11 @@
           <div class="col s12">
             <blockquote>
               If a method WDL is uploaded, it's name and namespace will be taken
-              from the methodRepoMethod key of the provided configuration. Otherwise,
-              the method specified by methodRepoMethod must already exist in Firecloud
+              from the <code>methodRepoMethod</code> key of the provided configuration. Otherwise,
+              the method specified by <code>methodRepoMethod</code> must already exist in Firecloud.
+              If <code>methodRepoMethod.methodVersion</code> is set to <code>"latest"</code>, Lapdog will set
+              the version to the latest version of the method (including the newly
+              uploaded method)
             </blockquote>
           </div>
         </div>
@@ -211,7 +214,7 @@
 
           </td>
           <td>{{config.methodRepoMethod.methodNamespace}}/{{config.methodRepoMethod.methodName}} (Snapshot {{config.methodRepoMethod.methodVersion}})</td>
-          <td>{{config.rootEntityType}}</td>
+          <td v-bind:class="config.rootEntityType.match(etype_pattern) ? '' : 'red-text'">{{config.rootEntityType}}</td>
         </tr>
       </tbody>
     </table>
@@ -236,7 +239,7 @@ export default {
   data() {
     return {
       jq:window.$,
-
+      etype_pattern: /(pair|participant|sample)(_set)?/,
       lodash:_,
       configs: null,
       active_cfg: null,
@@ -442,13 +445,28 @@ export default {
       axios.get(API_URL + '/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/configs/'+config_slug)
         .then(response => {
           console.log(response.data);
-          this.active_cfg = response.data;
 
-          setTimeout(() => {
-            window.$("#config-modal").modal();
-            window.materialize.updateTextFields();
-            window.$("#config-modal").modal('open');
-          }, 250)
+          if (response.data.config)
+          {
+            this.active_cfg = response.data;
+            if (!response.data.wdl) {
+              window.materialize.toast({
+                html: "Unable to locate the WDL for this configuration"
+              })
+            }
+
+            setTimeout(() => {
+              window.$("#config-modal").modal();
+              window.materialize.updateTextFields();
+              window.$("#config-modal").modal('open');
+            }, 250)
+          }
+          else {
+            window.materialize.toast({
+              html: "Unable to locate the configuration"
+            })
+          }
+
 
         })
         .catch(error => {

@@ -168,6 +168,54 @@
         </div>
       </div>
     </div>
+    <div class="row" v-on:click="show_attributes = !show_attributes" v-if="ws">
+      <div v-if="!show_attributes" class="col s6" >
+        <span>
+          <i class="material-icons">keyboard_arrow_right</i>
+          Workspace Attributes
+        </span>
+      </div>
+      <div v-else class="col s6">
+        <span>
+          <i class="material-icons">keyboard_arrow_down</i>
+          Workspace Attributes
+        </span>
+      </div>
+    </div>
+    <div v-if="show_attributes">
+      <!-- <div class="row">
+        <div class="col s12">
+          You can edit workspace attributes using the Lapdog command-line client,
+          the Lapdog Python module, or on Firecloud
+        </div>
+      </div> -->
+      <div class="row" >
+        <div class="col s12 truncate">
+          <table>
+            <thead>
+              <tr>
+                <th>Attribute</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="key in lodash.keys(ws.attributes)" :key="key">
+                <td>{{key}}</td>
+                <td>
+                  <a v-if="lodash.startsWith(ws.attributes[key], 'gs://')"
+                    v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+ws.attributes[key].substr(5)"
+                    target="_blank" rel="noopener"
+                  >
+                    {{ws.attributes[key]}}
+                  </a>
+                  <span v-else>{{ws.attributes[key]}}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <div class="submission-container">
       <div class="row">
         <div class="col s12">
@@ -240,6 +288,7 @@
     props: ['namespace', 'workspace'],
     data() {
       return {
+        lodash: _,
         ws: null,
         acl: null,
         cache_state: null,
@@ -253,6 +302,7 @@
         submissions: null,
         expr_disabled: false,
         submit_okay: false,
+        show_attributes: false
         // entities: null
       }
     },
@@ -293,7 +343,7 @@
             console.error("FAILED");
             console.error(response)
           })
-      }, 1000),
+      }, 500),
       submit_workflow() {
         let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
         query += "config="+encodeURIComponent(this.submission_config);
@@ -363,6 +413,7 @@
         return this.entity_field == 'h' ? 'valid' : 'invalid';
       },
       getWorkspace(namespace, workspace) {
+        this.show_attributes = false;
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
             console.log(response.data);
@@ -447,7 +498,8 @@
           })
           .catch(error => {
             console.error("FAIL")
-            console.error(response)
+            console.error(error)
+            window.materialize.toast("Failed to sync the workspace cache: "+error.response.data)
           })
       },
       get_configs() {

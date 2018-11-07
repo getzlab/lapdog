@@ -20,6 +20,7 @@ from itertools import repeat
 from glob import glob
 import yaml
 from ..cache import cached, cache_fetch, cache_write, cache_init
+from ..adapters import NoSuchSubmission
 
 def readvar(obj, *args):
     current = obj
@@ -138,6 +139,7 @@ def workspace(namespace, name):
         for k,v in ws.operator.entity_types.items()
     ]
     data['configs'] = get_configs(namespace, name)
+    data['attributes'] = ws.attributes
     return data, 200
 
 @cached(600)
@@ -477,7 +479,11 @@ def decode_submission(submission_id):
 
 def get_submission(namespace, name, id):
     ws = get_workspace_object(namespace, name)
-    adapter = get_adapter(namespace, name, id)
+    try:
+        adapter = get_adapter(namespace, name, id)
+    except NoSuchSubmission:
+        traceback.print_exc()
+        return "No Such Submission", 404
     return {
         **ws.get_submission(id),
         **{
@@ -711,7 +717,11 @@ def get_config(namespace, name, config_namespace, config_name):
          config = ws.operator.get_config_detail(config_namespace, config_name)
     except:
         ws.sync()
-        return ("No such config", 404)
+        return (
+            {
+                'config': None,
+                'wdl': None
+            }, 200)
     try:
         data = getattr(fc, '__post')(
             '/api/inputsOutputs',
@@ -734,8 +744,12 @@ def get_config(namespace, name, config_namespace, config_name):
                 for param in data['outputs']
             }
         }
+    except KeyError:
+        traceback.print_exc()
+        print("The above error is likely caused by a missing WDL", file=sys.stderr)
+        io_types = None
     except:
-        traceback.princ_exc()
+        traceback.print_exc()
         io_types = None
     try:
         return {
@@ -752,7 +766,8 @@ def get_config(namespace, name, config_namespace, config_name):
         return {
             'config':config,
             'wdl': None
-        }, 404
+        }, 200
+    return "FAILED", 500
 
 def update_config(namespace, name, config):
     ws = get_workspace_object(namespace, name)

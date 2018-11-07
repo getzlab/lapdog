@@ -250,7 +250,10 @@ export default {
           console.log(this.workspaces[0])
         })
         .catch(error => {
-          console.error("FAIL!")
+          console.error("FAIL!");
+          window.materialize.toast({
+            html: "Failed to load workspaces"
+          });
         })
     },
     get_submission() {

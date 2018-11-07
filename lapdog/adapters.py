@@ -58,6 +58,8 @@ mtypes.update({
     'g1-small': (0.0257, 0.007)
 })
 
+class NoSuchSubmission(Exception):
+    pass
 
 class Recall(object):
     value = None
@@ -238,8 +240,11 @@ class SubmissionAdapter(object):
         self.data = cache_fetch('submission-json', bucket, submission)
         _do_cache_write = False
         if self.data is None:
-            self.data = safe_getblob(gs_path).download_as_string().decode()
-            _do_cache_write = True
+            try:
+                self.data = safe_getblob(gs_path).download_as_string().decode()
+                _do_cache_write = True
+            except FileNotFoundError as e:
+                raise NoSuchSubmission from e
         self.data = json.loads(self.data)
         self.workspace = self.data['workspace']
         self.namespace = self.data['namespace']
