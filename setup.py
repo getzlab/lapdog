@@ -8,7 +8,9 @@ setup(
     ],
     package_data={
         '':[
-            'wdl_pipeline.yaml',
+            'cromwell/wdl_pipeline.yaml'
+            'cromwell/LICENSE'
+            'cromwell/README.md',
             'vue/.babelrc',
             'vue/index.html',
             'vue/package.json',

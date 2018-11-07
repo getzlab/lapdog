@@ -800,7 +800,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         cmd = (
             'gcloud alpha genomics pipelines run '
-            '--pipeline-file {source_dir}/wdl_pipeline.yaml '
+            '--pipeline-file {source_dir}/cromwell/wdl_pipeline.yaml '
             '--zones {zone} '
             '--inputs WDL={wdl_text} '
             '--inputs WORKFLOW_INPUTS={workflow_template} '
