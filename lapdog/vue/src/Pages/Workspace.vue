@@ -163,12 +163,16 @@
             {{ws.workspaceSubmissionStats.runningSubmissionsCount}}
           </a>
         </div>
-        <div class="col s6">
-          <a href="#submission-modal" class='btn blue modal-trigger' >Execute new job</a>
+        <div class="col s6 execute-container">
+          <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-bind:class="ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
+            v-bind:data-tooltip="ws.entities && ws.entities.length ? '' : 'There are no entities in this workspace'"
+          >
+            Execute new job
+          </a>
         </div>
       </div>
     </div>
-    <div class="row" v-on:click="show_attributes = !show_attributes" v-if="ws">
+    <div class="row" v-on:click="show_attributes = !show_attributes" v-if="ws && ws.attributes && lodash.keys(ws.attributes).length">
       <div v-if="!show_attributes" class="col s6" >
         <span>
           <i class="material-icons">keyboard_arrow_right</i>
@@ -215,6 +219,8 @@
           </table>
         </div>
       </div>
+      <br>
+      <br>
     </div>
     <div class="submission-container">
       <div class="row">
@@ -579,6 +585,7 @@
         this.show_attributes = false;
         this.active_entity = null;
         this.entities_data = null;
+        // window.$('.execute-button').tooltip('close');
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
             console.log(response.data);
@@ -586,6 +593,21 @@
             this.entity_types = response.data.entities;
             this.method_configs = response.data.configs;
             window.$('.modal').modal();
+            setTimeout(() => {
+              window.$('.tooltipped').tooltip();
+              console.log(this.ws.entities);
+              console.log(window.$('.execute-button'));
+              if (!(this.ws.entities && this.ws.entities.length)) window.$('.execute-container').hover(
+                () => {
+                  window.$('.execute-button').tooltip('open');
+                },
+                () => {
+                  setTimeout(() => {
+                    window.$('.execute-button').tooltip('close');
+                  }, 100);
+                }
+              );
+            }, 100);
             axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
               .then(response => {
                 console.log(response.data);

@@ -21,6 +21,7 @@ from glob import glob
 import yaml
 from ..cache import cached, cache_fetch, cache_write, cache_init
 from ..adapters import NoSuchSubmission
+import re
 
 def readvar(obj, *args):
     current = obj
@@ -47,6 +48,14 @@ def get_workspace_object(namespace, name):
             current_app.config['storage']['cache']['all_workspaces'] = []
         current_app.config['storage']['cache']['all_workspaces'].append((namespace, name))
     return ws
+
+@lru_cache()
+def version():
+    with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), '__init__.py')) as reader:
+        result = re.search(r'__version__ = \"(\d+\.\d+\.\d+.*?)\"', reader.read())
+        if result:
+            return result.group(1)
+        return "Unknown"
 
 @cached(120, 10)
 def get_adapter(namespace, workspace, submission):

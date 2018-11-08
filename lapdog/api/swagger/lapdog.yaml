@@ -5,6 +5,17 @@ info:
 produces:
   - application/json
 paths:
+  /api/v1/version:
+    get:
+      operationId: lapdog.api.controllers.version
+      summary: Returns lapdog version
+      responses:
+        default:
+          description: Error
+        200:
+          description: Lapdog version
+          schema:
+            type: string
   /api/v1/status:
     get:
       operationId: lapdog.api.controllers.status

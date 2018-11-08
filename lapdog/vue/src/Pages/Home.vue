@@ -31,6 +31,11 @@
         </table>
       </div>
     </div>
+    <div class="row" v-if="lapdog_version">
+      <div class="col s12 center">
+        Lapdog version {{lapdog_version}}
+      </div>
+    </div>
   </div>
 </template>
 
@@ -40,12 +45,17 @@
   export default {
     data() {
       return {
-        systems: null
+        systems: null,
+        lapdog_version: null
       }
     },
 
     created() {
       this.getStatus();
+      axios.get(API_URL+'/api/v1/version')
+        .then(response => {
+          this.lapdog_version = response.data;
+        })
     },
 
     computed: {
