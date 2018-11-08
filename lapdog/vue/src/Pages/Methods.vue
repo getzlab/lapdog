@@ -75,25 +75,52 @@
           </div>
           <div class="row">
             <form class="col s6">
-              <div class="row" v-for="key in lodash.keys(active_cfg.config.inputs)">
-                <div class="input-field col s11" style="margin: 0px;">
-                  <!-- v-bind:class="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required && active_cfg.config.inputs[key].length < 1) ? 'invalid' : 'valid'" -->
-                  <input type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
-                    v-bind:placeholder="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required) ? 'Required' : 'Optional'"
-                  />
-                  <label style="z-index: -1;" v-bind:for="key">
-                    {{key + (lodash.has(active_cfg, ['io', 'inputs', key]) ? '   ('+active_cfg.io.inputs[key].type+')': '')}}
-                  </label>
+              <div v-if="lodash.has(active_cfg, ['io', 'inputs'])">
+                <div class="row" v-for="key in lodash.keys(active_cfg.io.inputs)">
+                  <div class="input-field col s11" style="margin: 0px;">
+                    <!-- v-bind:class="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required && active_cfg.config.inputs[key].length < 1) ? 'invalid' : 'valid'" -->
+                    <input type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
+                      v-bind:placeholder="(active_cfg.io.inputs[key].required) ? 'Required' : 'Optional'"
+                    />
+                    <label style="z-index: -1;" v-bind:for="key">
+                      {{key + '   ('+active_cfg.io.inputs[key].type+')'}}
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div v-else>
+                <div class="row" v-for="key in lodash.keys(active_cfg.config.inputs)">
+                  <div class="input-field col s11" style="margin: 0px;">
+                    <!-- v-bind:class="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required && active_cfg.config.inputs[key].length < 1) ? 'invalid' : 'valid'" -->
+                    <input type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
+                      v-bind:placeholder="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required) ? 'Required' : 'Optional'"
+                    />
+                    <label style="z-index: -1;" v-bind:for="key">
+                      {{key + (lodash.has(active_cfg, ['io', 'inputs', key]) ? '   ('+active_cfg.io.inputs[key].type+')': '')}}
+                    </label>
+                  </div>
                 </div>
               </div>
             </form>
             <form class="col s6">
-              <div class="row" v-for="key in lodash.keys(active_cfg.config.outputs)">
-                <div class="input-field col s11" style="margin: 0px;">
-                  <input placeholder="Required" type="text" v-bind:id="key" v-model="active_cfg.config.outputs[key]" v-bind:disabled="!edit_on"/>
-                  <label style="z-index: -1;">
-                    {{key + (lodash.has(active_cfg, ['io', 'outputs', key]) ? '   ('+active_cfg.io.outputs[key]+')': '')}}
-                  </label>
+              <div v-if="lodash.has(active_cfg, ['io', 'outputs'])">
+                <div class="row" v-for="key in lodash.keys(active_cfg.io.outputs)">
+                  <div class="input-field col s11" style="margin: 0px;">
+                    <input placeholder="Required" type="text" v-bind:id="key" v-model="active_cfg.config.outputs[key]" v-bind:disabled="!edit_on"/>
+                    <label style="z-index: -1;">
+                      {{key + '   ('+active_cfg.io.outputs[key]+')'}}
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div v-else>
+                <div class="row" v-for="key in lodash.keys(active_cfg.config.outputs)">
+                  <div class="input-field col s11" style="margin: 0px;">
+                    <input placeholder="Required" type="text" v-bind:id="key" v-model="active_cfg.config.outputs[key]" v-bind:disabled="!edit_on"/>
+                    <label style="z-index: -1;">
+                      {{key + (lodash.has(active_cfg, ['io', 'outputs', key]) ? '   ('+active_cfg.io.outputs[key]+')': '')}}
+                    </label>
+                  </div>
                 </div>
               </div>
             </form>

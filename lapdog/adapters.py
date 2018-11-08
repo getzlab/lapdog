@@ -115,11 +115,12 @@ class Call(object):
             return None
 
 @cached(10)
-def get_operation_status(opid, parse=True):
+def get_operation_status(opid, parse=True, fmt='json'):
     text = cache_fetch('operation', opid)
     if text is None:
         text = subprocess.run(
-            'gcloud alpha genomics operations describe %s' % (
+            'gcloud alpha genomics operations describe --format=%s %s' % (
+                fmt,
                 opid
             ),
             shell=True,
@@ -172,7 +173,8 @@ def kill_machines(instance_name):
     # if len(machines) > 1:
     #     machines = ' '.join(line.split()[0] for line in machines[1:] if len(line.strip()))
     # if len(machines):
-    return subprocess.run(
+    # Use Popen instead of run because deleting instances is a slow, blocking operation
+    return subprocess.Popen(
         'yes | gcloud compute instances delete %s' % (
             instance_name
         ),
@@ -453,22 +455,29 @@ class SubmissionAdapter(object):
         self.update()
         # FIXME: Once everything else works, see if cromwell labels work
         # At that point, we can add an abort here to kill everything with the id
-        for wf in self.workflows.values():
-            wf.abort()
         abort_operation(self.operation)
-        gs_path = os.path.join(
-            self.path,
-            'submission.json'
-        )
-        getblob(gs_path).upload_from_string(
-            json.dumps(
-                {
-                    **self.data,
-                    **{'status': 'Aborted'}
-                }
+        try:
+            for wf in self.workflows.values():
+                wf.abort()
+            # kill_machines('lapdog-submission-id='+self.submission)
+            status = get_operation_status(self.operation, False)
+            result = instance_name_pattern.search(status)
+            if result:
+                kill_machines(result.group(1).strip())
+        finally:
+            gs_path = os.path.join(
+                self.path,
+                'submission.json'
             )
-        )
-        kill_machines('lapdog-submission-id='+self.submission)
+            getblob(gs_path).upload_from_string(
+                json.dumps(
+                    {
+                        **self.data,
+                        **{'status': 'Aborted'}
+                    }
+                )
+            )
+
 
 
     @property

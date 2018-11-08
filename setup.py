@@ -1,7 +1,7 @@
 from setuptools import setup
 setup(
     name = 'lapdog',
-    version = '0.7.5',
+    version = '0.8.0',
     packages = [
         'lapdog',
         'lapdog.api'
@@ -21,9 +21,9 @@ setup(
             'api/swagger/lapdog.yaml'
         ],
     },
-    description = 'A wrapper for FISS and dalmatian',
-    author = 'Broad Institute - Cancer Genome Computational Analysis',
-    author_email = 'gdac@broadinstitute.org',
+    description = 'A relaxed wrapper for FISS and dalmatian',
+    author = 'Aaron Graubert - Broad Institute - Cancer Genome Computational Analysis',
+    author_email = 'aarong@broadinstitute.org',
     long_description = 'A wrapper for FISS and dalmatian',
     entry_points = {
         'console_scripts': [

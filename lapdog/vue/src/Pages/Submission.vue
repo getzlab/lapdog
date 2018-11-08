@@ -403,6 +403,7 @@ export default {
   },
   methods: {
     init(namespace, workspace, sid) {
+      window.$('.modal').modal();
       this.submission = null;
       this.workflows = null;
       this.display_cromwell = false;
@@ -424,6 +425,7 @@ export default {
               this.workflows = response.data
               setTimeout(() => {
                 window.$('.collapsible').collapsible();
+                window.$('#abort-modal').modal();
               }, 100);
             })
             .catch(error => {

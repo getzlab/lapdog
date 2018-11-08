@@ -19,7 +19,7 @@ import yaml
 from glob import glob
 from io import StringIO
 from . import adapters
-from .adapters import getblob, get_operation_status, mtypes
+from .adapters import getblob, get_operation_status, mtypes, NoSuchSubmission
 from .cache import cache_init
 from .operations import APIException, Operator, capture
 from itertools import repeat
@@ -27,6 +27,7 @@ import pandas as pd
 from socket import gethostname
 from math import ceil
 from functools import wraps
+import traceback
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -544,7 +545,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             raise APIException("Unexpected response from dalmatian: "+stdout_text)
         return result.group(1)
 
-    def get_submission(self, submission_id):
+    def get_submission(self, submission_id, lapdog_only=False):
         """
         Gets submission metadata from a lapdog or firecloud submission
         """
@@ -561,8 +562,12 @@ class WorkspaceManager(dog.WorkspaceManager):
                     # }
                 }
             except:
+                if lapdog_only:
+                    raise NoSuchSubmission(submission_id) from e
                 with dalmatian_api():
                     return super().get_submission(submission_id)
+        if lapdog_only:
+            raise NoSuchSubmission(submission_id)
         with dalmatian_api():
             return super().get_submission(submission_id)
 
@@ -570,7 +575,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     def _get_multiple_executions(self, execution_path):
         result = lapdog_submission_pattern.match(execution_path.name)
         if result:
-            return self.get_submission(result.group(1))
+            return self.get_submission(result.group(1), True)
 
 
     def list_configs(self):

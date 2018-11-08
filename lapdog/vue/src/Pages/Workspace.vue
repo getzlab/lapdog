@@ -202,7 +202,7 @@
               <tr v-for="key in lodash.keys(ws.attributes)" :key="key">
                 <td>{{key}}</td>
                 <td>
-                  <a v-if="lodash.startsWith(ws.attributes[key], 'gs://')"
+                  <a v-if="lodash.startsWith(lodash.toString(ws.attributes[key]), 'gs://')"
                     v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+ws.attributes[key].substr(5)"
                     target="_blank" rel="noopener"
                   >
@@ -276,7 +276,98 @@
         </div>
       </div>
 
+      <div class="data-viewer" v-if="ws && ws.entities && ws.entities.length">
+        <hr>
+        <h5>Data</h5>
+        <div class="row">
+          <div class="col s12">
 
+            <!-- style="border-radius: 15px; border: 2px solid grey;" -->
+            <ul class="pagination center" >
+              <li v-for="etype in ws.entities" v-bind:class="active_entity == etype ? 'active' : ''"
+                v-on:click.prevent="active_entity = etype"
+              >
+                <a href="#">{{etype.type}}s</a>
+              </li>
+            </ul>
+            <hr>
+          </div>
+        </div>
+        <div v-if="active_entity">
+          <div class="row" v-if="active_entity.count > page_limit">
+            <div class="col s12">
+              <ul class="pagination center">
+                <li v-bind:class="active_page == 0 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page - 1)">
+                  <a href="#"><i class="material-icons">chevron_left</i></a>
+                </li>
+                <li v-for="page in page_range" v-on:click.prevent="turn_page(page)" v-bind:class="page == active_page ? 'active' : ''">
+                  <a href="#">{{page}}</a>
+                </li>
+                <li v-bind:class="active_page == max_pages.length - 1 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page + 1)">
+                  <a href="#"><i class="material-icons">chevron_right</i></a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col s12" style="overflow-x: scroll;">
+              <table v-if="entities_data">
+                <thead>
+                  <tr>
+                    <th>{{active_entity.idName}}</th>
+                    <th v-for="attr in active_entity.attributeNames">
+                      {{attr}}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="entity in entities_data">
+                    <td>{{entity[active_entity.idName]}}</td>
+                    <td v-for="attr in active_entity.attributeNames">
+                      <a v-if="lodash.startsWith(lodash.toString(entity[attr]), 'gs://')"
+                        v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+lodash.toString(entity[attr]).substr(5)"
+                        target="_blank" rel="noopener"
+                      >
+                        {{truncate_cell(entity[attr])}}
+                      </a>
+                      <span v-else>
+                        {{truncate_cell(entity[attr])}}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else>
+                <div class="progress">
+                  <div class="indeterminate blue"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row" v-if="active_entity.count > page_limit">
+            <div class="col s12">
+              <ul class="pagination center">
+                <li v-bind:class="active_page == 0 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page - 1)">
+                  <a href="#"><i class="material-icons">chevron_left</i></a>
+                </li>
+                <li v-for="page in page_range" v-on:click.prevent="turn_page(page)" v-bind:class="page == active_page ? 'active' : ''">
+                  <a href="#">{{page}}</a>
+                </li>
+                <li v-bind:class="active_page == max_pages.length - 1 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page + 1)">
+                  <a href="#"><i class="material-icons">chevron_right</i></a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div v-else>
+          <div class="row">
+            <div class="col s12 center">
+              Select an entity type above to view
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -302,7 +393,11 @@
         submissions: null,
         expr_disabled: false,
         submit_okay: false,
-        show_attributes: false
+        show_attributes: false,
+        active_entity: null,
+        entities_data: null,
+        active_page: 0,
+        page_limit: 15
         // entities: null
       }
     },
@@ -313,12 +408,80 @@
       // this.get_configs();
       // this.get_entities(this.namespace, this.workspace);
     },
+    watch: {
+      active_entity(newVal, oldVal) {
+        if (!newVal) return;
+        this.active_page = 0;
+        window.materialize.toast({
+          html: "Loading "+newVal.type+'s'
+        });
+        this.load_data(
+          newVal.type,
+          0,
+          this.page_limit
+        )
+      },
+    },
     computed: {
       self_ref() {
         return this;
+      },
+      max_pages() {
+        return _.range(0, _.floor(this.active_entity.count / this.page_limit));
+      },
+      page_range() {
+        return _.slice(
+          this.max_pages,
+          _.max([0, this.active_page - 5]),
+          _.min([this.max_pages.length, this.active_page + 6])
+        );
       }
+      // active_entity: {
+      //   get() {
+      //     return this._active_entity ? this._active_entity : this.ws.entities[0]
+      //   },
+      //   set(etype) {
+      //     window.materialize.toast({html:"New etype: "+etype.type})
+      //     this._active_entity = etype;
+      //     window.materialize.toast({html:"New etype: "+this._active_entity.type})
+      //   }
+      // }
     },
     methods: {
+      // set_active(etype) {
+      //   this.$set(this, '_active_entity', etype);
+      // },
+      turn_page(page)
+      {
+
+          this.active_page = page;
+          this.load_data(
+            this.active_entity.type,
+            (this.active_page * this.page_limit),
+            ((this.active_page+1) * this.page_limit)
+          );
+      },
+      load_data(etype, start, stop)
+      {
+        this.entities_data = null;
+        axios.get(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/entities/'+etype+'?start='+start+'&end='+stop)
+          .then(response => {
+            console.log("Obtained entities");
+            this.entities_data = response.data;
+          })
+          .catch(error => {
+            console.error("Unable to load entities");
+            console.error(error);
+            window.materialize.toast({
+              html: "Unable to load entities"
+            })
+          })
+      },
+      truncate_cell(value) {
+        let string_value = _.toString(value);
+        if (string_value.length > 25) string_value = string_value.substr(0, 25)+"...";//"..."+string_value.substr(string_value.length - 25);
+        return string_value;
+      },
       preflight: _.debounce((_this) => {
         _this.submission_message = "Incomplete fields";
         if (_this.submission_config == "" || _this.submission_etype == "" || _this.entity_field == "") return;
@@ -414,6 +577,8 @@
       },
       getWorkspace(namespace, workspace) {
         this.show_attributes = false;
+        this.active_entity = null;
+        this.entities_data = null;
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
             console.log(response.data);
@@ -538,6 +703,7 @@
       this.entity_field = "";
       this.submission_expression = "";
       this.submissions = null;
+      this.active_entity = null;
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();
@@ -545,3 +711,14 @@
     }
   }
 </script>
+
+<style lang="css">
+  ul.pagination > li.active {
+    background: #1e88e5;
+  }
+
+  div.data-viewer td {
+    font-size: 0.9em;
+    padding: 5px;
+  }
+</style>

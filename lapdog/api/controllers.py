@@ -312,22 +312,34 @@ def set_acl(namespace, name):
         'service_account': True
     }, 200
 
+@cached(60)
+def _get_entitites_df(namespace, name, etype):
+    ws = get_workspace_object(namespace, name)
+    return ws.operator.get_entities_df(etype)
+
 @cached(10)
-def get_entities(namespace, name):
-    result = get_workspace_object(namespace, name).operator.entity_types
-    return {
-        'failed': False,
-        'reason': 'success',
-        'entity_types': sorted([
-            {
-                'type': key,
-                'attributes': val['attributeNames'],
-                'n': val['count'],
-                'id': val['idName'],
-                # 'cache': get_cache(namespace, name, key)
-            } for key, val in result.items()
-        ], key=lambda x:x['type'])
-    }, 200
+def get_entities(namespace, name, etype, start=0, end=None):
+    # result = get_workspace_object(namespace, name).operator.entity_types
+    # return {
+    #     'failed': False,
+    #     'reason': 'success',
+    #     'entity_types': sorted([
+    #         {
+    #             'type': key,
+    #             'attributes': val['attributeNames'],
+    #             'n': val['count'],
+    #             'id': val['idName'],
+    #             # 'cache': get_cache(namespace, name, key)
+    #         } for key, val in result.items()
+    #     ], key=lambda x:x['type'])
+    # }, 200
+    df = _get_entitites_df(namespace, name, etype).reset_index()
+    buffer = io.StringIO()
+    if end is not None:
+        df.iloc[start:end].to_json(buffer, 'records')
+    else:
+        df.to_json(buffer, 'records')
+    return json.loads(buffer.getvalue())
 
 def get_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
@@ -344,7 +356,7 @@ def sync_cache(namespace, name):
         ws.sync()
     ws.get_attributes()
     for etype in ws.operator.entity_types:
-        ws.operator.get_entities_df(etype)
+        _get_entitites_df(namespace, name, etype)
     for config in ws.list_configs():
         ws.operator.get_config_detail(config['namespace'], config['name'])
         try:
@@ -652,7 +664,7 @@ def read_logs(namespace, name, id, workflow_id, log, call):
 def operation_status(operation_id):
     from ..adapters import get_operation_status
     # print("Getting status:", operation_id)
-    text =  get_operation_status(operation_id, False)
+    text =  get_operation_status(operation_id, False, 'yaml')
     # print(text[:256])
     return text, 200
 

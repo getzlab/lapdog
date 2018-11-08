@@ -189,32 +189,50 @@ paths:
           description: A list of workspace summaries
           schema:
             $ref: "#/definitions/ACL_Update"
-  # /api/v1/workspaces/{namespace}/{name}/entities:
-  #   get:
-  #     parameters:
-  #       -
-  #         in: path
-  #         name: namespace
-  #         required: true
-  #         type: string
-  #         description: The workspaces namespace
-  #       -
-  #         in: path
-  #         name: name
-  #         required: true
-  #         type: string
-  #         description: The workspaces name
-  #     operationId: lapdog.api.controllers.get_entities
-  #     summary: Returns a list of entity types
-  #     responses:
-  #       default:
-  #         description: Error
-  #       200:
-  #         description: A list of entities in the workspace
-  #         schema:
-  #           type: array
-  #           items:
-  #             type: object
+  /api/v1/workspaces/{namespace}/{name}/entities/{etype}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: path
+          name: etype
+          required: true
+          type: string
+          description: Entity type
+        -
+          in: query
+          name: start
+          required: false
+          type: integer
+          description: DF start
+        -
+          in: query
+          name: end
+          required: false
+          type: integer
+          description: DF end
+      operationId: lapdog.api.controllers.get_entities
+      summary: Returns a list of entity types
+      responses:
+        default:
+          description: Error
+        200:
+          description: A list of entities in the workspace
+          schema:
+            type: array
+            items:
+              type: object
   /api/v1/workspaces/{namespace}/{name}/cache:
     get:
       parameters:
