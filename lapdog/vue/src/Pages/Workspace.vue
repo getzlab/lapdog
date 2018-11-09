@@ -307,7 +307,7 @@
                   <a href="#"><i class="material-icons">chevron_left</i></a>
                 </li>
                 <li v-for="page in page_range" v-on:click.prevent="turn_page(page)" v-bind:class="page == active_page ? 'active' : ''">
-                  <a href="#">{{page}}</a>
+                  <a href="#">{{page + 1}}</a>
                 </li>
                 <li v-bind:class="active_page == max_pages.length - 1 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page + 1)">
                   <a href="#"><i class="material-icons">chevron_right</i></a>
@@ -357,7 +357,7 @@
                   <a href="#"><i class="material-icons">chevron_left</i></a>
                 </li>
                 <li v-for="page in page_range" v-on:click.prevent="turn_page(page)" v-bind:class="page == active_page ? 'active' : ''">
-                  <a href="#">{{page}}</a>
+                  <a href="#">{{page + 1}}</a>
                 </li>
                 <li v-bind:class="active_page == max_pages.length - 1 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page + 1)">
                   <a href="#"><i class="material-icons">chevron_right</i></a>
@@ -433,7 +433,7 @@
         return this;
       },
       max_pages() {
-        return _.range(0, _.floor(this.active_entity.count / this.page_limit));
+        return _.range(0, _.ceil(this.active_entity.count / this.page_limit));
       },
       page_range() {
         return _.slice(
@@ -459,13 +459,13 @@
       // },
       turn_page(page)
       {
-
-          this.active_page = page;
-          this.load_data(
-            this.active_entity.type,
-            (this.active_page * this.page_limit),
-            ((this.active_page+1) * this.page_limit)
-          );
+        if (page < 0 || page >= this.max_pages.length) return;
+        this.active_page = page;
+        this.load_data(
+          this.active_entity.type,
+          (this.active_page * this.page_limit),
+          ((this.active_page+1) * this.page_limit)
+        );
       },
       load_data(etype, start, stop)
       {
