@@ -574,7 +574,7 @@
         if(this.ws) {
           for(let config in this.ws.configs)
           {
-            if(cfg == (this.ws.configs[config].name)) {
+            if(cfg == (this.ws.configs[config].namespace + '/'+this.ws.configs[config].name)) {
               return this.ws.configs[config].rootEntityType;
             }
           }
