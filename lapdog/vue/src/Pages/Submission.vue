@@ -211,7 +211,7 @@ Other: error_outline
           Configuration:
         </div>
         <div class="col s4">
-          <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace} }">
+          <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace, target_namespace: submission.methodConfigurationNamespace, target_name: submission.methodConfigurationName} }">
             {{submission.methodConfigurationNamespace+'/'+submission.methodConfigurationName}}
           </router-link>
         </div>

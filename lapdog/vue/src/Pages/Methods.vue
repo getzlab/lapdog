@@ -262,7 +262,18 @@
 import axios from'axios'
 import _ from 'lodash'
 export default {
-  props: ['namespace', 'workspace'],
+  props: {
+    namespace: String,
+    workspace: String,
+    target_namespace: {
+      type: String,
+      default: null
+    },
+    target_name: {
+      type: String,
+      default: null
+    }
+  },
   data() {
     return {
       jq:window.$,
@@ -274,7 +285,8 @@ export default {
       edit_on: false,
       show_wdl: false,
       config_filepath: '',
-      method_filepath: ''
+      method_filepath: '',
+      target_rendered: false,
     }
   },
   created() {
@@ -288,16 +300,24 @@ export default {
       this.edit_dirty = null;
       this.edit_on = false;
       this.show_wdl = false;
+      this.target_rendered = false;
       this.config_filepath = "";
       this.method_filepath = "";
       this.reset_uploads();
       this.get_configs(namespace, workspace);
+      console.log(this.target_namespace)
     },
     get_configs(ns, ws) {
       axios.get(API_URL+'/api/v1/workspaces/'+ns+'/'+ws+'/configs')
         .then(response => {
           console.log(response.data);
-          this.configs = response.data
+          this.configs = response.data;
+          if (this.target_namespace && this.target_name && !this.target_rendered) {
+            this.display_config(this.target_namespace+'/'+this.target_name, false);
+            // this.target_namespace = null;
+            // this.target_name = null;
+            this.target_rendered = true;
+          }
         })
         .catch(error => {
           console.error(error)
@@ -509,6 +529,7 @@ export default {
   },
   beforeRouteUpdate(to, from, next) {
     console.log("Update!");
+    window.$('.modal').modal('close');
     this.init(to.params.namespace, to.params.workspace);
     next();
   }

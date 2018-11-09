@@ -257,7 +257,7 @@
             <tbody>
               <tr v-for="sub in submissions">
                 <td>
-                  <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace} }">
+                  <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace, target_namespace:sub.methodConfigurationNamespace, target_name:sub.methodConfigurationName} }">
                     {{truncate_cell(sub.methodConfigurationNamespace+'/'+sub.methodConfigurationName, true)}}
                   </router-link>
                 </td>
@@ -315,7 +315,7 @@
               </ul>
             </div>
           </div>
-          <div class="row">
+          <div class="row" style="border: 1px solid grey;">
             <div class="col s12" style="overflow-x: scroll;">
               <table v-if="entities_data">
                 <thead>
