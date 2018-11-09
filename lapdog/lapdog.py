@@ -36,6 +36,12 @@ creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
 
 timestamp_format = '%Y-%m-%dT%H:%M:%S.000%Z'
 
+class ConfigNotFound(KeyError):
+    pass
+
+class ConfigNotUnique(KeyError):
+    pass
+
 @contextlib.contextmanager
 def dalmatian_api():
     try:
@@ -403,7 +409,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         else:
             return super().update_entity_attributes(etype, df)
 
-    def update_configuration(self, config, wdl=None, name=None, namespace=None):
+    def update_configuration(self, config, wdl=None, name=None, namespace=None, delete_old=True):
         """
         Update a method configuration and (optionally) the WDL
         Must provide a properly formed configuration object.
@@ -427,7 +433,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                         config['methodRepoMethod']['methodNamespace'],
                         config['methodRepoMethod']['methodName'],
                         "Runs " + config['methodRepoMethod']['methodName'],
-                        wdl_path
+                        wdl_path,
+                        delete_old
                     )
                     stdout.seek(0,0)
                     out_text = stdout.read()
@@ -499,13 +506,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         if not self.live:
             print("The workspace is currently in offline mode. Please call WorkspaceManager.sync() to reconnect to firecloud", file=sys.stderr)
             return
-        with dalmatian_api():
-            configs = {
-                cfg['name']:cfg for cfg in self.list_configs()
-            }
-        if config_name not in configs:
-            raise KeyError('Configuration "%s" not found in this workspace' % config_name)
-        config = configs[config_name]
+        config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             raise ValueError("expression and etype must BOTH be None or a string value")
         if etype is None:
@@ -584,6 +585,29 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         return self.operator.configs
 
+    def fetch_config(self, config_slug):
+        """
+        Fetches a configuration by the provided slug.
+        If the slug is just the config name, this returns a config
+        with a matching name IFF the name is unique. If another config
+        exists with the same name, this will fail.
+        If the slug is a full slug (namespace/name) this will always return
+        a matching config (slug uniqueness is enforced by firecloud)
+        """
+        configs = self.list_configs()
+        candidates = [] # For configs just matching name
+        for config in configs:
+            if config_slug == '%s/%s' % (config['namespace'], config['name']):
+                return config
+            elif config_slug == config['name']:
+                candidates.append(config)
+        if len(candidates) == 1:
+            return candidates[0]
+        elif len(candidates) > 1:
+            raise ConfigNotUnique('%d configs matching name "%s". Use a full config slug' % (len(candidates), config_slug))
+        raise ConfigNotFound('No such config "%s"' % config_slug)
+
+
     configs = property(list_configs)
     configurations = configs
 
@@ -610,10 +634,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Verifies execution configuration
         """
-        configs = {config['name']:config for config in self.list_configs()}
-        if config_name not in configs:
-            return False, 'Configuration "%s" not found in this workspace' % config_name
-        config = configs[config_name]
+        config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             return False, "expression and etype must BOTH be None or a string value"
         if etype is None:
@@ -653,10 +674,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Validates config parameters then executes a job directly on GCP
         """
-        configs = {config['name']:config for config in self.list_configs()}
-        if config_name not in configs:
-            raise KeyError('Configuration "%s" not found in this workspace' % config_name)
-        config = configs[config_name]
+        config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             raise ValueError("expression and etype must BOTH be None or a string value")
         if etype is None:

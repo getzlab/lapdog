@@ -816,7 +816,8 @@ def upload_config(namespace, name, config_filepath, method_filepath=None):
     try:
         result = get_workspace_object(namespace, name).update_configuration(
             config,
-            method_filepath # Either it's a file-object or None
+            method_filepath, # Either it's a file-object or None
+            delete_old=False # UI never deletes old configurations
         )
         get_config.cache_clear()
         get_configs.cache_clear()

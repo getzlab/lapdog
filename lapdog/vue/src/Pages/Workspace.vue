@@ -8,8 +8,8 @@
             <div class="input-field col s12">
               <select class="browser-default" id="config-select" v-model="submission_config" v-on:input="preflight(self_ref)">
                 <option value="" selected disabled>Choose a method</option>
-                <option v-for="config in method_configs" v-bind:value="config.name" :key="config.name">
-                  {{config.name}}
+                <option v-for="config in method_configs" v-bind:value="config.namespace+'/'+config.name" :key="config.name">
+                  {{config.namespace+'/'+config.name}}
                 </option>
               </select>
             </div>
@@ -258,7 +258,7 @@
               <tr v-for="sub in submissions">
                 <td>
                   <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace} }">
-                    {{sub.methodConfigurationName}}
+                    {{truncate_cell(sub.methodConfigurationNamespace+'/'+sub.methodConfigurationName, true)}}
                   </router-link>
                 </td>
                 <td>{{sub.submissionEntity.entityName}}</td>
@@ -483,9 +483,12 @@
             })
           })
       },
-      truncate_cell(value) {
+      truncate_cell(value, front) {
         let string_value = _.toString(value);
-        if (string_value.length > 25) string_value = string_value.substr(0, 25)+"...";//"..."+string_value.substr(string_value.length - 25);
+        if (string_value.length > 25) {
+          if (!front) string_value = string_value.substr(0, 25)+"...";//"..."+string_value.substr(string_value.length - 25);
+          else string_value = "..."+string_value.substr(string_value.length - 25);
+        }
         return string_value;
       },
       preflight: _.debounce((_this) => {
