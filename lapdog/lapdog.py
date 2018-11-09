@@ -662,7 +662,19 @@ class WorkspaceManager(dog.WorkspaceManager):
             else:
                 print("The following inputs are invalid on this configuation: %s" % repr(list(invalid_inputs)), file=sys.stderr)
 
-        submission_id = md5((gethostname() + str(time.time()) + config['name'] + entity).encode()).hexdigest()
+        submission_id = md5((gethostname() + str(time.time()) + config['namespace'] + config['name'] + entity).encode()).hexdigest()
+
+        submission_data_path = os.path.join(
+            'gs://'+self.get_bucket_id(),
+            'lapdog-executions',
+            submission_id,
+            'submission.json'
+        )
+        blob = getblob(submission_data_path)
+        while blob.exists():
+            print("Submission ID collision detected. Generating a new ID...", file=sys.stderr)
+            submission_id = md5((submission_id + str(time.time())).encode()).hexdigest()
+
         global_id = 'lapdog/'+base64.b64encode(
             ('%s/%s/%s' % (self.namespace, self.workspace, submission_id)).encode()
         ).decode()
@@ -767,13 +779,6 @@ class WorkspaceManager(dog.WorkspaceManager):
             for e, t in zip(workflow_entities, workflow_inputs)
         ]
 
-        submission_data_path = os.path.join(
-            'gs://'+self.get_bucket_id(),
-            'lapdog-executions',
-            submission_id,
-            'submission.json'
-        )
-
         cmd = (
             'gcloud alpha genomics pipelines run '
             '--pipeline-file {source_dir}/wdl_pipeline.yaml '
@@ -815,7 +820,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         print("Created submission", global_id)
 
-        getblob(submission_data_path).upload_from_string(json.dumps(submission_data))
+        blob.upload_from_string(json.dumps(submission_data))
 
         return global_id, submission_id, submission_data['operation']
 

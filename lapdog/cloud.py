@@ -1,6 +1,17 @@
-# NOTE This is a cloud function. It is useless to call on its own
+# This module defines utilities for the cloud function api
 
 import subprocess
+
+def cloud_api_endpoint(request):
+    if request.method == 'POST':
+        data = request.get_json()
+        # Global request format
+        # {
+        #     'auth': "<Issuer's auth token>",
+        #     'method': "<Lapdog API method name>",
+        #     'args': ['...'],
+        #     'kwargs': {'...'}
+        # }
 
 def create_submission(request):
 
@@ -8,7 +19,7 @@ def create_submission(request):
         'pileline-file': '<Pipeline file text>',
         'zones': '<Compute zone>',
         'inputs': {
-            'WDL': '<WDL text>',
+            'WDL': '<gs path to method>',
             'WORKFLOW_INPUTS': '<gs path to config>',
             'WORKFLOW_OPTIONS': {
                 '<Options JSON object>'
