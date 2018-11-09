@@ -8,7 +8,7 @@
             <div class="input-field col s12">
               <select class="browser-default" id="config-select" v-model="submission_config" v-on:input="preflight(self_ref)">
                 <option value="" selected disabled>Choose a method</option>
-                <option v-for="config in method_configs" v-bind:value="config.namespace+'/'+config.name" :key="config.name">
+                <option v-for="config in method_configs" v-bind:value="config.namespace+'/'+config.name" :key="config.namespace+'/'+config.name">
                   {{config.namespace+'/'+config.name}}
                 </option>
               </select>
