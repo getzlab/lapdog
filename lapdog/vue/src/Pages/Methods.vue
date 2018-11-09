@@ -133,13 +133,6 @@
         <div v-if="active_cfg">
           <h4>
             {{active_cfg.config.namespace}}/{{active_cfg.config.name}}
-            <span class="right">
-              <i v-if="edit_on" v-on:click.prevent="save_config" class="material-icons green-text" title="Save changes">check</i>
-              <i class="material-icons" v-bind:class="edit_on?'orange-text text-darken-3':''" v-on:click.prevent="toggle_edit" v-bind:title="edit_on ? 'Discard changes' : 'Edit configuration'">
-                {{edit_on?"cancel":"edit"}}
-              </i>
-              <i class="material-icons red-text" title="Delete this configuration" v-on:click.prevent="delete_config">delete</i>
-            </span>
           </h4>
         </div>
         <strong>Are you sure you want to delete this configuration?</strong>
