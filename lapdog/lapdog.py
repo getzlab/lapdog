@@ -673,6 +673,8 @@ class WorkspaceManager(dog.WorkspaceManager):
     def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False):
         """
         Validates config parameters then executes a job directly on GCP
+        Config name may either be a full slug (config namespace/config name)
+        or just the name (only if the name is unique)
         """
         config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):

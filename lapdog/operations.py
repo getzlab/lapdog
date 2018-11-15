@@ -611,6 +611,6 @@ class Operator(object):
             )
         if 'workspace' in expression:
             evaluator.add_attributes(
-                this.attributes
+                self.attributes
             )
         return evaluator(etype, entity, expression)
