@@ -625,7 +625,7 @@ def get_workflow(namespace, name, id, workflow_id):
             'entity': None
         }, 200
 
-@cached(30)
+# @cached(30)
 def read_logs(namespace, name, id, workflow_id, log, call):
     filename, suffix = {
         'stdout': ('stdout', '-stdout.log'),

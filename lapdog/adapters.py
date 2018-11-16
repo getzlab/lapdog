@@ -441,10 +441,14 @@ class SubmissionAdapter(object):
                 )
             elif matcher.apply(status_pattern.search(message)):
                 short = matcher.value.group(1)
+                task = matcher.value.group(3)
+                call = int(matcher.value.group(5))
                 old = matcher.value.group(6)
                 new = matcher.value.group(7)
                 self._init_workflow(short).handle(
                     'status',
+                    task,
+                    call,
                     old,
                     new
                 )
@@ -617,17 +621,20 @@ class WorkflowAdapter(object):
         ))
 
     def on_message(self, message):
-        if len(self.calls):
-            self.calls[-1].last_message = message.strip()
+        pass
+        # if len(self.calls):
+        #     self.calls[-1].last_message = message.strip()
         # else:
             # print("Discard message", message)
 
     def on_fail(self, message, status=None):
         self.failure = message
 
-    def on_status(self, old, new):
-        if len(self.calls):
-            self.calls[-1].status = new
+    def on_status(self, task, attempt, old, new):
+        for call in self.calls:
+            if call.task == task and call.attempt == attempt:
+                call.status = new
+                return
         # else:
             # print("Discard status", old,'->', new)
 

@@ -45,6 +45,7 @@ Other: error_outline
       <div class="modal-content">
         <div class="container">
           <h4>Workflow Info</h4>
+          {{active_workflow}}
           <div class="workflow-data" v-if="active_workflow">
             <div class="row" >
               <div class="col s2">
