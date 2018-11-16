@@ -194,7 +194,7 @@
         </div>
       </div> -->
       <div class="row" >
-        <div class="col s12 truncate">
+        <div class="col s12 truncat">
           <table>
             <thead>
               <tr>
@@ -258,7 +258,8 @@
               <tr v-for="sub in submissions">
                 <td>
                   <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace, target_namespace:sub.methodConfigurationNamespace, target_name:sub.methodConfigurationName} }">
-                    {{truncate_cell(sub.methodConfigurationNamespace+'/'+sub.methodConfigurationName, true)}}
+                    <!-- {{truncate_cell(sub.methodConfigurationNamespace+'/'+sub.methodConfigurationName, true)}} -->
+                    {{sub.methodConfigurationNamespace+'/'+sub.methodConfigurationName}}
                   </router-link>
                 </td>
                 <td>{{sub.submissionEntity.entityName}}</td>
@@ -315,7 +316,8 @@
               </ul>
             </div>
           </div>
-          <div class="row" style="border: 1px solid grey;">
+          <!-- <div class="row" style="border: 1px solid grey;"> -->
+          <div class="row z-depth-1">
             <div class="col s12" style="overflow-x: scroll;">
               <table v-if="entities_data">
                 <thead>
@@ -329,7 +331,7 @@
                 <tbody>
                   <tr v-for="entity in entities_data">
                     <td>{{entity[active_entity.idName]}}</td>
-                    <td v-for="attr in active_entity.attributeNames">
+                    <td v-for="attr in active_entity.attributeNames" class="trunc">
                       <a v-if="lodash.startsWith(lodash.toString(entity[attr]), 'gs://')"
                         v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+lodash.toString(entity[attr]).substr(5)"
                         target="_blank" rel="noopener"
@@ -403,7 +405,7 @@
         active_entity: null,
         entities_data: null,
         active_page: 0,
-        page_limit: 15
+        page_limit: 20
         // entities: null
       }
     },
@@ -485,11 +487,12 @@
       },
       truncate_cell(value, front) {
         let string_value = _.toString(value);
-        if (string_value.length > 25) {
-          if (!front) string_value = string_value.substr(0, 25)+"...";//"..."+string_value.substr(string_value.length - 25);
-          else string_value = "..."+string_value.substr(string_value.length - 25);
-        }
         return string_value;
+        // if (string_value.length > 25) {
+        //   if (!front) string_value = string_value.substr(0, 25)+"...";//"..."+string_value.substr(string_value.length - 25);
+        //   else string_value = "..."+string_value.substr(string_value.length - 25);
+        // }
+        // return string_value;
       },
       preflight: _.debounce((_this) => {
         _this.submission_message = "Incomplete fields";
@@ -746,4 +749,15 @@
     font-size: 0.9em;
     padding: 5px;
   }
+
+  table tr td {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  td.trunc {
+    max-width: 15px;
+  }
+
 </style>

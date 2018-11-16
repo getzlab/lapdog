@@ -948,13 +948,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             done = 'done' in status and status['done']
             if done:
                 print("All workflows completed. Uploading results...")
-                output_template = check_api(dog.firecloud.api.get_workspace_config(
-                    submission['namespace'],
-                    submission['workspace'],
+                output_template = self.operator.get_config_detail(
                     submission['methodConfigurationNamespace'],
                     submission['methodConfigurationName']
-                )).json()['outputs']
-
+                )['outputs']
                 output_data = {}
                 try:
                     workflow_metadata = json.loads(getblob(

@@ -607,4 +607,11 @@ export default {
     white-space: pre-wrap;
     font-size: 90%;
   }
+
+  table tr td {
+    white-space: nowrap;
+    text-overflow:ellipsis;
+    overflow: hidden;
+    max-width: 10px;
+  }
 </style>
