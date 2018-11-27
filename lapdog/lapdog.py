@@ -108,7 +108,7 @@ def _composite_upload(src, dest, size):
 
 
 @parallelize2()
-def upload(bucket, path, source):
+def upload(bucket, path, source, allow_composite=True):
     """
     Uploads {source} to google cloud.
     Result google cloud path is gs://{bucket}/{path}.
@@ -117,13 +117,17 @@ def upload(bucket, path, source):
     which will contain 1GB blobs from the file. The blobs will be concatenated into
     a single large file afterwards and the temporary folder deleted.
 
+    WARNING: You MUST set allow_composite to False if you are uploading to a nearline
+    or coldline bucket. The composite upload will incur large fees from deleting
+    the temporary objects
+
     This function starts the upload on a background thread and returns a callable
     object which can be used to wait for the upload to complete. Calling the object
     blocks until the upload finishes, and will raise any exceptions encountered
     by the background thread
     """
     # 4294967296
-    if os.path.isfile(source) and os.path.getsize(source) >= 2865470566: #2.7gib
+    if allow_composite and os.path.isfile(source) and os.path.getsize(source) >= 2865470566: #2.7gib
         _composite_upload(
             source,
             'gs://{}/{}'.format(bucket.name, path),
@@ -195,7 +199,7 @@ class BucketUploader(object):
 
         def scan_row(row):
             for i, value in enumerate(row):
-                if os.path.isfile(value):
+                if isinstance(value, str) and os.path.isfile(value):
                     path, callback = self.upload(value, row.name)
                     row.iloc[i] = path
                     uploads.append(callback)
@@ -282,12 +286,6 @@ class WorkspaceManager(dog.WorkspaceManager):
             stderr.seek(0,0)
             text = stdout.read() + stderr.read()
         return bool(creation_success_pattern.search(text))
-
-    def upload_entities(self, etype, df, index=True):
-        """
-        Upload/Update entities in the workspace
-        """
-        return self.operator.update_entities_df(etype, df, index)
 
     def get_samples(self):
         """

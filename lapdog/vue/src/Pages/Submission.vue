@@ -45,7 +45,6 @@ Other: error_outline
       <div class="modal-content">
         <div class="container">
           <h4>Workflow Info</h4>
-          {{active_workflow}}
           <div class="workflow-data" v-if="active_workflow">
             <div class="row" >
               <div class="col s2">
@@ -134,7 +133,7 @@ Other: error_outline
                       <a href="#" v-on:click.prevent="get_log('stderr', call.idx)">Standard Error</a>
                     </div>
                     <div class="col s3">
-                      <a href="#" v-on:click.prevent="get_log('google', call.idx)">Genomics</a>
+                      <a href="#" v-on:click.prevent="get_log('google', call.idx)">Cromwell</a>
                     </div>
                   </div>
                 </div>

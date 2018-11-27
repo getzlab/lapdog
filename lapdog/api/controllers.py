@@ -155,18 +155,27 @@ def workspace(namespace, name):
 def service_account():
     try:
         buff = io.StringIO(subprocess.check_output(
-            'gcloud iam service-accounts list',
+            'gcloud iam service-accounts list --format=json',
             shell=True,
             stderr=subprocess.PIPE
         ).decode())
     except:
+        traceback.print_exc()
         return {
             'msg': 'Unable to read active service account',
             'error': traceback.format_exc()
         }, 500
     try:
-        return pd.read_fwf(buff, index_col=0).loc['Compute Engine default service account']['EMAIL'], 200
+        for acct in json.load(buff):
+            if 'displayName' in acct and acct['displayName'] == 'Compute Engine default service account':
+                return acct['email'], 200
+        buff.seek(0,0)
+        return {
+            'msg': 'Unable to locate service account',
+            'error': buff.read()
+        }, 500
     except:
+        traceback.print_exc()
         buff.seek(0,0)
         return {
             'msg': 'Unable to parse gcloud output',

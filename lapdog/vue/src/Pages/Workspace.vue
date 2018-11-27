@@ -757,7 +757,8 @@
   }
 
   td.trunc {
-    max-width: 15px;
+    max-width: 100px;
+    direction: rtl;
   }
 
 </style>
