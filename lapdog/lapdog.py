@@ -200,7 +200,7 @@ class BucketUploader(object):
         def scan_row(row):
             for i, value in enumerate(row):
                 if isinstance(value, str) and os.path.isfile(value):
-                    path, callback = self.upload(value, row.name)
+                    path, callback = self.upload(value, str(row.name))
                     row.iloc[i] = path
                     uploads.append(callback)
             return row

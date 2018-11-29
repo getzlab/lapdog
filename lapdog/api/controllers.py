@@ -296,13 +296,12 @@ def set_acl(namespace, name):
             [{
                 'email': account,
                 'accessLevel': 'WRITER',
-                'canShare': False,
-                'canCompute': False
             }]
         )
         try:
             data = response.json()
         except:
+            traceback.print_exc()
             return {
                 'failed': True,
                 'reason': 'firecloud'
@@ -314,11 +313,13 @@ def set_acl(namespace, name):
                     'reason': 'registration'
                 }, 200
             elif 'usersUpdated' not in data or account not in {acct['email'] for acct in data['usersUpdated']}:
+                print(data)
                 return {
                     'failed': True,
                     'reason': 'firecloud'
                 }, 200
         else:
+            print(data)
             return {
                 'failed': True,
                 'reason': 'firecloud'
