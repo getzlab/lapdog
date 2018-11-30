@@ -28,6 +28,7 @@ from socket import gethostname
 from math import ceil
 from functools import wraps
 import traceback
+import warnings
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -83,6 +84,8 @@ def build_input_key(template):
 
 def _composite_upload(src, dest, size):
 
+    warnings.warn("lapdog._composite_upload is deprecated. Upload() now uses Google's built-in chunked uploads", warnings.DeprecationWarning)
+
     @parallelize(5)
     def upload_component(component_path, i, text):
         blob = getblob(component_path+str(i))
@@ -107,7 +110,7 @@ def _composite_upload(src, dest, size):
     return composite_blob
 
 
-@parallelize2()
+@parallelize2(5)
 def upload(bucket, path, source, allow_composite=True):
     """
     Uploads {source} to google cloud.
@@ -127,17 +130,11 @@ def upload(bucket, path, source, allow_composite=True):
     by the background thread
     """
     # 4294967296
+    blob = bucket.blob(path)
     if allow_composite and os.path.isfile(source) and os.path.getsize(source) >= 2865470566: #2.7gib
-        _composite_upload(
-            source,
-            'gs://{}/{}'.format(bucket.name, path),
-            1074000000 # 1 gib
-        )
-    else:
-        blob = bucket.blob(path)
-        # print("Commencing upload:", source)
-        blob.upload_from_filename(source)
-        return blob
+        blob.chunk_size = 104857600 # ~100mb
+    blob.upload_from_filename(source)
+    return blob
 
 
 def purge_cache():

@@ -33,7 +33,7 @@ setup(
     },
     install_requires = [
         'firecloud-dalmatian',
-        'google-cloud-storage',
+        'google-cloud-storage>=1.9.0',
         'pyyaml',
         'agutil',
         'flask_cors',
