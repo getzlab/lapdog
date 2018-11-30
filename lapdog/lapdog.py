@@ -557,7 +557,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     #     'status': adapter.submission_status(True)
                     # }
                 }
-            except:
+            except Exception as e:
                 if lapdog_only:
                     raise NoSuchSubmission(submission_id) from e
                 with dalmatian_api():
@@ -961,6 +961,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 workflow_metadata = {
                     build_input_key(meta['workflow_metadata']['inputs']):meta
                     for meta in workflow_metadata
+                    if meta['workflow_metadata'] is not None and m['workflow_status'] == 'Succeeded'
                 }
                 submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
                 submission_data = pd.DataFrame()

@@ -9,8 +9,8 @@ setup(
     ],
     package_data={
         '':[
-            'cromwell/wdl_pipeline.yaml'
-            'cromwell/LICENSE'
+            'cromwell/wdl_pipeline.yaml',
+            'cromwell/LICENSE',
             'cromwell/README.md',
             'vue/.babelrc',
             'vue/index.html',
@@ -19,7 +19,8 @@ setup(
             'vue/src/main.js',
             'vue/src/App.vue',
             'vue/src/Pages/*.vue',
-            'api/swagger/lapdog.yaml'
+            'api/swagger/lapdog.yaml',
+            'wdl_pipeline.yaml'
         ],
     },
     description = 'A relaxed wrapper for FISS and dalmatian',

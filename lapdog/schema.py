@@ -60,10 +60,10 @@ class Evaluator(object):
         if components[0] == 'workspace':
             if components[1] not in self.attributes:
                 raise EvaluationError("No workspace attribute '%s' : %s" % (
-                    components[0],
+                    components[1],
                     expression
                 ))
-            return [self.attributes[components[0]]]
+            return [self.attributes[components[1]]]
         elif components[0] == 'this':
             if etype not in self.edata:
                 raise EvaluationError("Entity type not loaded '%s' : %s" % (

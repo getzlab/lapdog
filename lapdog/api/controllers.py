@@ -537,11 +537,13 @@ def upload_submission(namespace, name, id):
     try:
         stats = ws.complete_execution(id)
     except FileNotFoundError:
+        traceback.print_exc()
         return {
             'failed': True,
             'message': 'Job did not complete. It may have been aborted'
         }, 200
     except:
+        traceback.print_exc()
         return {
             'failed': True,
             'message': 'Exception: '+ traceback.format_exc()
