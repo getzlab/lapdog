@@ -82,6 +82,14 @@ def build_input_key(template):
             data += str(template[k])
     return md5(data.encode()).hexdigest()
 
+def list_potential_submissions(bucket_id):
+    for line in re.finditer(r'.+submission\.json', subprocess.run(
+                'gsutil ls gs://{}/lapdog-executions/*/submission.json'.format(bucket_id),
+                shell=True,
+                stdout=subprocess.PIPE
+                ).stdout.decode()):
+        yield line.group(0)
+
 def _composite_upload(src, dest, size):
 
     warnings.warn("lapdog._composite_upload is deprecated. Upload() now uses Google's built-in chunked uploads", warnings.DeprecationWarning)
@@ -569,7 +577,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     @parallelize(5)
     def _get_multiple_executions(self, execution_path):
-        result = lapdog_submission_pattern.match(execution_path.name)
+        result = lapdog_submission_pattern.match(execution_path)
         if result:
             return self.get_submission(result.group(1), True)
 
@@ -620,7 +628,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         if not lapdog_only:
             with dalmatian_api():
                 results = super().list_submissions(config)
-        for submission in WorkspaceManager._get_multiple_executions(repeat(self), storage.Client().get_bucket(self.get_bucket_id()).list_blobs(prefix='lapdog-executions')):
+        for submission in WorkspaceManager._get_multiple_executions(repeat(self), list_potential_submissions(self.bucket_id)):
             if submission is not None:
                 results.append(submission)
         return results
@@ -961,7 +969,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 workflow_metadata = {
                     build_input_key(meta['workflow_metadata']['inputs']):meta
                     for meta in workflow_metadata
-                    if meta['workflow_metadata'] is not None and m['workflow_status'] == 'Succeeded'
+                    if meta['workflow_metadata'] is not None and meta['workflow_status'] == 'Succeeded'
                 }
                 submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
                 submission_data = pd.DataFrame()

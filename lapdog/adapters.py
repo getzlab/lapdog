@@ -259,6 +259,7 @@ class SubmissionAdapter(object):
         self.submission = submission
         self.workflows = {}
         self._internal_reader = None
+        self.bucket = bucket
         if _do_cache_write and not self.live:
             cache_write(json.dumps(self.data), 'submission-json', bucket, submission)
 
@@ -284,16 +285,17 @@ class SubmissionAdapter(object):
                 maxTime = 0
                 total = 0
                 for wf in workflow_metadata:
-                    for calls in wf['workflow_metadata']['calls'].values():
-                        for call in calls:
-                            if 'end' in call:
-                                delta = datetime.datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
-                                delta = delta.total_seconds() / 3600
-                                if delta > maxTime:
-                                    maxTime = delta
-                                total += delta
-                                if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
-                                    cost += mtypes[call['jes']['machineType'].split('/')[-1]][int('preemptible' in call and call['preemptible'])]*delta
+                    if wf['workflow_metadata'] is not None:
+                        for calls in wf['workflow_metadata']['calls'].values():
+                            for call in calls:
+                                if 'end' in call:
+                                    delta = datetime.datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+                                    delta = delta.total_seconds() / 3600
+                                    if delta > maxTime:
+                                        maxTime = delta
+                                    total += delta
+                                    if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
+                                        cost += mtypes[call['jes']['machineType'].split('/')[-1]][int('preemptible' in call and call['preemptible'])]*delta
                 cost += mtypes['n1-standard-1'][0] * maxTime
                 cost = int(cost * 100) / 100
                 result = {
@@ -541,6 +543,17 @@ class SubmissionAdapter(object):
             log_text = stdout_blob.download_as_string()
             cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
             return BytesIO(log_text)
+        # If we get here, the submission is done, but there were no logs
+        if self.data['status'] != 'Error':
+            self.data['status'] = 'Error'
+            cache_write(json.dumps(self.data), 'submission-json', self.bucket, self.submission)
+            gs_path = os.path.join(
+                self.path,
+                'submission.json'
+            )
+            getblob(gs_path).upload_from_string(json.dumps(self.data).encode())
+        return BytesIO(b'')
+
 
     # def get_workflows(self, workflows):
     #

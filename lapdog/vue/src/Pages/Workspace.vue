@@ -225,7 +225,7 @@
     <div class="submission-container">
       <div class="row">
         <div class="col s12">
-          Labdog Submissions:
+          Lapdog Submissions:
         </div>
       </div>
       <!-- <div v-if="submissions" class="collection">
@@ -263,7 +263,7 @@
                   </router-link>
                 </td>
                 <td>{{sub.submissionEntity.entityName}}</td>
-                <td v-bind:class="sub.status == 'Failed' || sub.status == 'Error' ? 'red-text' : (sub.status == 'Succeeded' ? 'green-text' : '')">
+                <td v-bind:class="{Failed:'red-text', Error:'red-text', Aborted:'orange-text', Succeeded: 'green-text'}[sub.status]">
                   {{sub.status}}
                 </td>
                 <td>{{sub.submissionDate}}</td>
