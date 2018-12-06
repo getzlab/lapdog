@@ -472,15 +472,19 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
             'invalid_inputs': 'None'
         }, 200
 
-def execute(namespace, name, config, entity, expression="", etype=""):
+def execute(namespace, name, config, entity, expression="", etype="", memory=3, batch=250, query=100):
     ws = get_workspace_object(namespace, name)
+    print('submit runtime', memory, batch, query)
     try:
         global_id, local_id, operation_id = ws.execute(
             config,
             entity,
             expression if expression != "" else None,
             etype if etype != "" else None,
-            force=True
+            force=True,
+            memory=memory,
+            batch_limit=batch,
+            query_limit=query
         )
         return {
             'failed': False,

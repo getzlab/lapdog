@@ -76,7 +76,8 @@ class Runner(object):
 
         # Set up the Cromwell driver
         self.driver = cromwell_driver.CromwellDriver(cromwell_conf, cromwell_jar)
-        self.driver.start()
+        if not self.args.batch:
+            self.driver.start(3)
 
     def fill_cromwell_conf(self, cromwell_conf, working_dir, project):
         try:
@@ -126,12 +127,27 @@ class Runner(object):
     def run(self):
         if self.args.batch is not None:
             try:
+                file_util.gsutil_cp([os.environ['SUBMISSION_DATA_PATH']], 'submission.json')
+                with open('submission.json') as r:
+                    submission_data = json.load(r)
+                runtime = submission_data['runtime'] if 'runtime' in submission_data else None
+                self.driver.start(runtime['memory'] if runtime is not None else 3)
                 logging.info("Starting batch request")
+                # logging.info("SUBMITTING JOB " + repr((
+                #     self.args.batch,
+                #     self.args.wdl,
+                #     self.args.workflow_inputs,
+                #     self.args.workflow_options,
+                #     runtime['batch_limit'] if runtime is not None else 250,
+                #     runtime['query_limit'] if runtime is not None else 100
+                # )))
                 job_data = self.driver.batch(
                     self.args.batch,
                     self.args.wdl,
                     self.args.workflow_inputs,
-                    self.args.workflow_options
+                    self.args.workflow_options,
+                    runtime['batch_limit'] if runtime is not None else 250,
+                    runtime['query_limit'] if runtime is not None else 100
                 )
                 logging.info("Copying execution output file")
                 with open('workflows.json', 'w') as w:
@@ -180,6 +196,7 @@ class Runner(object):
                 with open('submission.json', 'w') as w:
                     json.dump(submission_data, w, indent=2)
                 file_util.gsutil_cp(['submission.json'], os.environ['SUBMISSION_DATA_PATH'])
+                return
         logging.info("starting")
 
         # Submit the job to the local Cromwell server

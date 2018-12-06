@@ -851,6 +851,27 @@ paths:
           type: string
           description: The entity type (optional)
           default: ""
+        -
+          in: query
+          name: memory
+          required: false
+          type: integer
+          description: The memory for cromwell (optional)
+          default: 3
+        -
+          in: query
+          name: batch
+          required: false
+          type: integer
+          description: Max concurrent jobs (optional)
+          default: 250
+        -
+          in: query
+          name: query
+          required: false
+          type: integer
+          description: Number of jobs to query at once (optional)
+          default: 100
       summary: Checks if the provided inputs are valid to execute
       operationId: lapdog.api.controllers.execute
       responses:

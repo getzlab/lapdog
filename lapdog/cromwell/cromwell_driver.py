@@ -18,12 +18,23 @@ import os
 import subprocess
 import time
 import json
+import csv
 
 import requests
 
 import sys_util
 import sys
 import atexit
+import itertools
+
+def clump(seq, length):
+    getter = iter(seq)
+    while True:
+        try:
+            tmp = next(getter)
+            yield itertools.chain([tmp], itertools.islice(getter, length-1))
+        except StopIteration:
+            return
 
 
 class CromwellDriver(object):
@@ -36,7 +47,7 @@ class CromwellDriver(object):
 
         self.batch_submission = False
 
-    def start(self):
+    def start(self, memory=3):
         """Start the Cromwell service."""
         if self.cromwell_proc:
             logging.info("Request to start Cromwell: already running")
@@ -45,7 +56,7 @@ class CromwellDriver(object):
         self.cromwell_proc = subprocess.Popen([
                 'java',
                 '-Dconfig.file=' + self.cromwell_conf,
-                '-Xmx4g',
+                '-Xmx%dg'%memory,
                 '-jar', self.cromwell_jar,
                 'server'])
 
@@ -68,119 +79,131 @@ class CromwellDriver(object):
             'http://localhost:8000/api/workflows/v1/{0}/abort'.format(workflow_id)
         ).json()
 
-    def batch(self, submission_id, wdl, inputs, options):
+    def batch(self, submission_id, wdl, inputs, options, batch_limit, query_limit):
         logging.info("Starting batch request. Waiting for cromwell to start...")
         time.sleep(60)
         with open(wdl, 'rb') as wdlReader:
-            with open(inputs, 'rb') as inputReader:
-                with open(options, 'rb') as optionReader:
-                    data = {
-                        'workflowSource': wdlReader.read(),
-                        'workflowInputs': inputReader.read(),
-                        'workflowOptions': optionReader.read(),
-                        'labels': json.dumps({
-                            'lapdog-submission-id':submission_id,
-                            'lapdog-execution-role':'worker'
-                        }).encode()
-                    }
+            with open(options, 'rb') as optionReader:
+                data = {
+                    'workflowSource': wdlReader.read(),
+                    # 'workflowInputs': json.dumps([line for line in reader]),
+                    'workflowOptions': optionReader.read(),
+                    'labels': json.dumps({
+                        'lapdog-submission-id':submission_id,
+                        'lapdog-execution-role':'worker'
+                    }).encode()
+                }
         logging.info("Starting the following configuration: " + json.dumps(data))
+        output = []
+        with open(inputs, 'rb') as inputReader:
+            reader = csv.DictReader(inputReader, delimiter='\t', lineterminator='\n')
+            for batch in clump(reader, batch_limit):
+                logging.info("Running a new batch of %d workflows" % batch_limit)
 
-        response = None
-        for attempt in range(10):
-            try:
-                response = requests.post(
-                    'http://localhost:8000/api/workflows/v1/batch',
-                    files=data
-                ).json()
-                logging.info("Submitted jobs. Begin polling")
-                break
-            except requests.exceptions.ConnectionError as e:
-                logging.info("Failed to connect to Cromwell (attempt %d): %s",
-                    attempt + 1, e)
-                time.sleep(30)
+                chunk = []
 
-        if not response:
-            sys_util.exit_with_error(
-                    "Failed to connect to Cromwell after {0} seconds".format(
-                            300))
+                for group in clump(batch, query_limit):
+                    logging.info("Starting a chunk of %d workflows" % query_limit)
+                    response = None
+                    for attempt in range(10):
+                        try:
+                            data['workflowInputs'] = json.dumps([line for line in group])
+                            response = requests.post(
+                                'http://localhost:8000/api/workflows/v1/batch',
+                                files=data
+                            ).json()
+                            logging.info("Submitted jobs. Begin polling")
+                            break
+                        except requests.exceptions.ConnectionError as e:
+                            logging.info("Failed to connect to Cromwell (attempt %d): %s",
+                                attempt + 1, e)
+                            time.sleep(30)
 
-        logging.info("Raw response: " + repr(response))
+                    if not response:
+                        sys_util.exit_with_error(
+                                "Failed to connect to Cromwell after {0} seconds".format(
+                                        300))
 
-        for job in response:
-            if job['status'] != 'Submitted':
-                for job in response:
-                    self.abort(job['id'])
-                sys_util.exit_with_error(
-                        "Job {} status from Cromwell was not 'Submitted', instead '{}'".format(
-                                job['id'], job['status']))
+                    logging.info("Raw response: " + repr(response))
 
-        self.batch_submission = True
+                    for job in response:
+                        if job['status'] != 'Submitted':
+                            for job in response:
+                                self.abort(job['id'])
+                            sys_util.exit_with_error(
+                                    "Job {} status from Cromwell was not 'Submitted', instead '{}'".format(
+                                            job['id'], job['status']))
+                        else:
+                            chunk.append(job)
 
-        @atexit.register
-        def abort_all_jobs():
-            if self.batch_submission:
-                for job in response:
-                    self.abort(job['id'])
+                self.batch_submission = True
 
-        for i in range(12):
-            time.sleep(5)
+                @atexit.register
+                def abort_all_jobs():
+                    if self.batch_submission:
+                        for job in response:
+                            self.abort(job['id'])
 
-        attempt = 0
-        max_failed_attempts = 3
-        known_failures = set()
-        while True:
-            for i in range(3):
-                time.sleep(5)
+                for i in range(12):
+                    time.sleep(5)
 
-            # Cromwell occassionally fails to respond to the status request.
-            # Only give up after 3 consecutive failed requests.
-            try:
-                status_json = [
-                    self.fetch(wf_id=job['id'], method='status')
-                    for job in response
-                ]
                 attempt = 0
-            except requests.exceptions.ConnectionError as e:
-                attempt += 1
-                logging.info("Error polling Cromwell job status (attempt %d): %s",
-                    attempt, e)
+                max_failed_attempts = 3
+                known_failures = set()
+                while True:
+                    for i in range(3):
+                        time.sleep(5)
 
-                if attempt >= max_failed_attempts:
-                    sys_util.exit_with_error(
-                        "Cromwell did not respond for %d consecutive requests" % attempt)
+                    # Cromwell occassionally fails to respond to the status request.
+                    # Only give up after 3 consecutive failed requests.
+                    try:
+                        status_json = [
+                            self.fetch(wf_id=job['id'], method='status')
+                            for job in chunk
+                        ]
+                        attempt = 0
+                    except requests.exceptions.ConnectionError as e:
+                        attempt += 1
+                        logging.info("Error polling Cromwell job status (attempt %d): %s",
+                            attempt, e)
 
-                continue
+                        if attempt >= max_failed_attempts:
+                            sys_util.exit_with_error(
+                                "Cromwell did not respond for %d consecutive requests" % attempt)
 
-            statuses = {job['status'] for job in status_json}
-            # logging.info("<WORKFLOW STATUS UPDATE> %s" % json.dumps(status_json))
-            if 'Failed' in statuses:
-                new_failures = [
-                    job for job in status_json
-                    if job['status'] == 'Failed' and job['id'] not in known_failures
+                        continue
+
+                    statuses = {job['status'] for job in status_json}
+                    # logging.info("<WORKFLOW STATUS UPDATE> %s" % json.dumps(status_json))
+                    if 'Failed' in statuses:
+                        new_failures = [
+                            job for job in status_json
+                            if job['status'] == 'Failed' and job['id'] not in known_failures
+                        ]
+                        if len(new_failures):
+                            sys.stderr.write(
+                                 "The following jobs failed: %s\n" % (
+                                     ', '.join('%s (%s)' % (job['id'], job['status']) for job in new_failures)
+                                 )
+                             )
+                        known_failures |= {job['id'] for job in new_failures}
+                    if not len(statuses - {'Succeeded', 'Failed', 'Aborted'}):
+                        logging.info("All workflows in terminal states")
+                        break
+
+                self.batch_submission = False
+                logging.info("<SUBMISSION COMPLETE. FINALIZING DATA>")
+
+                output += [
+                    {
+                        'workflow_id':job['id'],
+                        'workflow_status':job['status'],
+                        'workflow_output': self.fetch(wf_id=job['id'], method='outputs') if job['status'] == 'Succeeded' else None,
+                        'workflow_metadata': self.fetch(wf_id=job['id'], method='metadata') if job['status'] == 'Succeeded' else None,
+                    }
+                    for job in status_json
                 ]
-                if len(new_failures):
-                    sys.stderr.write(
-                         "The following jobs failed: %s\n" % (
-                             ', '.join('%s (%s)' % (job['id'], job['status']) for job in new_failures)
-                         )
-                     )
-                known_failures |= {job['id'] for job in new_failures}
-            if not len(statuses - {'Succeeded', 'Failed', 'Aborted'}):
-                logging.info("All workflows in terminal states")
-                break
-
-        self.batch_submission = False
-        logging.info("<SUBMISSION COMPLETE. FINALIZING DATA>")
-
-        return [
-            {
-                'workflow_id':job['id'],
-                'workflow_status':job['status'],
-                'workflow_output': self.fetch(wf_id=job['id'], method='outputs') if job['status'] == 'Succeeded' else None,
-                'workflow_metadata': self.fetch(wf_id=job['id'], method='metadata') if job['status'] == 'Succeeded' else None,
-            }
-            for job in status_json
-        ]
+        return output
 
 
 

@@ -36,10 +36,71 @@
           </div>
           <div v-if="submission_message != ''" class="row">
             <div class="col s12" v-if="submission_message == '-'">
+              <div class="preloader-wrapper small active">
+                <div class="spinner-layer spinner-blue-only">
+                  <div class="circle-clipper left">
+                    <div class="circle"></div>
+                  </div><div class="gap-patch">
+                    <div class="circle"></div>
+                  </div><div class="circle-clipper right">
+                    <div class="circle"></div>
+                  </div>
+                </div>
+              </div>
               Validating inputs...
             </div>
             <div v-else class="col s12" v-bind:class="submit_okay ? 'green-text' : 'red-text'">
               {{(submit_okay ? "" : "Error: ") + submission_message}}
+            </div>
+          </div>
+          <div class="row" v-if="preflight_entities > batch_size">
+            <div class="col s12 orange-text">
+              Warning: This submission contains a large number of workflows.
+              Unless otherwise specified, Cromwell will only run {{batch_size}} workflows at
+              a time
+            </div>
+          </div>
+          <div class="row" v-on:click.prevent="show_advanced = !show_advanced">
+            <div class="col s12">
+              <i class="material-icons">
+                {{show_advanced ? "keyboard_arrow_down" : "keyboard_arrow_right"}}
+              </i>
+              Advanced Options
+            </div>
+          </div>
+          <div v-if="show_advanced">
+            <div class="row">
+              <div class="col s3">
+                Cromwell Memory
+              </div>
+              <div class="col s7">
+                <input v-model="cromwell_mem" class="blue-text" type="range" name="cromwell-mem" min="3" max="624" step="1" value="3">
+              </div>
+              <div class="col s2">
+                {{cromwell_mem}} GB
+              </div>
+            </div>
+            <div class="row">
+              <div class="col s3">
+                Max Concurrent Workflows
+              </div>
+              <div class="col s7">
+                <input v-model="batch_size" class="blue-text" type="range" name="cromwell-mem" min="100" v-bind:max="Math.floor(cromwell_mem * 250/3)" step="1" value="250">
+              </div>
+              <div class="col s2">
+                {{batch_size}} Jobs
+              </div>
+            </div>
+            <div class="row">
+              <div class="col s3">
+                Workflow Dispatch Rate
+              </div>
+              <div class="col s7">
+                <input v-model="query_size" class="blue-text" type="range" name="cromwell-mem" min="1" v-bind:max="batch_size" step="1" value="250">
+              </div>
+              <div class="col s2">
+                {{query_size}} Jobs/chunk
+              </div>
             </div>
           </div>
         </div>
@@ -405,7 +466,12 @@
         active_entity: null,
         entities_data: null,
         active_page: 0,
-        page_limit: 20
+        page_limit: 20,
+        preflight_entities: 0,
+        show_advanced: false,
+        cromwell_mem: 3,
+        batch_size: 250,
+        query_size: 100
         // entities: null
       }
     },
@@ -496,6 +562,7 @@
       },
       preflight: _.debounce((_this) => {
         _this.submission_message = "Incomplete fields";
+        _this.preflight_entities = 0;
         if (_this.submission_config == "" || _this.submission_etype == "" || _this.entity_field == "") return;
         _this.submission_message = "-";
         console.log("Executing preflight");
@@ -511,6 +578,7 @@
             console.log(response);
             let result = response.data;
             _this.submit_okay = result.ok && !result.failed;
+            _this.preflight_entities = result.workflows;
             if (_this.submit_okay) _this.submission_message = "Ready to submit " + result.workflows + " workflow(s)";
             else _this.submission_message = result.message;
           })
@@ -525,6 +593,10 @@
         query += "&entity="+encodeURIComponent(this.entity_field);
         if (this.submission_expression != "") query += "&expression="+encodeURIComponent(this.submission_expression);
         if (this.submission_etype != "") query += "&etype="+encodeURIComponent(this.submission_etype);
+        // if (this.cromwell_mem % 2 == 1) this.cromwell_mem += 1;
+        query += "&memory="+encodeURIComponent(_.toString(this.cromwell_mem));
+        query += "&batch="+encodeURIComponent(_.toString(this.batch_size));
+        query += "&query="+encodeURIComponent(_.toString(this.query_size));
         window.materialize.toast({
           html: "Preparing job...",
           displayLength: 5000,
@@ -591,6 +663,10 @@
         this.show_attributes = false;
         this.active_entity = null;
         this.entities_data = null;
+        this.show_advanced = false;
+        this.cromwell_mem = 3;
+        this.batch_size = 250;
+        this.query_size = 100;
         // window.$('.execute-button').tooltip('close');
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {

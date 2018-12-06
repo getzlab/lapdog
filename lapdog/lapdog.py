@@ -673,11 +673,22 @@ class WorkspaceManager(dog.WorkspaceManager):
         return True, config, entity, etype, workflow_entities, template, invalid_inputs
 
 
-    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False):
+    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False, memory=3, batch_limit=None, query_limit=None):
         """
         Validates config parameters then executes a job directly on GCP
         Config name may either be a full slug (config namespace/config name)
         or just the name (only if the name is unique)
+
+        If memory is None (default): The cromwell VM will be an n1-standard-1
+        Otherwise: The cromwell VM will be a custom instance with 2 CPU and the requested memory
+
+        If batch_limit is None (default): The cromwell VM will run a maximum of 250 workflows per 3 GB on the cromwell instance
+        Otherwise: The cromwell VM will run, at most, batch_limit concurrent workflows
+
+        If query_limit is None (default): The cromwell VM will submit and query 100 workflows at a time.
+        This has no bearing on the number of running workflows, but does slow the rate at which
+        workflows get started and that failures are detected
+        Otherwise: The cromwell VM will submit/query the given number of workflows at a time
         """
         config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
@@ -750,7 +761,12 @@ class WorkspaceManager(dog.WorkspaceManager):
             },
             'submitter': 'lapdog',
             'workflowEntityType': config['rootEntityType'],
-            'workflowExpression': expression if expression is not None else None
+            'workflowExpression': expression if expression is not None else None,
+            'runtime': {
+                'memory': memory,
+                'batch_limit': (int(250*memory/3) if batch_limit is None else 250),
+                'query_limit': 100 if query_limit is None else query_limit
+            }
         }
 
         @parallelize(5)
@@ -802,12 +818,33 @@ class WorkspaceManager(dog.WorkspaceManager):
             prepend="Preparing Workflows... "
         )]
 
-        config_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/config.json".format(
+        config_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/config.tsv".format(
             bucket_id=self.get_bucket_id(),
             submission_id=submission_id
         )
+        # AS OF newest lapdog, configs uploaded as TSV
+        buff = StringIO()
+        columns = [*{key for row in workflow_inputs for key in row}]
+        writer = csv.DictWriter(
+            buff,
+            columns,
+            delimiter='\t',
+            lineterminator='\n'
+        )
+        writer.writeheader()
+        writer.writerows(
+            {
+                **{
+                    column: None
+                    for column in columns
+                },
+                **row
+            }
+            for row in workflow_inputs
+        )
         getblob(config_path).upload_from_string(
-            json.dumps(workflow_inputs).encode()
+            # json.dumps(workflow_inputs).encode()
+            buff.getvalue().encode()
         )
 
 
@@ -850,6 +887,8 @@ class WorkspaceManager(dog.WorkspaceManager):
             submission_id=submission_id,
             submission_data_path=submission_data_path
         )
+        if memory != 3:
+            cmd += ' --cpus 2 --memory %d' % memory
 
         results = subprocess.run(
             cmd, shell=True, executable='/bin/bash',
