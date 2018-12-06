@@ -370,24 +370,7 @@ def get_cache(namespace, name):
 
 def sync_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
-    was_live = ws.live
-    if not ws.live:
-        ws.sync()
-    ws.get_attributes()
-    for etype in ws.operator.entity_types:
-        _get_entitites_df(namespace, name, etype)
-    for config in ws.list_configs():
-        ws.operator.get_config_detail(config['namespace'], config['name'])
-        try:
-            ws.operator.get_wdl(
-                config['methodRepoMethod']['methodNamespace'],
-                config['methodRepoMethod']['methodName'],
-                config['methodRepoMethod']['methodVersion']
-            )
-        except NameError:
-            # WDL Doesnt exist
-            pass
-    ws.sync()
+    ws.populate_cache()
     ws.operator._webcache_ = True
     return get_cache(namespace, name)
 

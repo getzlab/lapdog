@@ -36,6 +36,30 @@ def clump(seq, length):
         except StopIteration:
             return
 
+# https://stackoverflow.com/questions/15063936/csv-error-field-larger-than-field-limit-131072
+maxInt = sys.maxsize
+while True:
+    # decrease the maxInt value by factor 10
+    # as long as the OverflowError occurs.
+    try:
+        csv.field_size_limit(maxInt)
+        break
+    except OverflowError:
+        maxInt = int(maxInt/10)
+
+def unpack(data):
+    for k,v in data.items():
+        if v.startswith('[') and v.endswith(']'):
+            try:
+                data[k] = json.loads(v.replace("\\'", '~<BACKQUOTE>').replace("'", '"').replace('~<BACKQUOTE>', "\\'"))
+            except:
+                pass
+        elif v.startswith('{') and v.endswith('}'):
+            try:
+                data[k] = json.loads(v.replace("\\'", '~<BACKQUOTE>').replace("'", '"').replace('~<BACKQUOTE>', "\\'"))
+            except:
+                pass
+    return data
 
 class CromwellDriver(object):
 
@@ -107,7 +131,7 @@ class CromwellDriver(object):
                     response = None
                     for attempt in range(10):
                         try:
-                            data['workflowInputs'] = json.dumps([line for line in group])
+                            data['workflowInputs'] = json.dumps([unpack(line) for line in group])
                             response = requests.post(
                                 'http://localhost:8000/api/workflows/v1/batch',
                                 files=data

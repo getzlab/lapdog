@@ -60,6 +60,7 @@ mtypes.update({
 
 core_price = (0.031611, 0.006655)
 mem_price = (0.004237, 0.000892)
+extended_price = (0.009550, 0.002014)
 
 def get_hourly_cost(mtype, preempt=False):
     try:
@@ -67,7 +68,7 @@ def get_hourly_cost(mtype, preempt=False):
             return mtypes[mtype][int(preempt)]
         else:
             custom, cores, mem = mtype.split('-')
-            return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*int(mem)/1024)
+            return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*int(mem)/1024) + max(0, extended_price[int(preempt)]*(int(mem)-13312)/1024)
     except:
         traceback.print_exc()
         print(mtype, "unknown machine type")
@@ -370,6 +371,8 @@ class SubmissionAdapter(object):
                             )
                     except KeyError:
                         pass
+                    except yaml.scanner.ScannerError:
+                        print("Operation", call.operation, "had invalid operation metadata")
             status = self.status
             if 'metadata' in status and 'startTime' in status['metadata']:
                 delta = (

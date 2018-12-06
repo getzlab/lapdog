@@ -320,7 +320,7 @@ Other: error_outline
               <i v-else-if="sort_key == 'entity'" class="material-icons tiny">
                 keyboard_arrow_up
               </i>
-              Entity
+              <span class="expandable">Entity</span>
             </th>
             <th v-on:click="sort_workflows('status')">
               <i v-if="sort_key == 'status' && !reversed" class="material-icons tiny">
@@ -329,7 +329,7 @@ Other: error_outline
               <i v-else-if="sort_key == 'status'" class="material-icons tiny">
                 keyboard_arrow_up
               </i>
-              Status
+              <span class="expandable">Status</span>
             </th>
             <th v-on:click="sort_workflows('id')">
               <i v-if="sort_key == 'id' && !reversed" class="material-icons tiny">
@@ -338,7 +338,7 @@ Other: error_outline
               <i v-else-if="sort_key == 'id'" class="material-icons tiny">
                 keyboard_arrow_up
               </i>
-              Workflow ID
+              <span class="expandable">Workflow ID</span>
             </th>
           </tr>
         </thead>

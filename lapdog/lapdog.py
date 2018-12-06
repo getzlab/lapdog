@@ -287,6 +287,25 @@ class WorkspaceManager(dog.WorkspaceManager):
             print("There were", len(exceptions), "exceptions while attempting to sync with firecloud")
         return is_live, exceptions
 
+    def populate_cache(self):
+        if self.live:
+            self.sync()
+        self.get_attributes()
+        for etype in self.operator.entity_types:
+            self.operator.get_entities_df(etype)
+        for config in self.list_configs():
+            self.operator.get_config_detail(config['namespace'], config['name'])
+            try:
+                self.operator.get_wdl(
+                    config['methodRepoMethod']['methodNamespace'],
+                    config['methodRepoMethod']['methodName'],
+                    config['methodRepoMethod']['methodVersion']
+                )
+            except NameError:
+                # WDL Doesnt exist
+                pass
+        self.sync()
+
     def get_bucket_id(self):
         """
         Returns the bucket ID of the workspace
@@ -762,6 +781,16 @@ class WorkspaceManager(dog.WorkspaceManager):
                 print("Aborted", file=sys.stderr)
                 return
 
+        if len(workflow_entities) > 1000:
+            resync = True
+            print("This submission contains a large amount of workflows")
+            print("Please wait while the workspace loads data to prepare the submission in offline mode...")
+            self.populate_cache()
+            print("Taking the cache offline...")
+            self.operator.go_offline()
+        else:
+            resync = False
+
         submission_data = {
             'workspace':self.workspace,
             'namespace':self.namespace,
@@ -927,6 +956,10 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         getblob(submission_data_path).upload_from_string(json.dumps(submission_data))
 
+        if resync:
+            print("Bringing the workspace back online")
+            self.sync()
+
         return global_id, submission_id, submission_data['operation']
 
     def get_submission_cost(self, submission_id):
@@ -952,7 +985,6 @@ class WorkspaceManager(dog.WorkspaceManager):
             status = get_operation_status(submission['operation'])
             done = 'done' in status and status['done']
             if done:
-                print("All workflows completed. Uploading results...")
                 output_template = check_api(dog.firecloud.api.get_workspace_config(
                     submission['namespace'],
                     submission['workspace'],
@@ -1009,48 +1041,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             done = 'done' in status and status['done']
             if done:
                 print("All workflows completed. Uploading results...")
-                output_template = self.operator.get_config_detail(
-                    submission['methodConfigurationNamespace'],
-                    submission['methodConfigurationName']
-                )['outputs']
-                output_data = {}
-                try:
-                    workflow_metadata = json.loads(getblob(
-                        'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
-                            bucket_id=self.get_bucket_id(),
-                            submission_id=submission_id
-                        )
-                    ).download_as_string())
-                except:
-                    raise FileNotFoundError("Unable to locate the tracking file for this submission. It may not have finished")
-
-                workflow_metadata = {
-                    build_input_key(meta['workflow_metadata']['inputs']):meta
-                    for meta in workflow_metadata
-                    if meta['workflow_metadata'] is not None and meta['workflow_status'] == 'Succeeded'
-                }
-                submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
-                submission_data = pd.DataFrame()
-                for key, entity in status_bar.iter(submission_workflows.items(), prepend="Uploading results... "):
-                    if key not in workflow_metadata:
-                        print("Entity", entity, "has no output metadata")
-                    elif workflow_metadata[key]['workflow_status'] != 'Succeeded':
-                        print("Entity", entity, "failed")
-                        print("Errors:")
-                        for call, calldata in workflow_metadata[key]['workflow_metadata']['calls'].items():
-                            print("Call", call, "failed with error:", get_operation_status(calldata['jobId'])['error'])
-                    else:
-                        output_data = workflow_metadata[key]['workflow_output']
-                        entity_data = pd.DataFrame(index=[entity])
-                        for k,v in output_data['outputs'].items():
-                            k = output_template[k]
-                            if k.startswith('this.'):
-                                entity_data[k[5:]] = [v]
-                        submission_data = submission_data.append(entity_data, sort=True)
                 with capture():
                     self.update_entity_attributes(
                         submission['workflowEntityType'],
-                        submission_data,
+                        self.submission_output_df(submission_id),
                     )
                 return True
             else:
