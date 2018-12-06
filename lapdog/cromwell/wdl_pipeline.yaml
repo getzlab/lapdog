@@ -18,7 +18,7 @@ inputParameters:
   description: gsutil path to submission data object
 
 docker:
-  imageName: gcr.io/broad-cga-aarong-gtex/wdl_runner:batch
+  imageName: gcr.io/broad-cga-aarong-gtex/wdl_runner:v0.9.0
 
   cmd: >
     /wdl_runner/wdl_runner.sh

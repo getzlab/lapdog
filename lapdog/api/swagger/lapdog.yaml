@@ -306,6 +306,13 @@ paths:
           required: true
           type: string
           description: The workspaces name
+        -
+          in: query
+          name: cache
+          required: false
+          type: boolean
+          description: Return live or cached results
+          default: false
       summary: Lists the submissions in order
       operationId: lapdog.api.controllers.list_submissions
       responses:

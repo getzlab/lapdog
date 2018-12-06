@@ -43,7 +43,7 @@
               </div>
             </div>
           </div>
-          <div v-if="active_cfg.wdl" style="margin-top: 15px; margin-bottom: 0px;" class="row" v-on:click.prevent="toggle_wdl">
+          <div v-if="active_cfg.wdl" style="margin-top: 15px; margin-bottom: 0px;" class="row expandable" v-on:click.prevent="toggle_wdl">
             <div v-if="!show_wdl" class="col s4" >
               <span>
                 <i class="material-icons">keyboard_arrow_right</i>

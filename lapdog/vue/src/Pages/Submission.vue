@@ -262,13 +262,13 @@ Other: error_outline
       </div>
     </div>
     <div class="row">
-      <div v-if="!display_cromwell" class="col s12" v-on:click.prevent="read_cromwell">
+      <div v-if="!display_cromwell" class="col s12 expandable" v-on:click.prevent="read_cromwell">
         <span>
           <i class="material-icons">keyboard_arrow_right</i>
           Cromwell Log
         </span>
       </div>
-      <div v-else class="col s12" v-on:click.prevent="display_cromwell = false">
+      <div v-else class="col s12 expandable" v-on:click.prevent="display_cromwell = false">
         <span>
           <i class="material-icons">keyboard_arrow_down</i>
           Cromwell Log

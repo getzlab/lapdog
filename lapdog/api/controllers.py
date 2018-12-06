@@ -419,12 +419,12 @@ def get_configs(namespace, name):
     return ws.list_configs()
 
 @cached(20)
-def list_submissions(namespace, name):
+def list_submissions(namespace, name, cache):
     from ..lapdog import timestamp_format
     ws = get_workspace_object(namespace, name)
     return sorted(
         (
-            sub for sub in ws.list_submissions(lapdog_only=True)
+            sub for sub in ws.list_submissions(lapdog_only=True, cached=cache)
             if 'identifier' in sub
         ),
         key=lambda s:(
@@ -474,7 +474,6 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
 
 def execute(namespace, name, config, entity, expression="", etype="", memory=3, batch=250, query=100):
     ws = get_workspace_object(namespace, name)
-    print('submit runtime', memory, batch, query)
     try:
         global_id, local_id, operation_id = ws.execute(
             config,

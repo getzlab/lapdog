@@ -60,7 +60,7 @@
               a time
             </div>
           </div>
-          <div class="row" v-on:click.prevent="show_advanced = !show_advanced">
+          <div class="row expandable" v-on:click.prevent="show_advanced = !show_advanced">
             <div class="col s12">
               <i class="material-icons">
                 {{show_advanced ? "keyboard_arrow_down" : "keyboard_arrow_right"}}
@@ -233,7 +233,7 @@
         </div>
       </div>
     </div>
-    <div class="row" v-on:click="show_attributes = !show_attributes" v-if="ws && ws.attributes && lodash.keys(ws.attributes).length">
+    <div class="row expandable" v-on:click="show_attributes = !show_attributes" v-if="ws && ws.attributes && lodash.keys(ws.attributes).length">
       <div v-if="!show_attributes" class="col s6" >
         <span>
           <i class="material-icons">keyboard_arrow_right</i>
@@ -302,7 +302,16 @@
           <div class="indeterminate blue"></div>
         </div>
       </div> -->
-
+      <div v-if="cached_submissions || submissions == null">
+        <div class="progress">
+          <div class="indeterminate blue"></div>
+        </div>
+      </div>
+      <div v-if="submissions && cached_submissions" class="row">
+        <div class="col s12">
+          Showing Cached Submissions:
+        </div>
+      </div>
       <div v-if="submissions" class="row">
         <div class="col s12">
           <table class="highlight">
@@ -336,11 +345,6 @@
               </tr>
             </tbody>
           </table>
-        </div>
-      </div>
-      <div v-else>
-        <div class="progress">
-          <div class="indeterminate blue"></div>
         </div>
       </div>
 
@@ -471,7 +475,8 @@
         show_advanced: false,
         cromwell_mem: 3,
         batch_size: 250,
-        query_size: 100
+        query_size: 100,
+        cached_submissions: true
         // entities: null
       }
     },
@@ -667,6 +672,7 @@
         this.cromwell_mem = 3;
         this.batch_size = 250;
         this.query_size = 100;
+        this.cached_submissions = true;
         // window.$('.execute-button').tooltip('close');
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
@@ -695,11 +701,22 @@
                 console.log(response.data);
                 this.cache_state = response.data;
                 console.log("Fetching submissions");
-                  axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions')
+                  axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions?cache=true')
                     .then(response => {
                       console.log("Fetched submissions");
                       console.log(response.data);
                       this.submissions = response.data;
+                      axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions?cache=false')
+                        .then(response => {
+                          console.log("Fetched submissions");
+                          console.log(response.data);
+                          this.submissions = response.data;
+                          this.cached_submissions = false;
+                        })
+                        .catch(error => {
+                          console.error("FAIL");
+                          console.error(error)
+                        })
                     })
                     .catch(error => {
                       console.error("FAIL");

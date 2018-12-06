@@ -296,3 +296,11 @@ export default {
   }
 }
 </script>
+
+<style lang="css">
+
+.expandable {
+  cursor: pointer;
+}
+
+</style>

@@ -11,7 +11,7 @@ from functools import lru_cache
 import contextlib
 import re
 import select
-from .cache import cache_fetch, cache_write, cached
+from .cache import cache_fetch, cache_write, cached, cache_path
 import traceback
 import sys
 
@@ -57,6 +57,26 @@ mtypes.update({
     'f1-micro': (0.0076, 0.0035),
     'g1-small': (0.0257, 0.007)
 })
+
+core_price = (0.031611, 0.006655)
+mem_price = (0.004237, 0.000892)
+
+def get_hourly_cost(mtype, preempt=False):
+    try:
+        if mtype in mtypes:
+            return mtypes[mtype][int(preempt)]
+        else:
+            custom, cores, mem = mtype.split('-')
+            return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*int(mem)/1024)
+    except:
+        traceback.print_exc()
+        print(mtype, "unknown machine type")
+        return 0
+
+def get_cromwell_type(runtime):
+    if runtime['memory'] <= 3:
+        return 'n1-standard-1'
+    return 'custom-2-%d' % (1024 * runtime['memory'])
 
 class NoSuchSubmission(Exception):
     pass
@@ -112,6 +132,8 @@ class Call(object):
             blob = safe_getblob(os.path.join(self.path, 'rc'))
             return int(blob.download_as_string().decode())
         except FileNotFoundError:
+            return None
+        except ValueError:
             return None
 
 @cached(10)
@@ -269,98 +291,118 @@ class SubmissionAdapter(object):
         return self.workflows[short]
 
     def cost(self):
-        if not self.live:
-            stored_cost = cache_fetch('submission', self.namespace, self.workspace, self.submission, dtype='cost')
-            if stored_cost is not None:
-                return json.loads(stored_cost)
-            try:
-                workflow_metadata = json.loads(safe_getblob(
-                    os.path.join(
-                        self.path,
-                        'results',
-                        'workflows.json'
-                    )
-                ).download_as_string())
-                cost = 0
-                maxTime = 0
-                total = 0
-                for wf in workflow_metadata:
-                    if wf['workflow_metadata'] is not None:
-                        for calls in wf['workflow_metadata']['calls'].values():
-                            for call in calls:
-                                if 'end' in call:
-                                    delta = datetime.datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
-                                    delta = delta.total_seconds() / 3600
-                                    if delta > maxTime:
-                                        maxTime = delta
-                                    total += delta
-                                    if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
-                                        cost += mtypes[call['jes']['machineType'].split('/')[-1]][int('preemptible' in call and call['preemptible'])]*delta
-                cost += mtypes['n1-standard-1'][0] * maxTime
-                cost = int(cost * 100) / 100
-                result = {
-                    'clock_h': maxTime,
-                    'cpu_h': total,
-                    'est_cost': cost
-                }
-                cache_write(json.dumps(result), 'submission', self.namespace, self.workspace, self.submission, dtype='cost')
-                return result
-            except:
-                # Try the slow route
-                print(traceback.format_exc(), file=sys.stderr)
-                pass
-        self.update()
-        cost = 0
-        maxTime = 0
-        total = 0
-        for wf in self.workflows.values():
-            for call in wf.calls:
+        try:
+            if not self.live:
+                stored_cost = cache_fetch('submission', self.namespace, self.workspace, self.submission, dtype='cost')
+                if stored_cost is not None:
+                    return json.loads(stored_cost)
                 try:
-                    call = get_operation_status(call.operation)
-                    delta = (
-                        datetime.datetime.strptime(
-                            (call['metadata']['endTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
+                    workflow_metadata = json.loads(safe_getblob(
+                        os.path.join(
+                            self.path,
+                            'results',
+                            'workflows.json'
+                        )
+                    ).download_as_string())
+                    cost = 0
+                    maxTime = 0
+                    total = 0
+                    for wf in workflow_metadata:
+                        if wf['workflow_metadata'] is not None:
+                            for calls in wf['workflow_metadata']['calls'].values():
+                                for call in calls:
+                                    if 'end' in call:
+                                        delta = datetime.datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+                                        delta = delta.total_seconds() / 3600
+                                        if delta > maxTime:
+                                            maxTime = delta
+                                        total += delta
+                                        if 'jes' in call and 'machineType' in call['jes']:
+                                            cost += delta * get_hourly_cost(
+                                                call['jes']['machineType'].split('/')[-1],
+                                                'preemptible' in call and call['preemptible']
+                                            )
+                    cost += maxTime * get_hourly_cost(
+                        get_cromwell_type(self.data['runtime']) if 'runtime' in self.data else 'n1-standard-1',
+                        False
+                    )
+                    cost = int(cost * 100) / 100
+                    result = {
+                        'clock_h': maxTime,
+                        'cpu_h': total,
+                        'est_cost': cost
+                    }
+                    cache_write(json.dumps(result), 'submission', self.namespace, self.workspace, self.submission, dtype='cost')
+                    return result
+                except:
+                    # Try the slow route
+                    print(traceback.format_exc(), file=sys.stderr)
+                    print("Attempting slow cost calculation")
+                    pass
+            self.update()
+            cost = 0
+            maxTime = 0
+            total = 0
+            for wf in self.workflows.values():
+                for call in wf.calls:
+                    try:
+                        call = get_operation_status(call.operation)
+                        delta = (
+                            datetime.datetime.strptime(
+                                (call['metadata']['endTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
+                                timestamp_format
+                            )
+                            if 'endTime' in call['metadata']
+                            else datetime.datetime.utcnow()
+                        ) - datetime.datetime.strptime(
+                            (call['metadata']['startTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
                             timestamp_format
                         )
-                        if 'endTime' in call['metadata']
-                        else datetime.datetime.utcnow()
-                    ) - datetime.datetime.strptime(
-                        (call['metadata']['startTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
+                        delta = delta.total_seconds() / 3600
+                        if delta > maxTime:
+                            maxTime = delta
+                        total += delta
+                        if 'jes' in call and 'machineType' in call['jes']:
+                            cost += delta * get_hourly_cost(
+                                call['jes']['machineType'].split('/')[-1],
+                                'preemptible' in call['metadata']['request']['pipelineArgs']['resources']
+                                and call['metadata']['request']['pipelineArgs']['resources']['preemptible']
+                            )
+                    except KeyError:
+                        pass
+            status = self.status
+            if 'metadata' in status and 'startTime' in status['metadata']:
+                delta = (
+                    datetime.datetime.strptime(
+                        status['metadata']['endTime'],
                         timestamp_format
-                    )
-                    delta = delta.total_seconds() / 3600
-                    if delta > maxTime:
-                        maxTime = delta
-                    total += delta
-                    if 'jes' in call and 'machineType' in call['jes'] and call['jes']['machineType'].split('/')[-1] in mtypes:
-                        cost += mtypes[call['jes']['machineType'].split('/')[-1]][int(
-                            'preemptible' in call['metadata']['request']['pipelineArgs']['resources']
-                            and call['metadata']['request']['pipelineArgs']['resources']['preemptible']
-                        )]*delta
-                except KeyError:
-                    pass
-        status = self.status
-        if 'metadata' in status and 'startTime' in status['metadata']:
-            delta = (
-                datetime.datetime.strptime(
-                    status['metadata']['endTime'],
+                    ) if 'endTime' in status['metadata']
+                    else datetime.datetime.utcnow()
+                ) - datetime.datetime.strptime(
+                    status['metadata']['startTime'],
                     timestamp_format
-                ) if 'endTime' in status['metadata']
-                else datetime.datetime.utcnow()
-            ) - datetime.datetime.strptime(
-                status['metadata']['startTime'],
-                timestamp_format
+                )
+                delta = delta.total_seconds() / 3600
+                if delta > maxTime:
+                    maxTime = delta
+            cost += maxTime * get_hourly_cost(
+                get_cromwell_type(self.data['runtime']) if 'runtime' in self.data else 'n1-standard-1',
+                False
             )
-            delta = delta.total_seconds() / 3600
-            if delta > maxTime:
-                maxTime = delta
-        cost += mtypes['n1-standard-1'][0] * maxTime
-        cost = int(cost * 100) / 100
-        return {
-            'clock_h': maxTime,
-            'cpu_h': total,
-            'est_cost': cost
-        }
+            cost = int(cost * 100) / 100
+            return {
+                'clock_h': maxTime,
+                'cpu_h': total,
+                'est_cost': cost
+            }
+        except:
+            traceback.print_exc()
+            print("STRING FORMAT ERROR", self.submission)
+            return {
+                'clock_h': 0,
+                'cpu_h': 0,
+                'est_cost': 0
+            }
 
 
     def update(self):

@@ -20,7 +20,7 @@ from glob import glob
 from io import StringIO
 from . import adapters
 from .adapters import getblob, get_operation_status, mtypes, NoSuchSubmission
-from .cache import cache_init
+from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture
 from itertools import repeat
 import pandas as pd
@@ -230,6 +230,10 @@ def get_submission(submission_id):
         return WorkspaceManager(ns, ws).get_submission(sid)
     raise TypeError("Global get_submission can only operate on lapdog global ids")
 
+@parallelize(5)
+def _load_submissions(path):
+    with open(path, 'r') as r:
+        return path[-37:-5], json.load(r)
 
 class WorkspaceManager(dog.WorkspaceManager):
     def __init__(self, reference, workspace=None, timezone='America/New_York'):
@@ -251,6 +255,18 @@ class WorkspaceManager(dog.WorkspaceManager):
             timezone
         )
         self.operator = Operator(self)
+        self._submission_cache = {}
+        try:
+            self._submission_cache = {
+                k:v
+                for k,v in _load_submissions(
+                    glob(os.path.join(cache_init(), 'submission-json.{}.*.data'.format(self.bucket_id)))
+                )
+            }
+
+        except:
+            print("Warning: Unable to prepopulate workspace submission cache")
+            self.sync()
 
     @property
     def pending_operations(self):
@@ -559,6 +575,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         elif lapdog_id_pattern.match(submission_id):
             try:
                 adapter = self.get_adapter(submission_id)
+                if not adapter.live:
+                    self._submission_cache[submission_id] = adapter.data
                 return {
                     **adapter.data,
                     # **{
@@ -580,7 +598,6 @@ class WorkspaceManager(dog.WorkspaceManager):
         result = lapdog_submission_pattern.match(execution_path)
         if result:
             return self.get_submission(result.group(1), True)
-
 
     def list_configs(self):
         """
@@ -620,10 +637,12 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         return adapters.SubmissionAdapter(self.get_bucket_id(), submission_id)
 
-    def list_submissions(self, config=None, lapdog_only=False):
+    def list_submissions(self, config=None, lapdog_only=False, cached=False):
         """
         Lists submissions in the workspace
         """
+        if cached:
+            return [*self._submission_cache.values()]
         results = []
         if not lapdog_only:
             with dalmatian_api():
@@ -764,7 +783,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             'workflowExpression': expression if expression is not None else None,
             'runtime': {
                 'memory': memory,
-                'batch_limit': (int(250*memory/3) if batch_limit is None else 250),
+                'batch_limit': (int(250*memory/3) if batch_limit is None else batch_limit),
                 'query_limit': 100 if query_limit is None else query_limit
             }
         }
