@@ -106,6 +106,14 @@ Other: error_outline
                       </a>
                     </div>
                   </div>
+                  <div class="row">
+                    <div class="col s2">
+                      Runtime:
+                    </div>
+                    <div class="col s10">
+                      {{call.runtime > 1 ? "" + Math.floor(call.runtime) + " Hours" : "" + Math.floor(call.runtime*60) + " Minutes"}}
+                    </div>
+                  </div>
                   <div class="row" v-if="call.message && call.message.length">
                     <div class="col s2">
                       Last Message:
@@ -204,6 +212,9 @@ Other: error_outline
         </div>
         <div class="col s3">
           {{submission.submissionDate}}
+        </div>
+        <div class="col s5" v-if="cost">
+          (Running for {{Math.round(cost.clock_h * 10) / 10}} hours)
         </div>
       </div>
       <div class="row">

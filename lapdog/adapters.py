@@ -139,6 +139,27 @@ class Call(object):
         except ValueError:
             return None
 
+    @property
+    @cached(10)
+    def runtime(self):
+        try:
+            data = get_operation_status(self.operation)
+            delta = (
+                datetime.datetime.strptime(
+                    (data['metadata']['endTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
+                    timestamp_format
+                )
+                if 'endTime' in data['metadata']
+                else datetime.datetime.utcnow()
+            ) - datetime.datetime.strptime(
+                (data['metadata']['startTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
+                timestamp_format
+            )
+            return delta.total_seconds() / 3600
+        except:
+            traceback.print_exc()
+            return 0
+
 @cached(10)
 def get_operation_status(opid, parse=True, fmt='json'):
     text = cache_fetch('operation', opid)

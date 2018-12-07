@@ -604,7 +604,8 @@ def get_workflow(namespace, name, id, workflow_id):
                     'task': call.task,
                     'gs_path': call.path,
                     'code': call.return_code,
-                    'idx': i
+                    'idx': i,
+                    'runtime': call.runtime
                 }
                 for i, call in enumerate(wf.calls)
             ],
