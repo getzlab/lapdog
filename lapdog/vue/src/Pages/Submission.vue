@@ -238,7 +238,7 @@ Other: error_outline
         Cost:
       </div>
       <div class="col s3" v-if="cost">
-        ${{submission.cost.est_cost}}
+        ${{cost.est_cost}}
       </div>
       <div class="col s3" v-else>
         Loading...
