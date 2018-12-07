@@ -36,7 +36,7 @@ setup(
         'firecloud-dalmatian',
         'google-cloud-storage>=1.9.0',
         'pyyaml',
-        'agutil',
+        'agutil>=4.0.0',
         'flask_cors',
         'crayons',
         'connexion',

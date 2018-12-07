@@ -582,7 +582,7 @@ def get_workflows(namespace, name, id):
 @cached(10)
 def get_workflow(namespace, name, id, workflow_id):
     adapter = get_adapter(namespace, name, id)
-    adapter.update()
+    adapter.update(5)
     # print(adapter.workflows)
     if workflow_id[:8] in adapter.workflows:
         # Return data from workflow

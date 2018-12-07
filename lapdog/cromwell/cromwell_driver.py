@@ -84,6 +84,8 @@ class CromwellDriver(object):
                 '-jar', self.cromwell_jar,
                 'server'])
 
+        self.mem = memory
+
         logging.info("Started Cromwell")
 
     def fetch(self, wf_id=None, post=False, files=None, method=None):
@@ -119,12 +121,24 @@ class CromwellDriver(object):
                 }
         logging.info("Starting the following configuration: " + json.dumps(data))
         output = []
+        first = True
         with open(inputs, 'rb') as inputReader:
             reader = csv.DictReader(inputReader, delimiter='\t', lineterminator='\n')
             for batch in clump(reader, batch_limit):
                 logging.info("Running a new batch of %d workflows" % batch_limit)
 
                 chunk = []
+
+                if not first:
+                    logging.info("Restarting cromwell...")
+                    self.cromwell_proc.kill()
+                    self.cromwell_proc = None
+                    time.sleep(10)
+                    self.start(self.mem)
+                    time.sleep(20)
+                    logging.info("Resuming next batch")
+                else:
+                    first = False
 
                 for group in clump(batch, query_limit):
                     logging.info("Starting a chunk of %d workflows" % query_limit)

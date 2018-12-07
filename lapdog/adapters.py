@@ -14,6 +14,8 @@ import select
 from .cache import cache_fetch, cache_write, cached, cache_path
 import traceback
 import sys
+import threading
+from agutil import ActiveTimeout, TimeoutExceeded, context_lock
 
 # Label filter format: labels.(label name)=(label value)
 
@@ -68,7 +70,7 @@ def get_hourly_cost(mtype, preempt=False):
             return mtypes[mtype][int(preempt)]
         else:
             custom, cores, mem = mtype.split('-')
-            return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*int(mem)/1024) + max(0, extended_price[int(preempt)]*(int(mem)-13312)/1024)
+            return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*int(mem)/1024) + max(0, extended_price[int(preempt)]*(int(mem)-(int(cores)*1024*6.5))/1024)
     except:
         traceback.print_exc()
         print(mtype, "unknown machine type")
@@ -217,7 +219,7 @@ class CommandReader(object):
         if __insert_text is not None:
             os.write(w, __insert_text)
         # self.proc = subprocess.Popen(cmd, *args, stdout=w, stderr=w, stdin=r2, universal_newlines=False, **kwargs)
-        self.proc = subprocess.Popen(cmd, *args, stdout=w, stderr=w, stdin=r2, universal_newlines=False, **kwargs)
+        self.proc = subprocess.Popen(cmd, *args, stdout=w, stderr=subprocess.DEVNULL, stdin=r2, universal_newlines=False, **kwargs)
         self.reader = open(r, 'rb')
         self.buffer = b''
 
@@ -283,6 +285,7 @@ class SubmissionAdapter(object):
         self.workflows = {}
         self._internal_reader = None
         self.bucket = bucket
+        self.update_lock = threading.Lock()
         if _do_cache_write and not self.live:
             cache_write(json.dumps(self.data), 'submission-json', bucket, submission)
 
@@ -340,39 +343,45 @@ class SubmissionAdapter(object):
                     print(traceback.format_exc(), file=sys.stderr)
                     print("Attempting slow cost calculation")
                     pass
-            self.update()
-            cost = 0
-            maxTime = 0
-            total = 0
-            for wf in self.workflows.values():
-                for call in wf.calls:
-                    try:
-                        call = get_operation_status(call.operation)
-                        delta = (
-                            datetime.datetime.strptime(
-                                (call['metadata']['endTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
-                                timestamp_format
-                            )
-                            if 'endTime' in call['metadata']
-                            else datetime.datetime.utcnow()
-                        ) - datetime.datetime.strptime(
-                            (call['metadata']['startTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
-                            timestamp_format
-                        )
-                        delta = delta.total_seconds() / 3600
-                        if delta > maxTime:
-                            maxTime = delta
-                        total += delta
-                        if 'jes' in call and 'machineType' in call['jes']:
-                            cost += delta * get_hourly_cost(
-                                call['jes']['machineType'].split('/')[-1],
-                                'preemptible' in call['metadata']['request']['pipelineArgs']['resources']
-                                and call['metadata']['request']['pipelineArgs']['resources']['preemptible']
-                            )
-                    except KeyError:
-                        pass
-                    except yaml.scanner.ScannerError:
-                        print("Operation", call.operation, "had invalid operation metadata")
+            try:
+                with ActiveTimeout(60) as timer:
+                    self.update()
+                    timer.update()
+                    cost = 0
+                    maxTime = 0
+                    total = 0
+                    for wf in self.workflows.values():
+                        for call in wf.calls:
+                            timer.update()
+                            try:
+                                call = get_operation_status(call.operation)
+                                delta = (
+                                    datetime.datetime.strptime(
+                                        (call['metadata']['endTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
+                                        timestamp_format
+                                    )
+                                    if 'endTime' in call['metadata']
+                                    else datetime.datetime.utcnow()
+                                ) - datetime.datetime.strptime(
+                                    (call['metadata']['startTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
+                                    timestamp_format
+                                )
+                                delta = delta.total_seconds() / 3600
+                                if delta > maxTime:
+                                    maxTime = delta
+                                total += delta
+                                if 'jes' in call and 'machineType' in call['jes']:
+                                    cost += delta * get_hourly_cost(
+                                        call['jes']['machineType'].split('/')[-1],
+                                        'preemptible' in call['metadata']['request']['pipelineArgs']['resources']
+                                        and call['metadata']['request']['pipelineArgs']['resources']['preemptible']
+                                    )
+                            except KeyError:
+                                pass
+                            except yaml.scanner.ScannerError:
+                                print("Operation", call.operation, "had invalid operation metadata")
+            except TimeoutExceeded:
+                print("Took longer than 60 seconds to load workflow costs. Skipping")
             status = self.status
             if 'metadata' in status and 'startTime' in status['metadata']:
                 delta = (
@@ -408,97 +417,106 @@ class SubmissionAdapter(object):
             }
 
 
-    def update(self):
-        if self._internal_reader is None:
-            self._internal_reader = self.read_cromwell(_do_wait=self.live)
-        event_stream = []
-        message = ''
-        while len(do_select(self._internal_reader, 1)[0]):
-            message = self._internal_reader.readline().decode().strip()
-            matcher = Recall()
-            if matcher.apply(workflow_dispatch_pattern.search(message)):
-                ids = [
-                    wf_id.strip() for wf_id in
-                    matcher.value.group(1).split(',')
-                ]
-                # print(len(ids), 'workflow(s) dispatched')
-                for long_id, data in zip(ids, self.raw_workflows):
-                    self._init_workflow(
-                        long_id[:8],
-                        data['workflowOutputKey'],
-                        long_id
-                    )
-                    self.workflow_mapping[data['workflowOutputKey']] = long_id
-            elif matcher.apply(workflow_start_pattern.search(message)):
-                # print("New workflow started")
-                long_id = matcher.value.group(1)
-                if long_id in {*self.workflow_mapping.values()}:
-                    # dispatch event on fully started workflow
-                    self.workflows[long_id[:8]].handle(
-                        'start',
-                        {v:k for k,v in self.workflow_mapping.items()}[long_id],
-                        long_id
-                    )
-                elif long_id[:8] in self.workflows:
-                    # dispatch event on half-started workflow
-                    # this will syncup and replay events
-                    idx = len(self.workflow_mapping)
-                    data = self.raw_workflows[idx]
-                    self.workflows[long_id[:8]].handle(
-                        'start',
-                        data['workflowOutputKey'],
-                        long_id
-                    )
-                    self.workflow_mapping[data['workflowOutputKey']] = long_id
-                else:
-                    # instead initialize new workflow
-                    idx = len(self.workflow_mapping)
-                    data = self.raw_workflows[idx]
-                    self._init_workflow(
-                        long_id[:8],
-                        data['workflowOutputKey'],
-                        long_id
-                    )
-                    self.workflow_mapping[data['workflowOutputKey']] = long_id
-            elif matcher.apply(task_start_pattern.search(message)):
-                short = matcher.value.group(1)
-                wf = matcher.value.group(2)
-                task = matcher.value.group(3)
-                na = matcher.value.group(4)
-                call = int(matcher.value.group(5))
-                operation = matcher.value.group(6)
-                self._init_workflow(short).handle(
-                    'task',
-                    wf,
-                    task,
-                    na,
-                    call,
-                    operation
-                )
-            elif matcher.apply(msg_pattern.search(message)):
-                self._init_workflow(matcher.value.group(1)).handle(
-                    'message',
-                    matcher.value.string
-                )
-            elif matcher.apply(fail_pattern.search(message)):
-                long_id = matcher.value.group(1)
-                self._init_workflow(long_id[:8]).handle(
-                    'fail',
-                    matcher.groups()[-1]
-                )
-            elif matcher.apply(status_pattern.search(message)):
-                short = matcher.value.group(1)
-                task = matcher.value.group(3)
-                call = int(matcher.value.group(5))
-                old = matcher.value.group(6)
-                new = matcher.value.group(7)
-                self._init_workflow(short).handle(
-                    'status',
-                    task,
-                    call,
-                    old,
-                    new
-                )
+    def update(self, timeout=-1):
+        ctime = time.monotonic()
+        try:
+            with context_lock(self.update_lock, timeout):
+                if time.monotonic() - ctime > 10:
+                    # We've been waiting a while already
+                    # no reason to re-update, if another thread just spent a while
+                    return
+                if self._internal_reader is None:
+                    self._internal_reader = self.read_cromwell(_do_wait=self.live)
+                event_stream = []
+                message = ''
+                while len(do_select(self._internal_reader, 1)[0]):
+                    message = self._internal_reader.readline().decode().strip()
+                    matcher = Recall()
+                    if matcher.apply(workflow_dispatch_pattern.search(message)):
+                        ids = [
+                            wf_id.strip() for wf_id in
+                            matcher.value.group(1).split(',')
+                        ]
+                        # print(len(ids), 'workflow(s) dispatched')
+                        for long_id, data in zip(ids, self.raw_workflows):
+                            self._init_workflow(
+                                long_id[:8],
+                                data['workflowOutputKey'],
+                                long_id
+                            )
+                            self.workflow_mapping[data['workflowOutputKey']] = long_id
+                    elif matcher.apply(workflow_start_pattern.search(message)):
+                        # print("New workflow started")
+                        long_id = matcher.value.group(1)
+                        if long_id in {*self.workflow_mapping.values()}:
+                            # dispatch event on fully started workflow
+                            self.workflows[long_id[:8]].handle(
+                                'start',
+                                {v:k for k,v in self.workflow_mapping.items()}[long_id],
+                                long_id
+                            )
+                        elif long_id[:8] in self.workflows:
+                            # dispatch event on half-started workflow
+                            # this will syncup and replay events
+                            idx = len(self.workflow_mapping)
+                            data = self.raw_workflows[idx]
+                            self.workflows[long_id[:8]].handle(
+                                'start',
+                                data['workflowOutputKey'],
+                                long_id
+                            )
+                            self.workflow_mapping[data['workflowOutputKey']] = long_id
+                        else:
+                            # instead initialize new workflow
+                            idx = len(self.workflow_mapping)
+                            data = self.raw_workflows[idx]
+                            self._init_workflow(
+                                long_id[:8],
+                                data['workflowOutputKey'],
+                                long_id
+                            )
+                            self.workflow_mapping[data['workflowOutputKey']] = long_id
+                    elif matcher.apply(task_start_pattern.search(message)):
+                        short = matcher.value.group(1)
+                        wf = matcher.value.group(2)
+                        task = matcher.value.group(3)
+                        na = matcher.value.group(4)
+                        call = int(matcher.value.group(5))
+                        operation = matcher.value.group(6)
+                        self._init_workflow(short).handle(
+                            'task',
+                            wf,
+                            task,
+                            na,
+                            call,
+                            operation
+                        )
+                    elif matcher.apply(msg_pattern.search(message)):
+                        self._init_workflow(matcher.value.group(1)).handle(
+                            'message',
+                            matcher.value.string
+                        )
+                    elif matcher.apply(fail_pattern.search(message)):
+                        long_id = matcher.value.group(1)
+                        self._init_workflow(long_id[:8]).handle(
+                            'fail',
+                            matcher.groups()[-1]
+                        )
+                    elif matcher.apply(status_pattern.search(message)):
+                        short = matcher.value.group(1)
+                        task = matcher.value.group(3)
+                        call = int(matcher.value.group(5))
+                        old = matcher.value.group(6)
+                        new = matcher.value.group(7)
+                        self._init_workflow(short).handle(
+                            'status',
+                            task,
+                            call,
+                            old,
+                            new
+                        )
+        except TimeoutExceeded:
+            pass
             # else:
             #     print("NO MATCH:", message)
 
@@ -507,6 +525,18 @@ class SubmissionAdapter(object):
         # FIXME: Once everything else works, see if cromwell labels work
         # At that point, we can add an abort here to kill everything with the id
         abort_operation(self.operation)
+        gs_path = os.path.join(
+            self.path,
+            'submission.json'
+        )
+        getblob(gs_path).upload_from_string(
+            json.dumps(
+                {
+                    **self.data,
+                    **{'status': 'Aborted'}
+                }
+            )
+        )
         try:
             for wf in self.workflows.values():
                 wf.abort()
@@ -515,6 +545,12 @@ class SubmissionAdapter(object):
             result = instance_name_pattern.search(status)
             if result:
                 kill_machines(result.group(1).strip())
+        except:
+            traceback.print_exc()
+            warnings.warn(
+                "Submission Abort did not complete. Some workflows may continue running unsupervised",
+                RuntimeWarning
+            )
         finally:
             gs_path = os.path.join(
                 self.path,
@@ -528,6 +564,7 @@ class SubmissionAdapter(object):
                     }
                 )
             )
+
 
 
 
