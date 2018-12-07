@@ -685,8 +685,9 @@ def operation_status(operation_id):
 
 def cache_size():
     total = 0
-    for path in glob(cache_init()+'/*'):
-        total += os.path.getsize(path)
+    for path, _, files in os.walk(cache_init()):
+        for f in files:
+            total += os.path.getsize(os.path.join(path, f))
     return byteSize(total), 200
 
 @cached(120)

@@ -29,6 +29,7 @@ from math import ceil
 from functools import wraps
 import traceback
 import warnings
+import shutil
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -146,8 +147,7 @@ def upload(bucket, path, source, allow_composite=True):
 
 
 def purge_cache():
-    for path in glob(cache_init()+'/*'):
-        os.remove(path)
+    shutil.rmtree(cache_init())
 
 
 def alias(func):
@@ -257,10 +257,14 @@ class WorkspaceManager(dog.WorkspaceManager):
         self.operator = Operator(self)
         self._submission_cache = {}
         try:
+            target_prefix = 'submission-json.{}'.format(self.bucket_id)
             self._submission_cache = {
                 k:v
                 for k,v in _load_submissions(
-                    glob(os.path.join(cache_init(), 'submission-json.{}.*.data'.format(self.bucket_id)))
+                    os.path.join(path, f)
+                    for path, _, files in os.walk(cache_init())
+                    for f in files
+                    if f.startswith(target_prefix)
                 )
             }
 
