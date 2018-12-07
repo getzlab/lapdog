@@ -509,9 +509,17 @@ def get_submission(namespace, name, id):
                 'lapdog-executions',
                 id
             ),
-            'cost': adapter.cost()
         }
     }, 200
+
+def get_cost(namespace, name, id):
+    ws = get_workspace_object(namespace, name)
+    try:
+        adapter = get_adapter(namespace, name, id)
+    except NoSuchSubmission:
+        traceback.print_exc()
+        return "No Such Submission", 404
+    return adapter.cost()
 
 def abort_submission(namespace, name, id):
     adapter = get_adapter(namespace, name, id)

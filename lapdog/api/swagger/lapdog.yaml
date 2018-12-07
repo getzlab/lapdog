@@ -680,6 +680,36 @@ paths:
             type: array
             items:
               type: object
+  /api/v1/submissions/expanded/{namespace}/{name}/{id}/cost:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+      summary: Gets cost of the submission
+      operationId: lapdog.api.controllers.get_cost
+      responses:
+        default:
+          description: Error
+        200:
+          description: Gets cost estimate
+          schema:
+            type: object
   /api/v1/submissions/expanded/{namespace}/{name}/{id}/workflows/{workflow_id}:
     get:
       parameters:

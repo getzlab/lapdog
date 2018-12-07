@@ -237,7 +237,7 @@ Other: error_outline
       <div class="col s1">
         Cost:
       </div>
-      <div class="col s3" v-if="submission">
+      <div class="col s3" v-if="cost">
         ${{submission.cost.est_cost}}
       </div>
       <div class="col s3" v-else>
@@ -380,7 +380,8 @@ export default {
       active_operation: null,
       active_log: null,
       sort_key: null,
-      reversed: false
+      reversed: false,
+      cost: null
     }
   },
   computed: {
@@ -413,6 +414,7 @@ export default {
       this.active_log = null;
       this.sort_key = null;
       this.reversed = false;
+      this.cost = null;
       axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid)
         .then(response => {
           console.log("Got submission");
@@ -435,6 +437,19 @@ export default {
                 html: "Unable to load workflows"
               })
             })
+            axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/cost')
+              .then(response => {
+                console.log("Got cost");
+                console.log(response.data);
+                this.cost = response.data;
+              })
+              .catch(error => {
+                console.error("Failed");
+                console.error(error);
+                window.materialize.toast({
+                  html: "Unable to load cost estimate"
+                })
+              })
         })
         .catch(response => {
           console.error("Failed");
