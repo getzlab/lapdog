@@ -272,6 +272,9 @@ class WorkspaceManager(dog.WorkspaceManager):
             print("Warning: Unable to prepopulate workspace submission cache")
             self.sync()
 
+    def __repr__(self):
+        return "<lapdog.WorkspaceManager {}/{}>".format(self.namespace, self.workspace)
+
     @property
     def pending_operations(self):
         return len(self.operator.pending)
@@ -600,12 +603,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 adapter = self.get_adapter(submission_id)
                 if not adapter.live:
                     self._submission_cache[submission_id] = adapter.data
-                return {
-                    **adapter.data,
-                    # **{
-                    #     'status': adapter.submission_status(True)
-                    # }
-                }
+                return adapter.data
             except Exception as e:
                 if lapdog_only:
                     raise NoSuchSubmission(submission_id) from e
@@ -985,16 +983,14 @@ class WorkspaceManager(dog.WorkspaceManager):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
             return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
-            submission = self.get_adapter(submission_id).data
-            status = get_operation_status(submission['operation'])
+            submission = self.get_adapter(submission_id)
+            status = submission.status
             done = 'done' in status and status['done']
             if done:
-                output_template = check_api(dog.firecloud.api.get_workspace_config(
-                    submission['namespace'],
-                    submission['workspace'],
-                    submission['methodConfigurationNamespace'],
-                    submission['methodConfigurationName']
-                )).json()['outputs']
+                output_template = self.operator.get_config_detail(
+                    submission.data['methodConfigurationNamespace'],
+                    submission.data['methodConfigurationName']
+                )['outputs']
 
                 output_data = {}
                 try:
@@ -1007,13 +1003,16 @@ class WorkspaceManager(dog.WorkspaceManager):
                 except:
                     raise FileNotFoundError("Unable to locate the tracking file for this submission. It may not have finished")
 
+
                 workflow_metadata = {
                     build_input_key(meta['workflow_metadata']['inputs']):meta
                     for meta in workflow_metadata
+                    if meta['workflow_metadata'] is not None and 'inputs' in meta['workflow_metadata']
                 }
-                submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
+
+                submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission.data['workflows']}
                 submission_data = pd.DataFrame()
-                for key, entity in status_bar.iter(submission_workflows.items(), prepend="Uploading results... "):
+                for key, entity in status_bar.iter(submission_workflows.items(), prepend="Processing Output... "):
                     if key not in workflow_metadata:
                         print("Entity", entity, "has no output metadata")
                     elif workflow_metadata[key]['workflow_status'] != 'Succeeded':
@@ -1040,16 +1039,15 @@ class WorkspaceManager(dog.WorkspaceManager):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
             return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
-            submission = self.get_adapter(submission_id).data
-            status = get_operation_status(submission['operation'])
+            submission = self.get_adapter(submission_id)
+            status = submission.status
             done = 'done' in status and status['done']
             if done:
                 print("All workflows completed. Uploading results...")
-                with capture():
-                    self.update_entity_attributes(
-                        submission['workflowEntityType'],
-                        self.submission_output_df(submission_id),
-                    )
+                self.operator.update_entities_df_attributes(
+                    submission.data['workflowEntityType'],
+                    self.submission_output_df(submission_id)
+                )
                 return True
             else:
                 print("This submission has not finished")

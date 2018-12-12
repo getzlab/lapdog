@@ -365,12 +365,12 @@ class SubmissionAdapter(object):
                     print("Attempting slow cost calculation")
                     pass
             try:
+                cost = 0
+                maxTime = 0
+                total = 0
                 with ActiveTimeout(60) as timer:
                     self.update()
                     timer.update()
-                    cost = 0
-                    maxTime = 0
-                    total = 0
                     for wf in self.workflows.values():
                         for call in wf.calls:
                             timer.update()
@@ -590,7 +590,7 @@ class SubmissionAdapter(object):
 
 
     @property
-    @cached(2)
+    @cached(5)
     def status(self):
         """
         Get the operation status
@@ -599,6 +599,7 @@ class SubmissionAdapter(object):
         return get_operation_status(self.operation)
 
     @property
+    @cached(10)
     def live(self):
         """
         Reports if the submission is active or not
