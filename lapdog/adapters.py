@@ -46,6 +46,8 @@ status_pattern = re.compile(r'PipelinesApiAsyncBackendJobExecutionActor \[UUID\(
 
 instance_name_pattern = re.compile(r'instance(?:Name)?:\s+(.+)')
 
+disk_pattern = re.compile(r'local-disk (\d+) (HDD|SSD)')
+
 mtypes = {
     'n1-standard-%d'%(2**i): (0.0475*(2**i), 0.01*(2**i)) for i in range(7)
 }
@@ -333,11 +335,22 @@ class SubmissionAdapter(object):
                     maxTime = 0
                     total = 0
                     for wf in workflow_metadata:
-                        if wf['workflow_metadata'] is not None:
+                        if wf['workflow_metadata'] is not None and 'calls' in wf['workflow_metadata']:
                             for calls in wf['workflow_metadata']['calls'].values():
                                 for call in calls:
                                     if 'end' in call:
-                                        delta = datetime.datetime.strptime(call['end'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.datetime.strptime(call['start'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+
+                                        delta = (
+                                            # Stupid horrible ugly timestampt
+                                            datetime.datetime.strptime(
+                                                (call['end'].split('.')[0].split('.')[0]+'Z').replace('ZZ', 'Z'),
+                                                timestamp_format
+                                            )
+                                            - datetime.datetime.strptime(
+                                                (call['start'].split('.')[0].split('.')[0]+'Z').replace('ZZ', 'Z'),
+                                                timestamp_format
+                                        )
+                                        )
                                         delta = delta.total_seconds() / 3600
                                         if delta > maxTime:
                                             maxTime = delta
@@ -347,6 +360,15 @@ class SubmissionAdapter(object):
                                                 call['jes']['machineType'].split('/')[-1],
                                                 'preemptible' in call and call['preemptible']
                                             )
+                                        if 'runtimeAttributes' in call and 'disks' in call['runtimeAttributes'] and disk_pattern.match(call['runtimeAttributes']['disks']):
+                                            result = disk_pattern.match(call['runtimeAttributes']['disks'])
+                                            if result.group(2) == 'HDD':
+                                                # runtime * 1hr/1month * monthly price/GB * GB
+                                                cost += delta * 0.0013698624132109968 * .04 * float(result.group(1))
+                                            elif result.group(2) == 'SSD':
+                                                cost += delta * 0.0013698624132109968 * .17 * float(result.group(1))
+                                            if 'bootDiskSizeGb' in call['runtimeAttributes']:
+                                                cost += delta * 0.0013698624132109968 * .04 * float(call['runtimeAttributes']['bootDiskSizeGb'])
                     cost += maxTime * get_hourly_cost(
                         get_cromwell_type(self.data['runtime']) if 'runtime' in self.data else 'n1-standard-1',
                         False

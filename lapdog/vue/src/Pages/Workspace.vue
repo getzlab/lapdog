@@ -602,7 +602,12 @@
         query += "&memory="+encodeURIComponent(_.toString(this.cromwell_mem));
         query += "&batch="+encodeURIComponent(_.toString(this.batch_size));
         query += "&query="+encodeURIComponent(_.toString(this.query_size));
-        window.materialize.toast({
+
+        if (this.preflight_entities > 500) window.materialize.toast({
+          html: "Preparing job. This may take a while...",
+          displayLength: 5000,
+        })
+        else window.materialize.toast({
           html: "Preparing job...",
           displayLength: 5000,
         })

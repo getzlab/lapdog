@@ -766,6 +766,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                 print("The following inputs are invalid on this configuation: %s" % repr(list(invalid_inputs)), file=sys.stderr)
 
         submission_id = md5((gethostname() + str(time.time()) + config['name'] + entity).encode()).hexdigest()
+        while submission_id in self._submission_cache:
+            submission_id = md5((submission_id + str(time.time())).encode()).hexdigest()
         global_id = 'lapdog/'+base64.b64encode(
             ('%s/%s/%s' % (self.namespace, self.workspace, submission_id)).encode()
         ).decode()
