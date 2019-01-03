@@ -8,8 +8,8 @@
             <div class="input-field col s12">
               <select class="browser-default" id="config-select" v-model="submission_config" v-on:input="preflight(self_ref)">
                 <option value="" selected disabled>Choose a method</option>
-                <option v-for="config in method_configs" v-bind:value="config.name" :key="config.name">
-                  {{config.name}}
+                <option v-for="config in method_configs" v-bind:value="config.namespace+'/'+config.name" :key="config.namespace+'/'+config.name">
+                  {{config.namespace+'/'+config.name}}
                 </option>
               </select>
             </div>
@@ -36,10 +36,71 @@
           </div>
           <div v-if="submission_message != ''" class="row">
             <div class="col s12" v-if="submission_message == '-'">
+              <div class="preloader-wrapper small active">
+                <div class="spinner-layer spinner-blue-only">
+                  <div class="circle-clipper left">
+                    <div class="circle"></div>
+                  </div><div class="gap-patch">
+                    <div class="circle"></div>
+                  </div><div class="circle-clipper right">
+                    <div class="circle"></div>
+                  </div>
+                </div>
+              </div>
               Validating inputs...
             </div>
             <div v-else class="col s12" v-bind:class="submit_okay ? 'green-text' : 'red-text'">
               {{(submit_okay ? "" : "Error: ") + submission_message}}
+            </div>
+          </div>
+          <div class="row" v-if="preflight_entities > batch_size">
+            <div class="col s12 orange-text">
+              Warning: This submission contains a large number of workflows.
+              Unless otherwise specified, Cromwell will only run {{batch_size}} workflows at
+              a time
+            </div>
+          </div>
+          <div class="row expandable" v-on:click.prevent="show_advanced = !show_advanced">
+            <div class="col s12">
+              <i class="material-icons">
+                {{show_advanced ? "keyboard_arrow_down" : "keyboard_arrow_right"}}
+              </i>
+              Advanced Options
+            </div>
+          </div>
+          <div v-if="show_advanced">
+            <div class="row">
+              <div class="col s3">
+                Cromwell Memory
+              </div>
+              <div class="col s7">
+                <input v-model="cromwell_mem" class="blue-text" type="range" name="cromwell-mem" min="3" max="624" step="1" value="3">
+              </div>
+              <div class="col s2">
+                {{cromwell_mem}} GB
+              </div>
+            </div>
+            <div class="row">
+              <div class="col s3">
+                Max Concurrent Workflows
+              </div>
+              <div class="col s7">
+                <input v-model="batch_size" class="blue-text" type="range" name="cromwell-mem" min="100" v-bind:max="Math.floor(cromwell_mem * 250/3)" step="1" value="250">
+              </div>
+              <div class="col s2">
+                {{batch_size}} Jobs
+              </div>
+            </div>
+            <div class="row">
+              <div class="col s3">
+                Workflow Dispatch Rate
+              </div>
+              <div class="col s7">
+                <input v-model="query_size" class="blue-text" type="range" name="cromwell-mem" min="1" v-bind:max="batch_size" step="1" value="250">
+              </div>
+              <div class="col s2">
+                {{query_size}} Jobs/chunk
+              </div>
             </div>
           </div>
         </div>
@@ -163,15 +224,69 @@
             {{ws.workspaceSubmissionStats.runningSubmissionsCount}}
           </a>
         </div>
-        <div class="col s6">
-          <a href="#submission-modal" class='btn blue modal-trigger' >Execute new job</a>
+        <div class="col s6 execute-container">
+          <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-bind:class="ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
+            v-bind:data-tooltip="ws.entities && ws.entities.length ? '' : 'There are no entities in this workspace'"
+          >
+            Execute new job
+          </a>
         </div>
       </div>
+    </div>
+    <div class="row expandable" v-on:click="show_attributes = !show_attributes" v-if="ws && ws.attributes && lodash.keys(ws.attributes).length">
+      <div v-if="!show_attributes" class="col s6" >
+        <span>
+          <i class="material-icons">keyboard_arrow_right</i>
+          Workspace Attributes
+        </span>
+      </div>
+      <div v-else class="col s6">
+        <span>
+          <i class="material-icons">keyboard_arrow_down</i>
+          Workspace Attributes
+        </span>
+      </div>
+    </div>
+    <div v-if="show_attributes">
+      <!-- <div class="row">
+        <div class="col s12">
+          You can edit workspace attributes using the Lapdog command-line client,
+          the Lapdog Python module, or on Firecloud
+        </div>
+      </div> -->
+      <div class="row" >
+        <div class="col s12 truncat">
+          <table>
+            <thead>
+              <tr>
+                <th>Attribute</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="key in lodash.keys(ws.attributes)" :key="key">
+                <td>{{key}}</td>
+                <td>
+                  <a v-if="lodash.startsWith(lodash.toString(ws.attributes[key]), 'gs://')"
+                    v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+ws.attributes[key].substr(5)"
+                    target="_blank" rel="noopener"
+                  >
+                    {{ws.attributes[key]}}
+                  </a>
+                  <span v-else>{{ws.attributes[key]}}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <br>
+      <br>
     </div>
     <div class="submission-container">
       <div class="row">
         <div class="col s12">
-          Labdog Submissions:
+          Lapdog Submissions:
         </div>
       </div>
       <!-- <div v-if="submissions" class="collection">
@@ -187,7 +302,16 @@
           <div class="indeterminate blue"></div>
         </div>
       </div> -->
-
+      <div v-if="cached_submissions || submissions == null">
+        <div class="progress">
+          <div class="indeterminate blue"></div>
+        </div>
+      </div>
+      <div v-if="submissions && cached_submissions" class="row">
+        <div class="col s12">
+          Showing Cached Submissions:
+        </div>
+      </div>
       <div v-if="submissions" class="row">
         <div class="col s12">
           <table class="highlight">
@@ -203,12 +327,13 @@
             <tbody>
               <tr v-for="sub in submissions">
                 <td>
-                  <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace} }">
-                    {{sub.methodConfigurationName}}
+                  <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace, target_namespace:sub.methodConfigurationNamespace, target_name:sub.methodConfigurationName} }">
+                    <!-- {{truncate_cell(sub.methodConfigurationNamespace+'/'+sub.methodConfigurationName, true)}} -->
+                    {{sub.methodConfigurationNamespace+'/'+sub.methodConfigurationName}}
                   </router-link>
                 </td>
                 <td>{{sub.submissionEntity.entityName}}</td>
-                <td v-bind:class="sub.status == 'Failed' || sub.status == 'Error' ? 'red-text' : (sub.status == 'Succeeded' ? 'green-text' : '')">
+                <td v-bind:class="{Failed:'red-text', Error:'red-text', Aborted:'orange-text', Succeeded: 'green-text'}[sub.status]">
                   {{sub.status}}
                 </td>
                 <td>{{sub.submissionDate}}</td>
@@ -222,13 +347,100 @@
           </table>
         </div>
       </div>
-      <div v-else>
-        <div class="progress">
-          <div class="indeterminate blue"></div>
+
+      <div class="data-viewer" v-if="ws && ws.entities && ws.entities.length">
+        <hr>
+        <h5>Data</h5>
+        <div class="row">
+          <div class="col s12">
+
+            <!-- style="border-radius: 15px; border: 2px solid grey;" -->
+            <ul class="pagination center" >
+              <li v-for="etype in ws.entities" v-bind:class="active_entity == etype ? 'active' : ''"
+                v-on:click.prevent="active_entity = etype"
+              >
+                <a href="#">{{etype.type}}s</a>
+              </li>
+            </ul>
+            <hr>
+          </div>
+        </div>
+        <div v-if="active_entity">
+          <div class="row" v-if="active_entity.count > page_limit">
+            <div class="col s12">
+              <ul class="pagination center">
+                <li v-bind:class="active_page == 0 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page - 1)">
+                  <a href="#"><i class="material-icons">chevron_left</i></a>
+                </li>
+                <li v-for="page in page_range" v-on:click.prevent="turn_page(page)" v-bind:class="page == active_page ? 'active' : ''">
+                  <a href="#">{{page + 1}}</a>
+                </li>
+                <li v-bind:class="active_page == max_pages.length - 1 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page + 1)">
+                  <a href="#"><i class="material-icons">chevron_right</i></a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <!-- <div class="row" style="border: 1px solid grey;"> -->
+          <div class="row z-depth-1">
+            <div class="col s12" style="overflow-x: scroll;">
+              <table v-if="entities_data">
+                <thead>
+                  <tr>
+                    <th>{{active_entity.idName}}</th>
+                    <th v-for="attr in active_entity.attributeNames">
+                      {{attr}}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="entity in entities_data">
+                    <td>{{entity[active_entity.idName]}}</td>
+                    <td v-for="attr in active_entity.attributeNames" class="trunc">
+                      <a v-if="lodash.startsWith(lodash.toString(entity[attr]), 'gs://')"
+                        v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+lodash.toString(entity[attr]).substr(5)"
+                        target="_blank" rel="noopener"
+                      >
+                        {{truncate_cell(entity[attr])}}
+                      </a>
+                      <span v-else>
+                        {{truncate_cell(entity[attr])}}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else>
+                <div class="progress">
+                  <div class="indeterminate blue"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row" v-if="active_entity.count > page_limit">
+            <div class="col s12">
+              <ul class="pagination center">
+                <li v-bind:class="active_page == 0 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page - 1)">
+                  <a href="#"><i class="material-icons">chevron_left</i></a>
+                </li>
+                <li v-for="page in page_range" v-on:click.prevent="turn_page(page)" v-bind:class="page == active_page ? 'active' : ''">
+                  <a href="#">{{page + 1}}</a>
+                </li>
+                <li v-bind:class="active_page == max_pages.length - 1 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page + 1)">
+                  <a href="#"><i class="material-icons">chevron_right</i></a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div v-else>
+          <div class="row">
+            <div class="col s12 center">
+              Select an entity type above to view
+            </div>
+          </div>
         </div>
       </div>
-
-
     </div>
   </div>
 </template>
@@ -240,6 +452,7 @@
     props: ['namespace', 'workspace'],
     data() {
       return {
+        lodash: _,
         ws: null,
         acl: null,
         cache_state: null,
@@ -253,6 +466,17 @@
         submissions: null,
         expr_disabled: false,
         submit_okay: false,
+        show_attributes: false,
+        active_entity: null,
+        entities_data: null,
+        active_page: 0,
+        page_limit: 20,
+        preflight_entities: 0,
+        show_advanced: false,
+        cromwell_mem: 3,
+        batch_size: 250,
+        query_size: 100,
+        cached_submissions: true
         // entities: null
       }
     },
@@ -263,14 +487,87 @@
       // this.get_configs();
       // this.get_entities(this.namespace, this.workspace);
     },
+    watch: {
+      active_entity(newVal, oldVal) {
+        if (!newVal) return;
+        this.active_page = 0;
+        window.materialize.toast({
+          html: "Loading "+newVal.type+'s'
+        });
+        this.load_data(
+          newVal.type,
+          0,
+          this.page_limit
+        )
+      },
+    },
     computed: {
       self_ref() {
         return this;
+      },
+      max_pages() {
+        return _.range(0, _.ceil(this.active_entity.count / this.page_limit));
+      },
+      page_range() {
+        return _.slice(
+          this.max_pages,
+          _.max([0, this.active_page - 5]),
+          _.min([this.max_pages.length, this.active_page + 6])
+        );
       }
+      // active_entity: {
+      //   get() {
+      //     return this._active_entity ? this._active_entity : this.ws.entities[0]
+      //   },
+      //   set(etype) {
+      //     window.materialize.toast({html:"New etype: "+etype.type})
+      //     this._active_entity = etype;
+      //     window.materialize.toast({html:"New etype: "+this._active_entity.type})
+      //   }
+      // }
     },
     methods: {
+      // set_active(etype) {
+      //   this.$set(this, '_active_entity', etype);
+      // },
+      turn_page(page)
+      {
+        if (page < 0 || page >= this.max_pages.length) return;
+        this.active_page = page;
+        this.load_data(
+          this.active_entity.type,
+          (this.active_page * this.page_limit),
+          ((this.active_page+1) * this.page_limit)
+        );
+      },
+      load_data(etype, start, stop)
+      {
+        this.entities_data = null;
+        axios.get(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/entities/'+etype+'?start='+start+'&end='+stop)
+          .then(response => {
+            console.log("Obtained entities");
+            this.entities_data = response.data;
+          })
+          .catch(error => {
+            console.error("Unable to load entities");
+            console.error(error);
+            window.materialize.toast({
+              html: "Unable to load entities"
+            })
+          })
+      },
+      truncate_cell(value, front) {
+        let string_value = _.toString(value);
+        return string_value;
+        // if (string_value.length > 25) {
+        //   if (!front) string_value = string_value.substr(0, 25)+"...";//"..."+string_value.substr(string_value.length - 25);
+        //   else string_value = "..."+string_value.substr(string_value.length - 25);
+        // }
+        // return string_value;
+      },
       preflight: _.debounce((_this) => {
         _this.submission_message = "Incomplete fields";
+        _this.preflight_entities = 0;
         if (_this.submission_config == "" || _this.submission_etype == "" || _this.entity_field == "") return;
         _this.submission_message = "-";
         console.log("Executing preflight");
@@ -286,6 +583,7 @@
             console.log(response);
             let result = response.data;
             _this.submit_okay = result.ok && !result.failed;
+            _this.preflight_entities = result.workflows;
             if (_this.submit_okay) _this.submission_message = "Ready to submit " + result.workflows + " workflow(s)";
             else _this.submission_message = result.message;
           })
@@ -293,14 +591,23 @@
             console.error("FAILED");
             console.error(response)
           })
-      }, 1000),
+      }, 500),
       submit_workflow() {
         let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
         query += "config="+encodeURIComponent(this.submission_config);
         query += "&entity="+encodeURIComponent(this.entity_field);
         if (this.submission_expression != "") query += "&expression="+encodeURIComponent(this.submission_expression);
         if (this.submission_etype != "") query += "&etype="+encodeURIComponent(this.submission_etype);
-        window.materialize.toast({
+        // if (this.cromwell_mem % 2 == 1) this.cromwell_mem += 1;
+        query += "&memory="+encodeURIComponent(_.toString(this.cromwell_mem));
+        query += "&batch="+encodeURIComponent(_.toString(this.batch_size));
+        query += "&query="+encodeURIComponent(_.toString(this.query_size));
+
+        if (this.preflight_entities > 500) window.materialize.toast({
+          html: "Preparing job. This may take a while...",
+          displayLength: 5000,
+        })
+        else window.materialize.toast({
           html: "Preparing job...",
           displayLength: 5000,
         })
@@ -352,7 +659,7 @@
         if(this.ws) {
           for(let config in this.ws.configs)
           {
-            if(cfg == (this.ws.configs[config].name)) {
+            if(cfg == (this.ws.configs[config].namespace + '/'+this.ws.configs[config].name)) {
               return this.ws.configs[config].rootEntityType;
             }
           }
@@ -363,6 +670,15 @@
         return this.entity_field == 'h' ? 'valid' : 'invalid';
       },
       getWorkspace(namespace, workspace) {
+        this.show_attributes = false;
+        this.active_entity = null;
+        this.entities_data = null;
+        this.show_advanced = false;
+        this.cromwell_mem = 3;
+        this.batch_size = 250;
+        this.query_size = 100;
+        this.cached_submissions = true;
+        // window.$('.execute-button').tooltip('close');
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
             console.log(response.data);
@@ -370,16 +686,42 @@
             this.entity_types = response.data.entities;
             this.method_configs = response.data.configs;
             window.$('.modal').modal();
+            setTimeout(() => {
+              window.$('.tooltipped').tooltip();
+              console.log(this.ws.entities);
+              console.log(window.$('.execute-button'));
+              if (!(this.ws.entities && this.ws.entities.length)) window.$('.execute-container').hover(
+                () => {
+                  window.$('.execute-button').tooltip('open');
+                },
+                () => {
+                  setTimeout(() => {
+                    window.$('.execute-button').tooltip('close');
+                  }, 100);
+                }
+              );
+            }, 100);
             axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
               .then(response => {
                 console.log(response.data);
                 this.cache_state = response.data;
                 console.log("Fetching submissions");
-                  axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions')
+                  axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions?cache=true')
                     .then(response => {
                       console.log("Fetched submissions");
                       console.log(response.data);
                       this.submissions = response.data;
+                      axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions?cache=false')
+                        .then(response => {
+                          console.log("Fetched submissions");
+                          console.log(response.data);
+                          this.submissions = response.data;
+                          this.cached_submissions = false;
+                        })
+                        .catch(error => {
+                          console.error("FAIL");
+                          console.error(error)
+                        })
                     })
                     .catch(error => {
                       console.error("FAIL");
@@ -447,7 +789,8 @@
           })
           .catch(error => {
             console.error("FAIL")
-            console.error(response)
+            console.error(error)
+            window.materialize.toast("Failed to sync the workspace cache: "+error.response.data)
           })
       },
       get_configs() {
@@ -486,6 +829,7 @@
       this.entity_field = "";
       this.submission_expression = "";
       this.submissions = null;
+      this.active_entity = null;
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();
@@ -493,3 +837,26 @@
     }
   }
 </script>
+
+<style lang="css">
+  ul.pagination > li.active {
+    background: #1e88e5;
+  }
+
+  div.data-viewer td {
+    font-size: 0.9em;
+    padding: 5px;
+  }
+
+  table tr td {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  td.trunc {
+    max-width: 100px;
+    direction: rtl;
+  }
+
+</style>

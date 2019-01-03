@@ -7,6 +7,7 @@ import csv
 from google.cloud import storage
 from agutil.parallel import parallelize, parallelize2
 from agutil import status_bar, byteSize, cmd as execute_command
+from threading import Lock
 import sys
 import re
 import tempfile
@@ -18,13 +19,17 @@ import yaml
 from glob import glob
 from io import StringIO
 from . import adapters
-from .adapters import getblob, get_operation_status, mtypes
-from .cache import cache_init
+from .adapters import getblob, get_operation_status, mtypes, NoSuchSubmission
+from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture
 from itertools import repeat
 import pandas as pd
 from socket import gethostname
+from math import ceil
 from functools import wraps
+import traceback
+import warnings
+import shutil
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -32,6 +37,12 @@ lapdog_submission_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/s
 creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
 
 timestamp_format = '%Y-%m-%dT%H:%M:%S.000%Z'
+
+class ConfigNotFound(KeyError):
+    pass
+
+class ConfigNotUnique(KeyError):
+    pass
 
 @contextlib.contextmanager
 def dalmatian_api():
@@ -72,42 +83,71 @@ def build_input_key(template):
             data += str(template[k])
     return md5(data.encode()).hexdigest()
 
-@parallelize2()
-def upload(bucket, path, source):
+def list_potential_submissions(bucket_id):
+    for line in re.finditer(r'.+submission\.json', subprocess.run(
+                'gsutil ls gs://{}/lapdog-executions/*/submission.json'.format(bucket_id),
+                shell=True,
+                stdout=subprocess.PIPE
+                ).stdout.decode()):
+        yield line.group(0)
+
+def _composite_upload(src, dest, size):
+
+    warnings.warn("lapdog._composite_upload is deprecated. Upload() now uses Google's built-in chunked uploads", warnings.DeprecationWarning)
+
+    @parallelize(5)
+    def upload_component(component_path, i, text):
+        blob = getblob(component_path+str(i))
+        blob.upload_from_string(text)
+        return blob
+
+    n_chunks = ceil(os.path.getsize(src) / size)
+    with open(src, 'rb') as reader:
+        blobs = list(
+            blob for blob in
+            upload_component(
+                repeat(dest+'.composite_upload/'),
+                range(n_chunks),
+                (reader.read(size) for i in range(n_chunks))
+            )
+        )
+    composite_blob = getblob(dest)
+    composite_blob.content_type = 'application/octet-stream'
+    composite_blob.compose(blobs)
+    for blob in blobs:
+        blob.delete()
+    return composite_blob
+
+
+@parallelize2(5)
+def upload(bucket, path, source, allow_composite=True):
     """
     Uploads {source} to google cloud.
     Result google cloud path is gs://{bucket}/{path}.
     If the file to upload is larger than 4Gib, the file will be uploaded via
-    the gsutil command (the public python module can't upload files larger than this limit)
+    a composite upload. A temporary folder will be created at {gs path}.composite_upload/
+    which will contain 1GB blobs from the file. The blobs will be concatenated into
+    a single large file afterwards and the temporary folder deleted.
+
+    WARNING: You MUST set allow_composite to False if you are uploading to a nearline
+    or coldline bucket. The composite upload will incur large fees from deleting
+    the temporary objects
 
     This function starts the upload on a background thread and returns a callable
     object which can be used to wait for the upload to complete. Calling the object
     blocks until the upload finishes, and will raise any exceptions encountered
     by the background thread
     """
-    #4294967296
-    if os.path.isfile(source) and os.path.getsize(source) >= 2865470566:
-        # 4Gib, must do a composite upload
-        result = execute_command(
-            'gsutil -o GSUtil:parallel_composite_upload_threshold=150M cp {} gs://{}/{}'.format(
-                source,
-                bucket.name,
-                path
-            ),
-            False
-        )
-        if result.returncode:
-            print(result.buffer)
-            raise ValueError("Large file upload failed")
-    else:
-        blob = bucket.blob(path)
-        # print("Commencing upload:", source)
-        blob.upload_from_filename(source)
+    # 4294967296
+    blob = bucket.blob(path)
+    if allow_composite and os.path.isfile(source) and os.path.getsize(source) >= 2865470566: #2.7gib
+        blob.chunk_size = 104857600 # ~100mb
+    blob.upload_from_filename(source)
+    return blob
 
 
 def purge_cache():
-    for path in glob(cache_init()+'/*'):
-        os.remove(path)
+    shutil.rmtree(cache_init())
 
 
 def alias(func):
@@ -164,8 +204,8 @@ class BucketUploader(object):
 
         def scan_row(row):
             for i, value in enumerate(row):
-                if os.path.isfile(value):
-                    path, callback = self.upload(value, row.name)
+                if isinstance(value, str) and os.path.isfile(value):
+                    path, callback = self.upload(value, str(row.name))
                     row.iloc[i] = path
                     uploads.append(callback)
             return row
@@ -190,6 +230,10 @@ def get_submission(submission_id):
         return WorkspaceManager(ns, ws).get_submission(sid)
     raise TypeError("Global get_submission can only operate on lapdog global ids")
 
+@parallelize(5)
+def _load_submissions(path):
+    with open(path, 'r') as r:
+        return path[-37:-5], json.load(r)
 
 class WorkspaceManager(dog.WorkspaceManager):
     def __init__(self, reference, workspace=None, timezone='America/New_York'):
@@ -211,6 +255,25 @@ class WorkspaceManager(dog.WorkspaceManager):
             timezone
         )
         self.operator = Operator(self)
+        self._submission_cache = {}
+        try:
+            target_prefix = 'submission-json.{}'.format(self.bucket_id)
+            self._submission_cache = {
+                k:v
+                for k,v in _load_submissions(
+                    os.path.join(path, f)
+                    for path, _, files in os.walk(cache_init())
+                    for f in files
+                    if f.startswith(target_prefix)
+                )
+            }
+
+        except:
+            print("Warning: Unable to prepopulate workspace submission cache")
+            self.sync()
+
+    def __repr__(self):
+        return "<lapdog.WorkspaceManager {}/{}>".format(self.namespace, self.workspace)
 
     @property
     def pending_operations(self):
@@ -230,6 +293,25 @@ class WorkspaceManager(dog.WorkspaceManager):
         if len(exceptions):
             print("There were", len(exceptions), "exceptions while attempting to sync with firecloud")
         return is_live, exceptions
+
+    def populate_cache(self):
+        if self.live:
+            self.sync()
+        self.get_attributes()
+        for etype in self.operator.entity_types:
+            self.operator.get_entities_df(etype)
+        for config in self.list_configs():
+            self.operator.get_config_detail(config['namespace'], config['name'])
+            try:
+                self.operator.get_wdl(
+                    config['methodRepoMethod']['methodNamespace'],
+                    config['methodRepoMethod']['methodName'],
+                    config['methodRepoMethod']['methodVersion']
+                )
+            except NameError:
+                # WDL Doesnt exist
+                pass
+        self.sync()
 
     def get_bucket_id(self):
         """
@@ -251,12 +333,6 @@ class WorkspaceManager(dog.WorkspaceManager):
             stderr.seek(0,0)
             text = stdout.read() + stderr.read()
         return bool(creation_success_pattern.search(text))
-
-    def upload_entities(self, etype, df, index=True):
-        """
-        Upload/Update entities in the workspace
-        """
-        return self.operator.update_entities_df(etype, df, index)
 
     def get_samples(self):
         """
@@ -378,7 +454,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         else:
             return super().update_entity_attributes(etype, df)
 
-    def update_configuration(self, config, wdl=None, name=None, namespace=None):
+    def update_configuration(self, config, wdl=None, name=None, namespace=None, delete_old=True):
         """
         Update a method configuration and (optionally) the WDL
         Must provide a properly formed configuration object.
@@ -402,7 +478,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                         config['methodRepoMethod']['methodNamespace'],
                         config['methodRepoMethod']['methodName'],
                         "Runs " + config['methodRepoMethod']['methodName'],
-                        wdl_path
+                        wdl_path,
+                        delete_old
                     )
                     stdout.seek(0,0)
                     out_text = stdout.read()
@@ -474,13 +551,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         if not self.live:
             print("The workspace is currently in offline mode. Please call WorkspaceManager.sync() to reconnect to firecloud", file=sys.stderr)
             return
-        with dalmatian_api():
-            configs = {
-                cfg['name']:cfg for cfg in self.list_configs()
-            }
-        if config_name not in configs:
-            raise KeyError('Configuration "%s" not found in this workspace' % config_name)
-        config = configs[config_name]
+        config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             raise ValueError("expression and etype must BOTH be None or a string value")
         if etype is None:
@@ -520,7 +591,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             raise APIException("Unexpected response from dalmatian: "+stdout_text)
         return result.group(1)
 
-    def get_submission(self, submission_id):
+    def get_submission(self, submission_id, lapdog_only=False):
         """
         Gets submission metadata from a lapdog or firecloud submission
         """
@@ -530,30 +601,53 @@ class WorkspaceManager(dog.WorkspaceManager):
         elif lapdog_id_pattern.match(submission_id):
             try:
                 adapter = self.get_adapter(submission_id)
-                return {
-                    **adapter.data,
-                    # **{
-                    #     'status': adapter.submission_status(True)
-                    # }
-                }
-            except:
+                if not adapter.live:
+                    self._submission_cache[submission_id] = adapter.data
+                return adapter.data
+            except Exception as e:
+                if lapdog_only:
+                    raise NoSuchSubmission(submission_id) from e
                 with dalmatian_api():
                     return super().get_submission(submission_id)
+        if lapdog_only:
+            raise NoSuchSubmission(submission_id)
         with dalmatian_api():
             return super().get_submission(submission_id)
 
     @parallelize(5)
     def _get_multiple_executions(self, execution_path):
-        result = lapdog_submission_pattern.match(execution_path.name)
+        result = lapdog_submission_pattern.match(execution_path)
         if result:
-            return self.get_submission(result.group(1))
-
+            return self.get_submission(result.group(1), True)
 
     def list_configs(self):
         """
         Lists configurations in the workspace
         """
         return self.operator.configs
+
+    def fetch_config(self, config_slug):
+        """
+        Fetches a configuration by the provided slug.
+        If the slug is just the config name, this returns a config
+        with a matching name IFF the name is unique. If another config
+        exists with the same name, this will fail.
+        If the slug is a full slug (namespace/name) this will always return
+        a matching config (slug uniqueness is enforced by firecloud)
+        """
+        configs = self.list_configs()
+        candidates = [] # For configs just matching name
+        for config in configs:
+            if config_slug == '%s/%s' % (config['namespace'], config['name']):
+                return config
+            elif config_slug == config['name']:
+                candidates.append(config)
+        if len(candidates) == 1:
+            return candidates[0]
+        elif len(candidates) > 1:
+            raise ConfigNotUnique('%d configs matching name "%s". Use a full config slug' % (len(candidates), config_slug))
+        raise ConfigNotFound('No such config "%s"' % config_slug)
+
 
     configs = property(list_configs)
     configurations = configs
@@ -564,15 +658,17 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         return adapters.SubmissionAdapter(self.get_bucket_id(), submission_id)
 
-    def list_submissions(self, config=None, lapdog_only=False):
+    def list_submissions(self, config=None, lapdog_only=False, cached=False):
         """
         Lists submissions in the workspace
         """
+        if cached:
+            return [*self._submission_cache.values()]
         results = []
         if not lapdog_only:
             with dalmatian_api():
                 results = super().list_submissions(config)
-        for submission in WorkspaceManager._get_multiple_executions(repeat(self), storage.Client().get_bucket(self.get_bucket_id()).list_blobs(prefix='lapdog-executions')):
+        for submission in WorkspaceManager._get_multiple_executions(repeat(self), list_potential_submissions(self.bucket_id)):
             if submission is not None:
                 results.append(submission)
         return results
@@ -581,10 +677,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Verifies execution configuration
         """
-        configs = {config['name']:config for config in self.list_configs()}
-        if config_name not in configs:
-            return False, 'Configuration "%s" not found in this workspace' % config_name
-        config = configs[config_name]
+        config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             return False, "expression and etype must BOTH be None or a string value"
         if etype is None:
@@ -620,14 +713,24 @@ class WorkspaceManager(dog.WorkspaceManager):
         return True, config, entity, etype, workflow_entities, template, invalid_inputs
 
 
-    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False):
+    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False, memory=3, batch_limit=None, query_limit=None):
         """
         Validates config parameters then executes a job directly on GCP
+        Config name may either be a full slug (config namespace/config name)
+        or just the name (only if the name is unique)
+
+        If memory is None (default): The cromwell VM will be an n1-standard-1
+        Otherwise: The cromwell VM will be a custom instance with 2 CPU and the requested memory
+
+        If batch_limit is None (default): The cromwell VM will run a maximum of 250 workflows per 3 GB on the cromwell instance
+        Otherwise: The cromwell VM will run, at most, batch_limit concurrent workflows
+
+        If query_limit is None (default): The cromwell VM will submit and query 100 workflows at a time.
+        This has no bearing on the number of running workflows, but does slow the rate at which
+        workflows get started and that failures are detected
+        Otherwise: The cromwell VM will submit/query the given number of workflows at a time
         """
-        configs = {config['name']:config for config in self.list_configs()}
-        if config_name not in configs:
-            raise KeyError('Configuration "%s" not found in this workspace' % config_name)
-        config = configs[config_name]
+        config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             raise ValueError("expression and etype must BOTH be None or a string value")
         if etype is None:
@@ -692,6 +795,16 @@ class WorkspaceManager(dog.WorkspaceManager):
                 print("Aborted", file=sys.stderr)
                 return
 
+        if len(workflow_entities) > 1000:
+            resync = True
+            print("This submission contains a large amount of workflows")
+            print("Please wait while the workspace loads data to prepare the submission in offline mode...")
+            self.populate_cache()
+            print("Taking the cache offline...")
+            self.operator.go_offline()
+        else:
+            resync = False
+
         submission_data = {
             'workspace':self.workspace,
             'namespace':self.namespace,
@@ -710,7 +823,12 @@ class WorkspaceManager(dog.WorkspaceManager):
             },
             'submitter': 'lapdog',
             'workflowEntityType': config['rootEntityType'],
-            'workflowExpression': expression if expression is not None else None
+            'workflowExpression': expression if expression is not None else None,
+            'runtime': {
+                'memory': memory,
+                'batch_limit': (int(250*memory/3) if batch_limit is None else batch_limit),
+                'query_limit': 100 if query_limit is None else query_limit
+            }
         }
 
         @parallelize(5)
@@ -762,12 +880,33 @@ class WorkspaceManager(dog.WorkspaceManager):
             prepend="Preparing Workflows... "
         )]
 
-        config_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/config.json".format(
+        config_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/config.tsv".format(
             bucket_id=self.get_bucket_id(),
             submission_id=submission_id
         )
+        # AS OF newest lapdog, configs uploaded as TSV
+        buff = StringIO()
+        columns = [*{key for row in workflow_inputs for key in row}]
+        writer = csv.DictWriter(
+            buff,
+            columns,
+            delimiter='\t',
+            lineterminator='\n'
+        )
+        writer.writeheader()
+        writer.writerows(
+            {
+                **{
+                    column: None
+                    for column in columns
+                },
+                **row
+            }
+            for row in workflow_inputs
+        )
         getblob(config_path).upload_from_string(
-            json.dumps(workflow_inputs).encode()
+            # json.dumps(workflow_inputs).encode()
+            buff.getvalue().encode()
         )
 
 
@@ -781,7 +920,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         cmd = (
             'gcloud alpha genomics pipelines run '
-            '--pipeline-file {source_dir}/wdl_pipeline.yaml '
+            '--pipeline-file {source_dir}/cromwell/wdl_pipeline.yaml '
             '--zones {zone} '
             '--inputs WDL={wdl_text} '
             '--inputs WORKFLOW_INPUTS={workflow_template} '
@@ -803,6 +942,8 @@ class WorkspaceManager(dog.WorkspaceManager):
             submission_id=submission_id,
             submission_data_path=submission_data_path
         )
+        if memory != 3:
+            cmd += ' --cpus 2 --memory %d' % memory
 
         results = subprocess.run(
             cmd, shell=True, executable='/bin/bash',
@@ -821,6 +962,10 @@ class WorkspaceManager(dog.WorkspaceManager):
         print("Created submission", global_id)
 
         blob.upload_from_string(json.dumps(submission_data))
+
+        if resync:
+            print("Bringing the workspace back online")
+            self.sync()
 
         return global_id, submission_id, submission_data['operation']
 
@@ -843,17 +988,14 @@ class WorkspaceManager(dog.WorkspaceManager):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
             return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
-            submission = self.get_adapter(submission_id).data
-            status = get_operation_status(submission['operation'])
+            submission = self.get_adapter(submission_id)
+            status = submission.status
             done = 'done' in status and status['done']
             if done:
-                print("All workflows completed. Uploading results...")
-                output_template = check_api(dog.firecloud.api.get_workspace_config(
-                    submission['namespace'],
-                    submission['workspace'],
-                    submission['methodConfigurationNamespace'],
-                    submission['methodConfigurationName']
-                )).json()['outputs']
+                output_template = self.operator.get_config_detail(
+                    submission.data['methodConfigurationNamespace'],
+                    submission.data['methodConfigurationName']
+                )['outputs']
 
                 output_data = {}
                 try:
@@ -866,13 +1008,16 @@ class WorkspaceManager(dog.WorkspaceManager):
                 except:
                     raise FileNotFoundError("Unable to locate the tracking file for this submission. It may not have finished")
 
+
                 workflow_metadata = {
                     build_input_key(meta['workflow_metadata']['inputs']):meta
                     for meta in workflow_metadata
+                    if meta['workflow_metadata'] is not None and 'inputs' in meta['workflow_metadata']
                 }
-                submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
+
+                submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission.data['workflows']}
                 submission_data = pd.DataFrame()
-                for key, entity in status_bar.iter(submission_workflows.items(), prepend="Uploading results... "):
+                for key, entity in status_bar.iter(submission_workflows.items(), prepend="Processing Output... "):
                     if key not in workflow_metadata:
                         print("Entity", entity, "has no output metadata")
                     elif workflow_metadata[key]['workflow_status'] != 'Succeeded':
@@ -899,56 +1044,15 @@ class WorkspaceManager(dog.WorkspaceManager):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
             return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
-            submission = self.get_adapter(submission_id).data
-            status = get_operation_status(submission['operation'])
+            submission = self.get_adapter(submission_id)
+            status = submission.status
             done = 'done' in status and status['done']
             if done:
                 print("All workflows completed. Uploading results...")
-                output_template = check_api(dog.firecloud.api.get_workspace_config(
-                    submission['namespace'],
-                    submission['workspace'],
-                    submission['methodConfigurationNamespace'],
-                    submission['methodConfigurationName']
-                )).json()['outputs']
-
-                output_data = {}
-                try:
-                    workflow_metadata = json.loads(getblob(
-                        'gs://{bucket_id}/lapdog-executions/{submission_id}/results/workflows.json'.format(
-                            bucket_id=self.get_bucket_id(),
-                            submission_id=submission_id
-                        )
-                    ).download_as_string())
-                except:
-                    raise FileNotFoundError("Unable to locate the tracking file for this submission. It may not have finished")
-
-                workflow_metadata = {
-                    build_input_key(meta['workflow_metadata']['inputs']):meta
-                    for meta in workflow_metadata
-                }
-                submission_workflows = {wf['workflowOutputKey']: wf['workflowEntity'] for wf in submission['workflows']}
-                submission_data = pd.DataFrame()
-                for key, entity in status_bar.iter(submission_workflows.items(), prepend="Uploading results... "):
-                    if key not in workflow_metadata:
-                        print("Entity", entity, "has no output metadata")
-                    elif workflow_metadata[key]['workflow_status'] != 'Succeeded':
-                        print("Entity", entity, "failed")
-                        print("Errors:")
-                        for call, calldata in workflow_metadata[key]['workflow_metadata']['calls'].items():
-                            print("Call", call, "failed with error:", get_operation_status(calldata['jobId'])['error'])
-                    else:
-                        output_data = workflow_metadata[key]['workflow_output']
-                        entity_data = pd.DataFrame(index=[entity])
-                        for k,v in output_data['outputs'].items():
-                            k = output_template[k]
-                            if k.startswith('this.'):
-                                entity_data[k[5:]] = [v]
-                        submission_data = submission_data.append(entity_data, sort=True)
-                with capture():
-                    self.update_entity_attributes(
-                        submission['workflowEntityType'],
-                        submission_data,
-                    )
+                self.operator.update_entities_df_attributes(
+                    submission.data['workflowEntityType'],
+                    self.submission_output_df(submission_id)
+                )
                 return True
             else:
                 print("This submission has not finished")

@@ -28,7 +28,7 @@
               <div class="col s2">
                 Entity Type:
               </div>
-              <div class="col s9">
+              <div class="col s9" v-bind:class="active_cfg.config.rootEntityType.match(etype_pattern)?'':'red-text'">
                 {{active_cfg.config.rootEntityType}}
               </div>
             </div>
@@ -43,7 +43,7 @@
               </div>
             </div>
           </div>
-          <div style="margin-top: 15px; margin-bottom: 0px;" class="row" v-on:click.prevent="toggle_wdl">
+          <div v-if="active_cfg.wdl" style="margin-top: 15px; margin-bottom: 0px;" class="row expandable" v-on:click.prevent="toggle_wdl">
             <div v-if="!show_wdl" class="col s4" >
               <span>
                 <i class="material-icons">keyboard_arrow_right</i>
@@ -75,25 +75,52 @@
           </div>
           <div class="row">
             <form class="col s6">
-              <div class="row" v-for="key in lodash.keys(active_cfg.config.inputs)">
-                <div class="input-field col s11" style="margin: 0px;">
-                  <!-- v-bind:class="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required && active_cfg.config.inputs[key].length < 1) ? 'invalid' : 'valid'" -->
-                  <input type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
-                    v-bind:placeholder="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required) ? 'Required' : 'Optional'"
-                  />
-                  <label style="z-index: -1;" v-bind:for="key">
-                    {{key + (lodash.has(active_cfg, ['io', 'inputs', key]) ? '   ('+active_cfg.io.inputs[key].type+')': '')}}
-                  </label>
+              <div v-if="lodash.has(active_cfg, ['io', 'inputs'])">
+                <div class="row" v-for="key in lodash.keys(active_cfg.io.inputs)">
+                  <div class="input-field col s11" style="margin: 0px;">
+                    <!-- v-bind:class="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required && active_cfg.config.inputs[key].length < 1) ? 'invalid' : 'valid'" -->
+                    <input type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
+                      v-bind:placeholder="(active_cfg.io.inputs[key].required) ? 'Required' : 'Optional'"
+                    />
+                    <label style="z-index: -1;" v-bind:for="key">
+                      {{key + '   ('+active_cfg.io.inputs[key].type+')'}}
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div v-else>
+                <div class="row" v-for="key in lodash.keys(active_cfg.config.inputs)">
+                  <div class="input-field col s11" style="margin: 0px;">
+                    <!-- v-bind:class="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required && active_cfg.config.inputs[key].length < 1) ? 'invalid' : 'valid'" -->
+                    <input type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
+                      v-bind:placeholder="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required) ? 'Required' : 'Optional'"
+                    />
+                    <label style="z-index: -1;" v-bind:for="key">
+                      {{key + (lodash.has(active_cfg, ['io', 'inputs', key]) ? '   ('+active_cfg.io.inputs[key].type+')': '')}}
+                    </label>
+                  </div>
                 </div>
               </div>
             </form>
             <form class="col s6">
-              <div class="row" v-for="key in lodash.keys(active_cfg.config.outputs)">
-                <div class="input-field col s11" style="margin: 0px;">
-                  <input placeholder="Required" type="text" v-bind:id="key" v-model="active_cfg.config.outputs[key]" v-bind:disabled="!edit_on"/>
-                  <label style="z-index: -1;">
-                    {{key + (lodash.has(active_cfg, ['io', 'outputs', key]) ? '   ('+active_cfg.io.outputs[key]+')': '')}}
-                  </label>
+              <div v-if="lodash.has(active_cfg, ['io', 'outputs'])">
+                <div class="row" v-for="key in lodash.keys(active_cfg.io.outputs)">
+                  <div class="input-field col s11" style="margin: 0px;">
+                    <input placeholder="Required" type="text" v-bind:id="key" v-model="active_cfg.config.outputs[key]" v-bind:disabled="!edit_on"/>
+                    <label style="z-index: -1;">
+                      {{key + '   ('+active_cfg.io.outputs[key]+')'}}
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div v-else>
+                <div class="row" v-for="key in lodash.keys(active_cfg.config.outputs)">
+                  <div class="input-field col s11" style="margin: 0px;">
+                    <input placeholder="Required" type="text" v-bind:id="key" v-model="active_cfg.config.outputs[key]" v-bind:disabled="!edit_on"/>
+                    <label style="z-index: -1;">
+                      {{key + (lodash.has(active_cfg, ['io', 'outputs', key]) ? '   ('+active_cfg.io.outputs[key]+')': '')}}
+                    </label>
+                  </div>
                 </div>
               </div>
             </form>
@@ -106,13 +133,6 @@
         <div v-if="active_cfg">
           <h4>
             {{active_cfg.config.namespace}}/{{active_cfg.config.name}}
-            <span class="right">
-              <i v-if="edit_on" v-on:click.prevent="save_config" class="material-icons green-text" title="Save changes">check</i>
-              <i class="material-icons" v-bind:class="edit_on?'orange-text text-darken-3':''" v-on:click.prevent="toggle_edit" v-bind:title="edit_on ? 'Discard changes' : 'Edit configuration'">
-                {{edit_on?"cancel":"edit"}}
-              </i>
-              <i class="material-icons red-text" title="Delete this configuration" v-on:click.prevent="delete_config">delete</i>
-            </span>
           </h4>
         </div>
         <strong>Are you sure you want to delete this configuration?</strong>
@@ -163,8 +183,11 @@
           <div class="col s12">
             <blockquote>
               If a method WDL is uploaded, it's name and namespace will be taken
-              from the methodRepoMethod key of the provided configuration. Otherwise,
-              the method specified by methodRepoMethod must already exist in Firecloud
+              from the <code>methodRepoMethod</code> key of the provided configuration. Otherwise,
+              the method specified by <code>methodRepoMethod</code> must already exist in Firecloud.
+              If <code>methodRepoMethod.methodVersion</code> is set to <code>"latest"</code>, Lapdog will set
+              the version to the latest version of the method (including the newly
+              uploaded method)
             </blockquote>
           </div>
         </div>
@@ -184,7 +207,16 @@
       </router-link>
     </h4>
     <h3>Methods</h3>
-    <a href="#" class="btn blue modal-trigger" data-target="upload-modal" v-on:click.prevent="display_upload">Upload new configuration</a>
+    <div class="row">
+      <div class="col s3">
+        <a href="#" class="btn blue modal-trigger" data-target="upload-modal" v-on:click.prevent="display_upload">Upload new configuration</a>
+      </div>
+      <div class="col s5">
+        <a target="_blank" rel="noopener" href="https://portal.firecloud.org/#methods" class="btn blue">
+          Import existing configuration in Firecloud
+        </a>
+      </div>
+    </div>
     <table v-if="configs">
       <thead>
         <tr>
@@ -202,7 +234,7 @@
 
           </td>
           <td>{{config.methodRepoMethod.methodNamespace}}/{{config.methodRepoMethod.methodName}} (Snapshot {{config.methodRepoMethod.methodVersion}})</td>
-          <td>{{config.rootEntityType}}</td>
+          <td v-bind:class="config.rootEntityType.match(etype_pattern) ? '' : 'red-text'">{{config.rootEntityType}}</td>
         </tr>
       </tbody>
     </table>
@@ -223,11 +255,22 @@
 import axios from'axios'
 import _ from 'lodash'
 export default {
-  props: ['namespace', 'workspace'],
+  props: {
+    namespace: String,
+    workspace: String,
+    target_namespace: {
+      type: String,
+      default: null
+    },
+    target_name: {
+      type: String,
+      default: null
+    }
+  },
   data() {
     return {
       jq:window.$,
-
+      etype_pattern: /(pair|participant|sample)(_set)?/,
       lodash:_,
       configs: null,
       active_cfg: null,
@@ -235,7 +278,8 @@ export default {
       edit_on: false,
       show_wdl: false,
       config_filepath: '',
-      method_filepath: ''
+      method_filepath: '',
+      target_rendered: false,
     }
   },
   created() {
@@ -249,16 +293,24 @@ export default {
       this.edit_dirty = null;
       this.edit_on = false;
       this.show_wdl = false;
+      this.target_rendered = false;
       this.config_filepath = "";
       this.method_filepath = "";
       this.reset_uploads();
       this.get_configs(namespace, workspace);
+      console.log(this.target_namespace)
     },
     get_configs(ns, ws) {
       axios.get(API_URL+'/api/v1/workspaces/'+ns+'/'+ws+'/configs')
         .then(response => {
           console.log(response.data);
-          this.configs = response.data
+          this.configs = response.data;
+          if (this.target_namespace && this.target_name && !this.target_rendered) {
+            this.display_config(this.target_namespace+'/'+this.target_name, false);
+            // this.target_namespace = null;
+            // this.target_name = null;
+            this.target_rendered = true;
+          }
         })
         .catch(error => {
           console.error(error)
@@ -433,13 +485,28 @@ export default {
       axios.get(API_URL + '/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/configs/'+config_slug)
         .then(response => {
           console.log(response.data);
-          this.active_cfg = response.data;
 
-          setTimeout(() => {
-            window.$("#config-modal").modal();
-            window.materialize.updateTextFields();
-            window.$("#config-modal").modal('open');
-          }, 250)
+          if (response.data.config)
+          {
+            this.active_cfg = response.data;
+            if (!response.data.wdl) {
+              window.materialize.toast({
+                html: "Unable to locate the WDL for this configuration"
+              })
+            }
+
+            setTimeout(() => {
+              window.$("#config-modal").modal();
+              window.materialize.updateTextFields();
+              window.$("#config-modal").modal('open');
+            }, 250)
+          }
+          else {
+            window.materialize.toast({
+              html: "Unable to locate the configuration"
+            })
+          }
+
 
         })
         .catch(error => {
@@ -455,6 +522,7 @@ export default {
   },
   beforeRouteUpdate(to, from, next) {
     console.log("Update!");
+    window.$('.modal').modal('close');
     this.init(to.params.namespace, to.params.workspace);
     next();
   }

@@ -5,6 +5,17 @@ info:
 produces:
   - application/json
 paths:
+  /api/v1/version:
+    get:
+      operationId: lapdog.api.controllers.version
+      summary: Returns lapdog version
+      responses:
+        default:
+          description: Error
+        200:
+          description: Lapdog version
+          schema:
+            type: string
   /api/v1/status:
     get:
       operationId: lapdog.api.controllers.status
@@ -189,32 +200,50 @@ paths:
           description: A list of workspace summaries
           schema:
             $ref: "#/definitions/ACL_Update"
-  # /api/v1/workspaces/{namespace}/{name}/entities:
-  #   get:
-  #     parameters:
-  #       -
-  #         in: path
-  #         name: namespace
-  #         required: true
-  #         type: string
-  #         description: The workspaces namespace
-  #       -
-  #         in: path
-  #         name: name
-  #         required: true
-  #         type: string
-  #         description: The workspaces name
-  #     operationId: lapdog.api.controllers.get_entities
-  #     summary: Returns a list of entity types
-  #     responses:
-  #       default:
-  #         description: Error
-  #       200:
-  #         description: A list of entities in the workspace
-  #         schema:
-  #           type: array
-  #           items:
-  #             type: object
+  /api/v1/workspaces/{namespace}/{name}/entities/{etype}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: path
+          name: etype
+          required: true
+          type: string
+          description: Entity type
+        -
+          in: query
+          name: start
+          required: false
+          type: integer
+          description: DF start
+        -
+          in: query
+          name: end
+          required: false
+          type: integer
+          description: DF end
+      operationId: lapdog.api.controllers.get_entities
+      summary: Returns a list of entity types
+      responses:
+        default:
+          description: Error
+        200:
+          description: A list of entities in the workspace
+          schema:
+            type: array
+            items:
+              type: object
   /api/v1/workspaces/{namespace}/{name}/cache:
     get:
       parameters:
@@ -277,6 +306,13 @@ paths:
           required: true
           type: string
           description: The workspaces name
+        -
+          in: query
+          name: cache
+          required: false
+          type: boolean
+          description: Return live or cached results
+          default: false
       summary: Lists the submissions in order
       operationId: lapdog.api.controllers.list_submissions
       responses:
@@ -644,6 +680,36 @@ paths:
             type: array
             items:
               type: object
+  /api/v1/submissions/expanded/{namespace}/{name}/{id}/cost:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+      summary: Gets cost of the submission
+      operationId: lapdog.api.controllers.get_cost
+      responses:
+        default:
+          description: Error
+        200:
+          description: Gets cost estimate
+          schema:
+            type: object
   /api/v1/submissions/expanded/{namespace}/{name}/{id}/workflows/{workflow_id}:
     get:
       parameters:
@@ -822,6 +888,27 @@ paths:
           type: string
           description: The entity type (optional)
           default: ""
+        -
+          in: query
+          name: memory
+          required: false
+          type: integer
+          description: The memory for cromwell (optional)
+          default: 3
+        -
+          in: query
+          name: batch
+          required: false
+          type: integer
+          description: Max concurrent jobs (optional)
+          default: 250
+        -
+          in: query
+          name: query
+          required: false
+          type: integer
+          description: Number of jobs to query at once (optional)
+          default: 100
       summary: Checks if the provided inputs are valid to execute
       operationId: lapdog.api.controllers.execute
       responses:

@@ -41,16 +41,15 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
 
 ---
 
-### TODO
-1. Rework submission adapter reader
-  - On first call: create singleton reader object
-  - On all calls:
-    - Poll singleton for data and store to buffer
-    - Return BytesIO of buffer
-2. Improve caching latency
-3. Sort out adapter cache hierarchy
+### Roadmap
+(Subject to change)
+1. ~~Add Data view~~ **Done**
+2. Enable Multi-Project mode
+3. Add better timeouts when interacting with Firecloud
+    * Lapdog should switch to its internal cache more eagerly than it does now
+    * Goal: enforce a ~5s timeout if the desired data is already cached
+    * 20s timeout otherwise
 4. Enable call caching
-
 
 ### Pro/Con with Firecloud
 

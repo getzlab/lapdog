@@ -20,6 +20,8 @@ from itertools import repeat
 from glob import glob
 import yaml
 from ..cache import cached, cache_fetch, cache_write, cache_init
+from ..adapters import NoSuchSubmission
+import re
 
 def readvar(obj, *args):
     current = obj
@@ -46,6 +48,14 @@ def get_workspace_object(namespace, name):
             current_app.config['storage']['cache']['all_workspaces'] = []
         current_app.config['storage']['cache']['all_workspaces'].append((namespace, name))
     return ws
+
+@lru_cache()
+def version():
+    with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), '__init__.py')) as reader:
+        result = re.search(r'__version__ = \"(\d+\.\d+\.\d+.*?)\"', reader.read())
+        if result:
+            return result.group(1)
+        return "Unknown"
 
 @cached(120, 10)
 def get_adapter(namespace, workspace, submission):
@@ -138,24 +148,34 @@ def workspace(namespace, name):
         for k,v in ws.operator.entity_types.items()
     ]
     data['configs'] = get_configs(namespace, name)
+    data['attributes'] = ws.attributes
     return data, 200
 
 @cached(600)
 def service_account():
     try:
         buff = io.StringIO(subprocess.check_output(
-            'gcloud iam service-accounts list',
+            'gcloud iam service-accounts list --format=json',
             shell=True,
             stderr=subprocess.PIPE
         ).decode())
     except:
+        traceback.print_exc()
         return {
             'msg': 'Unable to read active service account',
             'error': traceback.format_exc()
         }, 500
     try:
-        return pd.read_fwf(buff).loc[0]['EMAIL'], 200
+        for acct in json.load(buff):
+            if 'displayName' in acct and acct['displayName'] == 'Compute Engine default service account':
+                return acct['email'], 200
+        buff.seek(0,0)
+        return {
+            'msg': 'Unable to locate service account',
+            'error': buff.read()
+        }, 500
     except:
+        traceback.print_exc()
         buff.seek(0,0)
         return {
             'msg': 'Unable to parse gcloud output',
@@ -276,13 +296,12 @@ def set_acl(namespace, name):
             [{
                 'email': account,
                 'accessLevel': 'WRITER',
-                'canShare': False,
-                'canCompute': False
             }]
         )
         try:
             data = response.json()
         except:
+            traceback.print_exc()
             return {
                 'failed': True,
                 'reason': 'firecloud'
@@ -294,11 +313,13 @@ def set_acl(namespace, name):
                     'reason': 'registration'
                 }, 200
             elif 'usersUpdated' not in data or account not in {acct['email'] for acct in data['usersUpdated']}:
+                print(data)
                 return {
                     'failed': True,
                     'reason': 'firecloud'
                 }, 200
         else:
+            print(data)
             return {
                 'failed': True,
                 'reason': 'firecloud'
@@ -310,22 +331,34 @@ def set_acl(namespace, name):
         'service_account': True
     }, 200
 
+@cached(60)
+def _get_entitites_df(namespace, name, etype):
+    ws = get_workspace_object(namespace, name)
+    return ws.operator.get_entities_df(etype)
+
 @cached(10)
-def get_entities(namespace, name):
-    result = get_workspace_object(namespace, name).operator.entity_types
-    return {
-        'failed': False,
-        'reason': 'success',
-        'entity_types': sorted([
-            {
-                'type': key,
-                'attributes': val['attributeNames'],
-                'n': val['count'],
-                'id': val['idName'],
-                # 'cache': get_cache(namespace, name, key)
-            } for key, val in result.items()
-        ], key=lambda x:x['type'])
-    }, 200
+def get_entities(namespace, name, etype, start=0, end=None):
+    # result = get_workspace_object(namespace, name).operator.entity_types
+    # return {
+    #     'failed': False,
+    #     'reason': 'success',
+    #     'entity_types': sorted([
+    #         {
+    #             'type': key,
+    #             'attributes': val['attributeNames'],
+    #             'n': val['count'],
+    #             'id': val['idName'],
+    #             # 'cache': get_cache(namespace, name, key)
+    #         } for key, val in result.items()
+    #     ], key=lambda x:x['type'])
+    # }, 200
+    df = _get_entitites_df(namespace, name, etype).reset_index()
+    buffer = io.StringIO()
+    if end is not None:
+        df.iloc[start:end].to_json(buffer, 'records')
+    else:
+        df.to_json(buffer, 'records')
+    return json.loads(buffer.getvalue())
 
 def get_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
@@ -337,24 +370,7 @@ def get_cache(namespace, name):
 
 def sync_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
-    was_live = ws.live
-    if not ws.live:
-        ws.sync()
-    ws.get_attributes()
-    for etype in ws.operator.entity_types:
-        ws.operator.get_entities_df(etype)
-    for config in ws.list_configs():
-        ws.operator.get_config_detail(config['namespace'], config['name'])
-        try:
-            ws.operator.get_wdl(
-                config['methodRepoMethod']['methodNamespace'],
-                config['methodRepoMethod']['methodName'],
-                config['methodRepoMethod']['methodVersion']
-            )
-        except NameError:
-            # WDL Doesnt exist
-            pass
-    ws.sync()
+    ws.populate_cache()
     ws.operator._webcache_ = True
     return get_cache(namespace, name)
 
@@ -386,12 +402,12 @@ def get_configs(namespace, name):
     return ws.list_configs()
 
 @cached(20)
-def list_submissions(namespace, name):
+def list_submissions(namespace, name, cache):
     from ..lapdog import timestamp_format
     ws = get_workspace_object(namespace, name)
     return sorted(
         (
-            sub for sub in ws.list_submissions(lapdog_only=True)
+            sub for sub in ws.list_submissions(lapdog_only=True, cached=cache)
             if 'identifier' in sub
         ),
         key=lambda s:(
@@ -439,7 +455,7 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
             'invalid_inputs': 'None'
         }, 200
 
-def execute(namespace, name, config, entity, expression="", etype=""):
+def execute(namespace, name, config, entity, expression="", etype="", memory=3, batch=250, query=100):
     ws = get_workspace_object(namespace, name)
     try:
         global_id, local_id, operation_id = ws.execute(
@@ -447,7 +463,10 @@ def execute(namespace, name, config, entity, expression="", etype=""):
             entity,
             expression if expression != "" else None,
             etype if etype != "" else None,
-            force=True
+            force=True,
+            memory=memory,
+            batch_limit=batch,
+            query_limit=query
         )
         return {
             'failed': False,
@@ -477,7 +496,11 @@ def decode_submission(submission_id):
 
 def get_submission(namespace, name, id):
     ws = get_workspace_object(namespace, name)
-    adapter = get_adapter(namespace, name, id)
+    try:
+        adapter = get_adapter(namespace, name, id)
+    except NoSuchSubmission:
+        traceback.print_exc()
+        return "No Such Submission", 404
     return {
         **ws.get_submission(id),
         **{
@@ -486,9 +509,17 @@ def get_submission(namespace, name, id):
                 'lapdog-executions',
                 id
             ),
-            'cost': adapter.cost()
         }
     }, 200
+
+def get_cost(namespace, name, id):
+    ws = get_workspace_object(namespace, name)
+    try:
+        adapter = get_adapter(namespace, name, id)
+    except NoSuchSubmission:
+        traceback.print_exc()
+        return "No Such Submission", 404
+    return adapter.cost()
 
 def abort_submission(namespace, name, id):
     adapter = get_adapter(namespace, name, id)
@@ -500,11 +531,13 @@ def upload_submission(namespace, name, id):
     try:
         stats = ws.complete_execution(id)
     except FileNotFoundError:
+        traceback.print_exc()
         return {
             'failed': True,
             'message': 'Job did not complete. It may have been aborted'
         }, 200
     except:
+        traceback.print_exc()
         return {
             'failed': True,
             'message': 'Exception: '+ traceback.format_exc()
@@ -549,7 +582,7 @@ def get_workflows(namespace, name, id):
 @cached(10)
 def get_workflow(namespace, name, id, workflow_id):
     adapter = get_adapter(namespace, name, id)
-    adapter.update()
+    adapter.update(5)
     # print(adapter.workflows)
     if workflow_id[:8] in adapter.workflows:
         # Return data from workflow
@@ -571,7 +604,8 @@ def get_workflow(namespace, name, id, workflow_id):
                     'task': call.task,
                     'gs_path': call.path,
                     'code': call.return_code,
-                    'idx': i
+                    'idx': i,
+                    'runtime': call.runtime
                 }
                 for i, call in enumerate(wf.calls)
             ],
@@ -598,7 +632,7 @@ def get_workflow(namespace, name, id, workflow_id):
             'entity': None
         }, 200
 
-@cached(30)
+# @cached(30)
 def read_logs(namespace, name, id, workflow_id, log, call):
     filename, suffix = {
         'stdout': ('stdout', '-stdout.log'),
@@ -646,14 +680,15 @@ def read_logs(namespace, name, id, workflow_id, log, call):
 def operation_status(operation_id):
     from ..adapters import get_operation_status
     # print("Getting status:", operation_id)
-    text =  get_operation_status(operation_id, False)
+    text =  get_operation_status(operation_id, False, 'yaml')
     # print(text[:256])
     return text, 200
 
 def cache_size():
     total = 0
-    for path in glob(cache_init()+'/*'):
-        total += os.path.getsize(path)
+    for path, _, files in os.walk(cache_init()):
+        for f in files:
+            total += os.path.getsize(os.path.join(path, f))
     return byteSize(total), 200
 
 @cached(120)
@@ -711,7 +746,11 @@ def get_config(namespace, name, config_namespace, config_name):
          config = ws.operator.get_config_detail(config_namespace, config_name)
     except:
         ws.sync()
-        return ("No such config", 404)
+        return (
+            {
+                'config': None,
+                'wdl': None
+            }, 200)
     try:
         data = getattr(fc, '__post')(
             '/api/inputsOutputs',
@@ -734,8 +773,12 @@ def get_config(namespace, name, config_namespace, config_name):
                 for param in data['outputs']
             }
         }
+    except KeyError:
+        traceback.print_exc()
+        print("The above error is likely caused by a missing WDL", file=sys.stderr)
+        io_types = None
     except:
-        traceback.princ_exc()
+        traceback.print_exc()
         io_types = None
     try:
         return {
@@ -752,7 +795,8 @@ def get_config(namespace, name, config_namespace, config_name):
         return {
             'config':config,
             'wdl': None
-        }, 404
+        }, 200
+    return "FAILED", 500
 
 def update_config(namespace, name, config):
     ws = get_workspace_object(namespace, name)
@@ -780,7 +824,8 @@ def upload_config(namespace, name, config_filepath, method_filepath=None):
     try:
         result = get_workspace_object(namespace, name).update_configuration(
             config,
-            method_filepath # Either it's a file-object or None
+            method_filepath, # Either it's a file-object or None
+            delete_old=False # UI never deletes old configurations
         )
         get_config.cache_clear()
         get_configs.cache_clear()

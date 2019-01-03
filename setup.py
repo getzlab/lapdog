@@ -1,7 +1,8 @@
 from setuptools import setup
+from lapdog import __version__
 setup(
     name = 'lapdog',
-    version = '0.7.2',
+    version = __version__,
     packages = [
         'lapdog',
         'lapdog.api',
@@ -9,7 +10,9 @@ setup(
     ],
     package_data={
         '':[
-            'wdl_pipeline.yaml',
+            'cromwell/wdl_pipeline.yaml',
+            'cromwell/LICENSE',
+            'cromwell/README.md',
             'vue/.babelrc',
             'vue/index.html',
             'vue/package.json',
@@ -17,12 +20,13 @@ setup(
             'vue/src/main.js',
             'vue/src/App.vue',
             'vue/src/Pages/*.vue',
-            'api/swagger/lapdog.yaml'
+            'api/swagger/lapdog.yaml',
+            'wdl_pipeline.yaml'
         ],
     },
-    description = 'A wrapper for FISS and dalmatian',
-    author = 'Broad Institute - Cancer Genome Computational Analysis',
-    author_email = 'gdac@broadinstitute.org',
+    description = 'A relaxed wrapper for FISS and dalmatian',
+    author = 'Aaron Graubert - Broad Institute - Cancer Genome Computational Analysis',
+    author_email = 'aarong@broadinstitute.org',
     long_description = 'A wrapper for FISS and dalmatian',
     entry_points = {
         'console_scripts': [
@@ -31,9 +35,9 @@ setup(
     },
     install_requires = [
         'firecloud-dalmatian',
-        'google-cloud-storage',
+        'google-cloud-storage>=1.9.0',
         'pyyaml',
-        'agutil',
+        'agutil>=4.0.0',
         'flask_cors',
         'crayons',
         'connexion',

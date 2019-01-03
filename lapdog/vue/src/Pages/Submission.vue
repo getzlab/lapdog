@@ -8,6 +8,19 @@ Other: error_outline
 -->
 <template lang="html">
   <div id="submission">
+    <div class="modal" id="abort-modal">
+      <div class="modal-content">
+        <h4>Abort Submission?</h4>
+      </div>
+      <div class="modal-footer">
+        <div class="row">
+          <div class="col s6 offset-s3">
+            <a class="modal-close red-text left" v-on:click="abort_sub">YES</a>
+            <a class="modal-close right">NO</a>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="modal" id="operation-modal">
       <div class="modal-content">
         <div class="containe">
@@ -93,6 +106,14 @@ Other: error_outline
                       </a>
                     </div>
                   </div>
+                  <div class="row">
+                    <div class="col s2">
+                      Runtime:
+                    </div>
+                    <div class="col s10">
+                      {{call.runtime > 1 ? "" + Math.floor(call.runtime) + " Hours" : "" + Math.floor(call.runtime*60) + " Minutes"}}
+                    </div>
+                  </div>
                   <div class="row" v-if="call.message && call.message.length">
                     <div class="col s2">
                       Last Message:
@@ -120,7 +141,7 @@ Other: error_outline
                       <a href="#" v-on:click.prevent="get_log('stderr', call.idx)">Standard Error</a>
                     </div>
                     <div class="col s3">
-                      <a href="#" v-on:click.prevent="get_log('google', call.idx)">Genomics</a>
+                      <a href="#" v-on:click.prevent="get_log('google', call.idx)">Cromwell</a>
                     </div>
                   </div>
                 </div>
@@ -192,14 +213,17 @@ Other: error_outline
         <div class="col s3">
           {{submission.submissionDate}}
         </div>
+        <div class="col s5" v-if="cost">
+          (Running for {{Math.round(cost.clock_h * 10) / 10}} hours)
+        </div>
       </div>
       <div class="row">
         <div class="col s2">
           Configuration:
         </div>
         <div class="col s4">
-          <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace} }">
-            {{submission.methodConfigurationName}}
+          <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace, target_namespace: submission.methodConfigurationNamespace, target_name: submission.methodConfigurationName} }">
+            {{submission.methodConfigurationNamespace+'/'+submission.methodConfigurationName}}
           </router-link>
         </div>
         <div class="col s1">
@@ -224,8 +248,8 @@ Other: error_outline
       <div class="col s1">
         Cost:
       </div>
-      <div class="col s3" v-if="submission">
-        ${{submission.cost.est_cost}}
+      <div class="col s3" v-if="cost">
+        ${{cost.est_cost}}
       </div>
       <div class="col s3" v-else>
         Loading...
@@ -245,17 +269,17 @@ Other: error_outline
         <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
       </div>
       <div class="col s6" v-if="submission.status == 'Running'">
-        <a class='btn red darken-3' v-on:click.prevent="abort_sub">Abort Submission</a>
+        <button class='btn red darken-3 modal-trigger' data-target="abort-modal">Abort Submission</button>
       </div>
     </div>
     <div class="row">
-      <div v-if="!display_cromwell" class="col s12" v-on:click.prevent="read_cromwell">
+      <div v-if="!display_cromwell" class="col s12 expandable" v-on:click.prevent="read_cromwell">
         <span>
           <i class="material-icons">keyboard_arrow_right</i>
           Cromwell Log
         </span>
       </div>
-      <div v-else class="col s12" v-on:click.prevent="display_cromwell = false">
+      <div v-else class="col s12 expandable" v-on:click.prevent="display_cromwell = false">
         <span>
           <i class="material-icons">keyboard_arrow_down</i>
           Cromwell Log
@@ -297,7 +321,7 @@ Other: error_outline
           </div>
         </li>
       </ul> -->
-      <table>
+      <table class="highlight">
         <thead>
           <tr>
             <th v-on:click="sort_workflows('entity')">
@@ -307,7 +331,7 @@ Other: error_outline
               <i v-else-if="sort_key == 'entity'" class="material-icons tiny">
                 keyboard_arrow_up
               </i>
-              Entity
+              <span class="expandable">Entity</span>
             </th>
             <th v-on:click="sort_workflows('status')">
               <i v-if="sort_key == 'status' && !reversed" class="material-icons tiny">
@@ -316,7 +340,7 @@ Other: error_outline
               <i v-else-if="sort_key == 'status'" class="material-icons tiny">
                 keyboard_arrow_up
               </i>
-              Status
+              <span class="expandable">Status</span>
             </th>
             <th v-on:click="sort_workflows('id')">
               <i v-if="sort_key == 'id' && !reversed" class="material-icons tiny">
@@ -325,7 +349,7 @@ Other: error_outline
               <i v-else-if="sort_key == 'id'" class="material-icons tiny">
                 keyboard_arrow_up
               </i>
-              Workflow ID
+              <span class="expandable">Workflow ID</span>
             </th>
           </tr>
         </thead>
@@ -367,7 +391,8 @@ export default {
       active_operation: null,
       active_log: null,
       sort_key: null,
-      reversed: false
+      reversed: false,
+      cost: null
     }
   },
   computed: {
@@ -390,6 +415,7 @@ export default {
   },
   methods: {
     init(namespace, workspace, sid) {
+      window.$('.modal').modal();
       this.submission = null;
       this.workflows = null;
       this.display_cromwell = false;
@@ -399,6 +425,7 @@ export default {
       this.active_log = null;
       this.sort_key = null;
       this.reversed = false;
+      this.cost = null;
       axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid)
         .then(response => {
           console.log("Got submission");
@@ -411,16 +438,43 @@ export default {
               this.workflows = response.data
               setTimeout(() => {
                 window.$('.collapsible').collapsible();
+                window.$('#abort-modal').modal();
               }, 100);
             })
             .catch(error => {
               console.error("Failed");
               console.error(error);
+              window.materialize.toast({
+                html: "Unable to load workflows"
+              })
             })
+            axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/cost')
+              .then(response => {
+                console.log("Got cost");
+                console.log(response.data);
+                this.cost = response.data;
+              })
+              .catch(error => {
+                console.error("Failed");
+                console.error(error);
+                window.materialize.toast({
+                  html: "Unable to load cost estimate"
+                })
+              })
         })
         .catch(response => {
           console.error("Failed");
           console.error(response)
+          console.log(response.response.data);
+          if (_.has(response.response, 'data') && response.response.data == "No Such Submission")
+            window.materialize.toast({
+              html: "Submission not found",
+              displayLength: 10000
+            })
+          else window.materialize.toast({
+            html: "Unable to load the submission: "+response.response.data.detail,
+            displayLength: 10000
+          })
         })
     },
     sort_workflows(key) {
@@ -532,7 +586,7 @@ export default {
     upload() {
       window.materialize.toast({
         html: "Uploading results to Firecloud...",
-        displayLength: 2000,
+        displayLength: 5000,
       });
       axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
         .then(response => {
@@ -578,5 +632,12 @@ export default {
     font-family: monospace;
     white-space: pre-wrap;
     font-size: 90%;
+  }
+
+  table tr td {
+    white-space: nowrap;
+    text-overflow:ellipsis;
+    overflow: hidden;
+    max-width: 10px;
   }
 </style>

@@ -167,15 +167,24 @@ class Operator(object):
         self.fail()
 
     def _upload_config(self, config):
-        with capture() as (stdout, stderr):
-            dog.WorkspaceManager.update_config(
-                self.workspace,
-                config
-            )
-            stdout.seek(0,0)
-            stderr.seek(0,0)
-            text = stdout.read() + stderr.read()
-        return 'Successfully' in text and 'configuration' in text and config['name'] in text
+        configs = self.configs
+        if (config['namespace']+'/'+config['name']) not in ['%s/%s'%(m['namespace'], m['name']) for m in configs]:
+            # configuration doesn't exist -> name, namespace specified in json_body
+            r = api.create_workspace_config(self.workspace.namespace, self.workspace.workspace, config)
+            if r.status_code==201:
+                print('Successfully added configuration: {}'.format(config['name']))
+                return True
+            else:
+                print(r.text)
+        else:
+            r = api.update_workspace_config(self.workspace.namespace, self.workspace.workspace,
+                    config['namespace'], config['name'], config)
+            if r.status_code==200:
+                print('Successfully updated configuration {}/{}'.format(config['namespace'], config['name']))
+                return True
+            else:
+                print(r.text)
+        return False
 
     def add_config(self, config):
         key = 'config:%s/%s' % (config['namespace'], config['name'])
@@ -236,18 +245,18 @@ class Operator(object):
             return self.cache[key]
         self.fail()
 
-    def upload_wdl(self, namespace, name, synopsis, path):
+    def upload_wdl(self, namespace, name, synopsis, path, delete=True):
         key = 'wdl:%s/%s' % (namespace, name)
         with open(path) as r:
             self.cache[key] = r.read()
         if self.live:
             try:
-                dog.update_method(namespace, name, synopsis, path)
+                dog.update_method(namespace, name, synopsis, path, delete_old=delete)
             except ValueError:
                 self.go_offline()
                 self.pending.append((
                     key,
-                    partial(dog.update_method, namespace, name, synopsis, path),
+                    partial(dog.update_method, namespace, name, synopsis, path, delete_old=delete),
                     partial(dog.get_wdl, namespace, name)
                 ))
             except AssertionError:
@@ -260,7 +269,7 @@ class Operator(object):
         else:
             self.pending.append((
                 key,
-                partial(dog.update_method, namespace, name, synopsis, path),
+                partial(dog.update_method, namespace, name, synopsis, path, delete_old=delete),
                 partial(dog.get_wdl, namespace, name)
             ))
 
@@ -602,6 +611,6 @@ class Operator(object):
             )
         if 'workspace' in expression:
             evaluator.add_attributes(
-                this.attributes
+                self.attributes
             )
         return evaluator(etype, entity, expression)

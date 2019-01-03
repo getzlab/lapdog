@@ -3,6 +3,7 @@ import time
 import shutil
 import time
 from functools import lru_cache, partial, wraps
+from hashlib import md5
 
 CACHES = {}
 
@@ -36,6 +37,21 @@ def cache_type(key):
         return func
     return wrapper
 
+def path_eval(func):
+
+    def call(*args, **kwargs):
+        path = func(*args, **kwargs)
+        key = md5(path.encode()).hexdigest()
+        dirpath = os.path.join(
+            cache_init(),
+            key[:2],
+            key[2:4]
+        )
+        os.makedirs(dirpath, exist_ok=True)
+        return os.path.join(dirpath, path)
+
+    return call
+
 def cache_init():
     if 'LAPDOG_CACHE' in os.environ:
         path = os.environ['LAPDOG_CACHE']
@@ -50,43 +66,33 @@ def cache_init():
     return path
 
 @cache_type('submission')
+@path_eval
 def _submission_type(namespace, workspace, submission_id, dtype, ext):
-    return os.path.join(
-        cache_init(),
-        'submissions.%s.%s.%s.%s%s' % (
-            namespace, workspace, submission_id, dtype, ext
-        )
+    return 'submissions.%s.%s.%s.%s%s' % (
+        namespace, workspace, submission_id, dtype, ext
     )
 
 @cache_type('workflow')
+@path_eval
 def _workflow_type(submission_id, workflow_id, dtype, ext):
-    return os.path.join(
-        cache_init(),
-        'workflows.%s.%s.%s%s' % (
-            submission_id, workflow_id, dtype, ext
-        )
+    return 'workflows.%s.%s.%s%s' % (
+        submission_id, workflow_id, dtype, ext
     )
 
+@path_eval
 def _default_type(*args, **kwargs):
-    return os.path.join(
-        cache_init(),
-        'cachedata.kw.' + '.'.join(key+'-'+str(val) for key, val in kwargs.items()) + '.pos.' + '.'.join(args)
-    )
+    return 'cachedata.kw.' + '.'.join(key+'-'+str(val) for key, val in kwargs.items()) + '.pos.' + '.'.join(args)
 
 @cache_type('operation')
+@path_eval
 def _operation_type(operation_id, dtype, ext):
-    return os.path.join(
-        cache_init(),
-        'operations.%s' % operation_id.replace('operations/', '')
-    )
+    return 'operations.%s' % operation_id.replace('operations/', '')
 
 @cache_type('submission-json')
+@path_eval
 def _json_type(bucket_id, submission_id, dtype, ext):
-    return os.path.join(
-        cache_init(),
-        'submission-json.%s.%s.%s%s' % (
-            bucket_id, submission_id, dtype, ext
-        )
+    return 'submission-json.%s.%s.%s%s' % (
+        bucket_id, submission_id, dtype, ext
     )
 
 def cache_path(key):
