@@ -109,7 +109,6 @@ def list_workspaces():
         return sorted([
             {
                 'accessLevel': workspace['accessLevel'],
-                'owners': workspace['owners'],
                 'public': workspace['public'],
                 'namespace': workspace['workspace']['namespace'],
                 'name': workspace['workspace']['name'],
@@ -126,7 +125,6 @@ def list_workspaces():
                 workspace = get_workspace_object(ns, ws).operator.firecloud_workspace
                 workspace_data.append({
                     'accessLevel': workspace['accessLevel'],
-                    'owners': workspace['owners'],
                     'public': False,
                     'namespace': ns,
                     'name': ws,
