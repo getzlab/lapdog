@@ -25,7 +25,7 @@ id_rsa = os.path.join(
 def ld_project_for_namespace(namespace):
     # TEMP
     warnings.warn("Project for namespace returns constant")
-    return 'broad-cga-aarong-gtex'
+    return 'broad-cga-aarong-gtex' # Note: we can
     prefix = ('ld-'+namespace)[:25]
     suffix = md5(prefix.encode()).hexdigest().lower()
     return prefix + '-' + suffix[:4]
@@ -62,16 +62,15 @@ def get_access_token(account=None):
     return token
 
 def get_token_expired(token):
-    expiry = int(cache_fetch('token', 'expiry', token=md5(token.encode()).hexdigest()))
-    if not expiry:
+    expiry = cache_fetch('token', 'expiry', token=md5(token.encode()).hexdigest())
+    if expiry is None:
         try:
             data = requests.get('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token='+token).json()
             expiry = int(time.time() + int(data['expires_in']))
             cache_write(str(expiry), 'token', 'expiry', token=md5(token.encode()).hexdigest())
         except:
             return True
-    print(expiry < time.time(), expiry - time.time())
-    return expiry < time.time()
+    return int(expiry) < time.time()
 
 class Gateway(object):
     """Acts as an interface between local lapdog and any resources behind the project's API"""

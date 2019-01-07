@@ -1,7 +1,7 @@
 <template>
   <div id="home">
     <div class="row">
-      <div class="col s6">
+      <div class="col s6 red-text">
         <h3>
           Firecloud Status
         </h3>
