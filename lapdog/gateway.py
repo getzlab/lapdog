@@ -35,7 +35,7 @@ def ld_acct_in_project(account, ld_project):
     warnings.warn("Account for project returns constant")
     return 'lapdog-worker@broad-cga-aarong-gtex.iam.gserviceaccount.com'
     # Use a regex replace. can only contain lowercase alphanumeric characters and hyphens
-    return 'lapdog-'+account.split('@')[0] + '@' + ld_project + '.iam.gserviceaccount.com'
+    return 'lapdog-'+ md5(account.encode()).hexdigest() + '@' + ld_project + '.iam.gserviceaccount.com'
 
 @cached(60, 1)
 def get_account():
