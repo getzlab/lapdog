@@ -42,6 +42,7 @@ COPY cromwell_driver.py \
      wdl_outputs_util.py \
      wdl_runner.py \
      wdl_runner.sh \
+     logger.py \
      /wdl_runner/
 RUN chmod u+x /wdl_runner/wdl_runner.sh
 

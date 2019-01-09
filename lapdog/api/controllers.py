@@ -61,11 +61,11 @@ def version():
 def get_adapter(namespace, workspace, submission):
     return get_workspace_object(namespace, workspace).get_adapter(submission)
 
-@cached(60)
-def _get_lines(namespace, workspace, submission):
-    adapter = get_adapter(namespace, workspace, submission)
-    reader = adapter.read_cromwell()
-    return reader, []
+# @cached(60)
+# def _get_lines(namespace, workspace, submission):
+#     adapter = get_adapter(namespace, workspace, submission)
+#     reader = adapter.read_cromwell()
+#     return reader, []
 
 def get_lines(namespace, workspace, submission):
     # from ..adapters import do_select
@@ -75,7 +75,8 @@ def get_lines(namespace, workspace, submission):
     #     lines.append(reader.readline().decode().strip())
     #     print("READLINE", lines[-1])
     # return lines
-    reader, lines = _get_lines(namespace, workspace, submission)
+    reader = get_adapter(namespace, workspace, submission).read_cromwell()
+    lines = []
     from select import select
     try:
         if len(select([reader], [], [], 10)[0]):

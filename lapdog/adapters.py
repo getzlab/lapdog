@@ -27,6 +27,12 @@ def sleep_until(dt):
     if sleep_time > 0:
         time.sleep(sleep_time)
 
+def parse_time(timestamp):
+    return datetime.datetime.strptime(
+        (timestamp.split('.')[0]+'Z').replace('ZZ', 'Z'),
+        timestamp_format
+    )
+
 # individual VMs can be tracked viua a combination of labels and workflow meta
 # Workflows are reported by the cromwell_driver output and then VMs can be tracked
 # A combination of the Workflow label and the call- label should be able to uniquely identify tasks
@@ -147,16 +153,10 @@ class Call(object):
         try:
             data = get_operation_status(self.operation)
             delta = (
-                datetime.datetime.strptime(
-                    (data['metadata']['endTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
-                    timestamp_format
-                )
+                parse_time(data['metadata']['endTime'])
                 if 'endTime' in data['metadata']
                 else datetime.datetime.utcnow()
-            ) - datetime.datetime.strptime(
-                (data['metadata']['startTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
-                timestamp_format
-            )
+            ) - parse_time(data['metadata']['startTime'])
             return delta.total_seconds() / 3600
         except:
             traceback.print_exc()
@@ -344,14 +344,7 @@ class SubmissionAdapter(object):
 
                                         delta = (
                                             # Stupid horrible ugly timestampt
-                                            datetime.datetime.strptime(
-                                                (call['end'].split('.')[0].split('.')[0]+'Z').replace('ZZ', 'Z'),
-                                                timestamp_format
-                                            )
-                                            - datetime.datetime.strptime(
-                                                (call['start'].split('.')[0].split('.')[0]+'Z').replace('ZZ', 'Z'),
-                                                timestamp_format
-                                        )
+                                            parse_time(call['end']) - parse_time(call['start'])
                                         )
                                         delta = delta.total_seconds() / 3600
                                         if delta > maxTime:
@@ -401,16 +394,10 @@ class SubmissionAdapter(object):
                             try:
                                 call = get_operation_status(call.operation)
                                 delta = (
-                                    datetime.datetime.strptime(
-                                        (call['metadata']['endTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
-                                        timestamp_format
-                                    )
+                                    parse_time(call['metadata']['endTime'])
                                     if 'endTime' in call['metadata']
                                     else datetime.datetime.utcnow()
-                                ) - datetime.datetime.strptime(
-                                    (call['metadata']['startTime'].split('.')[0]+'Z').replace('ZZ', 'Z'), # stupid and ugly
-                                    timestamp_format
-                                )
+                                ) - parse_time(call['metadata']['startTime'])
                                 delta = delta.total_seconds() / 3600
                                 if delta > maxTime:
                                     maxTime = delta
@@ -430,15 +417,9 @@ class SubmissionAdapter(object):
             status = self.status
             if 'metadata' in status and 'startTime' in status['metadata']:
                 delta = (
-                    datetime.datetime.strptime(
-                        status['metadata']['endTime'],
-                        timestamp_format
-                    ) if 'endTime' in status['metadata']
+                    parse_time(status['metadata']['endTime']) if 'endTime' in status['metadata']
                     else datetime.datetime.utcnow()
-                ) - datetime.datetime.strptime(
-                    status['metadata']['startTime'],
-                    timestamp_format
-                )
+                ) - parse_time(status['metadata']['startTime'])
                 delta = delta.total_seconds() / 3600
                 if delta > maxTime:
                     maxTime = delta
@@ -461,7 +442,7 @@ class SubmissionAdapter(object):
                 'est_cost': 0
             }
 
-
+    @cached(90)
     def update(self, timeout=-1):
         ctime = time.monotonic()
         try:
@@ -470,12 +451,13 @@ class SubmissionAdapter(object):
                     # We've been waiting a while already
                     # no reason to re-update, if another thread just spent a while
                     return
-                if self._internal_reader is None:
-                    self._internal_reader = self.read_cromwell(_do_wait=self.live)
+                # if self._internal_reader is None:
+                #     self._internal_reader = self.read_cromwell(_do_wait=self.live)
                 event_stream = []
                 message = ''
-                while len(do_select(self._internal_reader, 1)[0]):
-                    message = self._internal_reader.readline().decode().strip()
+                reader = self.read_cromwell(_do_wait=self.live)
+                while len(do_select(reader, 1)[0]):
+                    message = reader.readline().decode().strip()
                     matcher = Recall()
                     if matcher.apply(workflow_dispatch_pattern.search(message)):
                         ids = [
@@ -644,22 +626,10 @@ class SubmissionAdapter(object):
             time.sleep(1)
         if _do_wait:
             sleep_until(
-                datetime.datetime.strptime(
-                    status['metadata']['startTime'],
-                    timestamp_format
-                )
+                parse_time(status['metadata']['startTime'])
                 + utc_offset
-                + datetime.timedelta(seconds=45)
+                + datetime.timedelta(seconds=120)
             )
-        if not ('done' in status and status['done']):
-            cmd = (
-                "gcloud compute ssh --zone {zone} {instance_name} -- "
-                "'docker logs -f $(docker ps -q)'"
-            ).format(
-                zone=status['metadata']['runtimeMetadata']['computeEngine']['zone'],
-                instance_name=status['metadata']['runtimeMetadata']['computeEngine']['instanceName']
-            )
-            return CommandReader(cmd, shell=True, executable='/bin/bash')
         stdout_blob = getblob(os.path.join(
             'gs://'+self.bucket,
             'lapdog-executions',
@@ -669,7 +639,6 @@ class SubmissionAdapter(object):
         ))
         if stdout_blob.exists():
             log_text = stdout_blob.download_as_string()
-            cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
             return BytesIO(log_text)
         stdout_blob = getblob(os.path.join(
             'gs://'+self.bucket,
@@ -682,8 +651,8 @@ class SubmissionAdapter(object):
             log_text = stdout_blob.download_as_string()
             cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
             return BytesIO(log_text)
-        # If we get here, the submission is done, but there were no logs
-        if self.data['status'] != 'Error':
+        if self.data['status'] != 'Error' and 'done' in status and status['done']:
+            # If we get here, the submission is done, but there were no logs
             self.data['status'] = 'Error'
             cache_write(json.dumps(self.data), 'submission-json', self.bucket, self.submission)
             gs_path = os.path.join(
