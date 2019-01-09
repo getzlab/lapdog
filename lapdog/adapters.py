@@ -296,6 +296,8 @@ class SubmissionAdapter(object):
             except FileNotFoundError as e:
                 raise NoSuchSubmission from e
         self.data = json.loads(self.data)
+        if 'operation' not in self.data:
+            print("<GATEWAY DEV> Delete submission", submission)
         self.workspace = self.data['workspace']
         self.namespace = self.data['namespace']
         self.identifier = self.data['identifier']
@@ -658,6 +660,17 @@ class SubmissionAdapter(object):
                 instance_name=status['metadata']['runtimeMetadata']['computeEngine']['instanceName']
             )
             return CommandReader(cmd, shell=True, executable='/bin/bash')
+        stdout_blob = getblob(os.path.join(
+            'gs://'+self.bucket,
+            'lapdog-executions',
+            self.submission,
+            'logs',
+            'pipeline-stdout.log'
+        ))
+        if stdout_blob.exists():
+            log_text = stdout_blob.download_as_string()
+            cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
+            return BytesIO(log_text)
         stdout_blob = getblob(os.path.join(
             'gs://'+self.bucket,
             'lapdog-executions',

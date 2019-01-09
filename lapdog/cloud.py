@@ -41,7 +41,11 @@ def cors(*methods):
                 return ('Not allowed', 405, {'Allow': ', '.join(methods)})
             elif 'Origin' in request.headers and not request.headers['Origin'].startswith('http://localhost'):
                 return ('Forbidden', 403)
-            return func(request)
+            result = list(func(request))
+            print("RESULT", result)
+            if isinstance(result[0], dict):
+                result[0] = json.dumps(result[0])
+            return tuple(result)
         return call
     return wrapper
 
@@ -124,11 +128,19 @@ def create_submission(request):
 
     # 4) Submit pipelines request
 
+    if 'memory' in data:
+        if data['memory'] > 13312:
+            mtype = 'custom-2-%d-ext' % data['memory']
+        else:
+            mtype = 'custom-2-%d' % data['memory']
+    else:
+        mtype = 'n1-standard-1'
+
     pipeline = {
         'pipeline': {
             'actions': [
                 {
-                    'imageUri': 'gcr.io/broad-cga-aarong-gtex/wdl_runner:v0.9.0',
+                    'imageUri': 'gcr.io/broad-cga-aarong-gtex/wdl_runner:gateway',
                     'commands': [
                         '/wdl_runner/wdl_runner.sh'
                     ],
@@ -155,7 +167,7 @@ def create_submission(request):
                             bucket=data['bucket'],
                             submission_id=data['submission_id']
                         ),
-                        'LAPDOG_LOG_PATH': "gs://{bucket}/lapdog-executions/{submission_id}/logs/".format(
+                        'LAPDOG_LOG_PATH': "gs://{bucket}/lapdog-executions/{submission_id}/logs".format(
                             bucket=data['bucket'],
                             submission_id=data['submission_id']
                         ),
@@ -166,7 +178,7 @@ def create_submission(request):
                 'projectId': os.environ.get("GCP_PROJECT"),
                 'regions': ['us-central1'], # FIXME
                 'virtualMachine': {
-                    'machineType': 'n1-standard-1' or 'custom-2-{memory}' or 'custom-2-{memory}-ext', # FIXME
+                    'machineType': mtype,
                     'preemptible': False,
                     'labels': {
                         'lapdog-execution-role': 'cromwell',
@@ -185,12 +197,14 @@ def create_submission(request):
             },
         }
     }
+    print(pipeline)
     response = requests.post(
-        'https://content-genomics.googleapis.com/v2alpha1/pipelines:run?alt=json',
+        'https://genomics.googleapis.com/v2alpha1/pipelines:run',
         headers={
-            'Authorization': 'Bearer ' + token
+            'Authorization': 'Bearer ' + data['token'],
+            'Content-Type': 'application/json'
         },
-        data=pipeline
+        json=pipeline
     )
     try:
         if response.status_code == 200:
@@ -215,7 +229,7 @@ def get_token_info(token):
 def ld_acct_in_project(account, ld_project=None):
     if ld_project is None:
         ld_project = os.environ.get('GCP_PROJECT')
-    return 'lapdog-'+ md5(account.encode()).hexdigest() + '@' + ld_project + '.iam.gserviceaccount.com'
+    return ('lapdog-'+ md5(account.encode()).hexdigest())[:30] + '@' + ld_project + '.iam.gserviceaccount.com'
 
 def validate_permissions(token, bucket):
     try:

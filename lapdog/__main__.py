@@ -303,15 +303,15 @@ def main():
     )
 
     service_account_parser = subparsers.add_parser(
-        'init',
-        help="One-time setup for the lapdog execution backend",
+        'initialize-project',
+        help="One-time initialization for the lapdog execution backend",
         description="One-time setup for the lapdog execution backend"
     )
     service_account_parser.set_defaults(func=cmd_service_account)
-    service_account_parser.add_argument(
-        'email',
-        help="Your firecloud account email"
-    )
+    # service_account_parser.add_argument(
+    #     'email',
+    #     help="Your firecloud account email"
+    # )
 
     args = parser.parse_args()
     try:
@@ -526,99 +526,164 @@ def cmd_finish(args):
     lapdog.complete_execution(args.submission_id)
 
 def cmd_service_account(args):
-    from .api.controllers import service_account
-    tempdir = tempfile.TemporaryDirectory()
-    print("Checking the status of the Genomics API")
-    cmd = "gcloud services list --enabled"
-    print(cmd)
-    proc = subprocess.run(
-        cmd,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    print("Genomics API Status:  ", end='')
-    if proc.returncode == 1 and 'permission' in proc.stderr.decode():
-        print(crayons.red("ERROR", bold=True))
-        sys.exit("You do not have sufficient permissions to check the Genomics API")
-    elif proc.returncode != 0:
-        print(crayons.red("ERROR", bold=True))
-        print(proc.stderr.decode())
-        sys.exit("Unknown failure")
-    df = pd.read_fwf(io.StringIO(proc.stdout.decode()))
-    if 'NAME' in df.columns and 'genomics.googleapis.com' in df['NAME'].values:
-        print(crayons.green("ENABLED"))
-    else:
-        print(crayons.yellow("DISABLED", bold=True))
-        print("Enabling the Genomics API")
-        cmd = "gcloud services enable genomics.googleapis.com"
-        print(cmd)
-        proc = subprocess.run(
-            cmd,
-            shell=True,
-            executable='/bin/bash'
-        )
-        print("Genomics API Status: ", end='')
-        if proc.returncode != 0:
-            print(crayons.red("ERROR", bold=True))
-            sys.exit("Unable to enable Genomics API")
-        else:
-            print(crayons.green("ENABLED"))
-    print("Detecting GCloud service account")
-    acct, code = service_account()
-    print("Service Account:  ", end='')
-    if code != 200:
-        print(crayons.red("ERROR", bold=True))
-        print(acct['error'])
-        sys.exit("Unable to check the current service account")
-    print(crayons.green(acct))
-    print("Checking Service Account Registration")
-    response = getattr(lapdog.fc, '__get')('/api/proxyGroup/%s'%acct)
-    print("Registration Status:  ", end='')
-    if response.status_code == 404:
-        print(crayons.yellow("UNREGISTERED", bold=True))
-        print("Must register service account with Firecloud")
-        print("Issuing service account token")
-        cmd = "gcloud iam service-accounts keys create --iam-account {} {}".format(
-            acct,
-            os.path.join(tempdir.name, 'key.json')
-        )
-        print(cmd)
-        subprocess.check_call(cmd, shell=True, executable='/bin/bash')
-        print("Registering service account with Firecloud")
-        import requests
-        from oauth2client.service_account import ServiceAccountCredentials
-        scopes = ['https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
-        credentials = ServiceAccountCredentials.from_json_keyfile_name(os.path.join(tempdir.name, 'key.json'), scopes=scopes)
-        headers = {"Authorization": "bearer " + credentials.get_access_token().access_token}
-        headers["User-Agent"] = lapdog.fc.FISS_USER_AGENT
-        profile_json = {"firstName":"None", "lastName": "None", "title":"None", "contactEmail":args.email,
-                                   "institute":"None", "institutionalProgram": "None", "programLocationCity": "None", "programLocationState": "None",
-                                   "programLocationCountry": "None", "pi": "None", "nonProfitStatus": "false"}
-        request = requests.post("https://api.firecloud.org/register/profile", headers=headers, json=profile_json)
-        print("Registration Status:  ", end='')
-        if request.status_code == 200:
-            print(crayons.green("REGISTERED"))
-        else:
-            print(crayons.red("ERROR", bold=True))
-            try:
-                print(request.json()['message'])
-            except:
-                print(request.text)
-            sys.exit("Unable to register account")
-    elif response.status_code >= 400:
-        print(crayons.red("ERROR", bold=True))
-        print(response.text)
-        sys.exit("Unable to check account registration status")
-    else:
-        print(crayons.green("REGISTERED"))
-    print("Lapdog Initialized")
+    print("Lapdog Engine Initialization")
     print(
-        "Caveat: To enable lapdog execution support on a workspace, you must grant",
-        crayons.black("WRITER", bold=True),
-        "access to",
-        crayons.black(acct, bold=True)
+        crayons.yellow("WARNING:", bold=True),
+        "This runs one-time setup for an entire Firecloud",
+        crayons.black("Namespace", bold=True)
     )
+    print("This should be considered an equivalent action to creating a Firecloud Billing Project")
+    print("You must be an owner of the Firecloud Billing Project and a Billing Account User for the underlying Google Billing Account")
+    print("Press Enter to continue, or Ctrl+C to abort")
+    input()
+    print(
+        crayons.yellow("WARNING:", bold=True),
+        "Please read all prompts carefully as incorrect information can cause a corrupt Lapdog Engine for the Namespace"
+    )
+    print()
+    namespace = input("Enter the Firecloud Namespace: ")
+    namespace_c = input("Confirm the Firecloud Namespace: ")
+    billing = input("Enter the Google Billing Account ID: ")
+    acct = input("Enter your Firecloud/GCP Email: ")
+    if namespace != namespace_c:
+        print(
+            crayons.red("Error:", bold=True),
+            "Namespace does not match"
+        )
+        sys.exit("%s != %s"  %(namespace, namespace_c))
+    from lapdog.gateway import get_account, get_access_token, get_token_info
+    acct_c = get_account()
+    if acct != acct_c:
+        print(
+            crayons.red("Error:", bold=True),
+            "The provided account (%s) does not match the currently logged in account (%s)" % (
+                acct,
+                acct_c
+            )
+        )
+        sys.exit("Please run `gcloud auth login` followed by `gcloud config set account %s`" % acct)
+    info = get_token_info(get_access_token())
+    if info['email'] != acct:
+        print(
+            crayons.red("Error:", bold=True),
+            "The provided account (%s) does not match the current application-default credentials (%s)" % (
+                acct,
+                info['email']
+            )
+        )
+        sys.exit("Please run `gcloud auth application-default login`")
+    from lapdog.gateway import ld_project_for_namespace
+    print("==========================")
+    print("Ready to Initialize")
+    print("1) Create Google Project %s" % ld_project_for_namespace(namespace))
+    print("    - This project will contain Lapdog Services and Resources to execute jobs in the %s namespace" % namespace)
+    print("2) Link Project", ld_project_for_namespace(namespace), "to Google Billing Project", billing)
+    print("    - All charges for Lapdog will be billed to this account")
+    print("    - Charges include costs for running jobs, storing Lapdog metadata, and operating the Lapdog Engine")
+    print("    - Data storage costs will be billed through the associated Firecloud Workspaces")
+    print("3) Enable Execution Engine")
+    print("    - Store initial metadata in the project")
+    print("    - Upload and activate Google Cloud Functions to operate the Lapdog Engine")
+    print("    - Create Lapdog Service Accounts and IAM Roles")
+    print("4) Grant Admin Access")
+    print("    - Your account will have administrator access to the project")
+    print("    - You must grant access for other users to use this Engine")
+    print()
+    print("Press Enter to Start, or Ctrl+C to abort")
+    input()
+    # from .api.controllers import service_account
+    # tempdir = tempfile.TemporaryDirectory()
+    # print("Checking the status of the Genomics API")
+    # cmd = "gcloud services list --enabled"
+    # print(cmd)
+    # proc = subprocess.run(
+    #     cmd,
+    #     shell=True,
+    #     stdout=subprocess.PIPE,
+    #     stderr=subprocess.PIPE
+    # )
+    # print("Genomics API Status:  ", end='')
+    # if proc.returncode == 1 and 'permission' in proc.stderr.decode():
+    #     print(crayons.red("ERROR", bold=True))
+    #     sys.exit("You do not have sufficient permissions to check the Genomics API")
+    # elif proc.returncode != 0:
+    #     print(crayons.red("ERROR", bold=True))
+    #     print(proc.stderr.decode())
+    #     sys.exit("Unknown failure")
+    # df = pd.read_fwf(io.StringIO(proc.stdout.decode()))
+    # if 'NAME' in df.columns and 'genomics.googleapis.com' in df['NAME'].values:
+    #     print(crayons.green("ENABLED"))
+    # else:
+    #     print(crayons.yellow("DISABLED", bold=True))
+    #     print("Enabling the Genomics API")
+    #     cmd = "gcloud services enable genomics.googleapis.com"
+    #     print(cmd)
+    #     proc = subprocess.run(
+    #         cmd,
+    #         shell=True,
+    #         executable='/bin/bash'
+    #     )
+    #     print("Genomics API Status: ", end='')
+    #     if proc.returncode != 0:
+    #         print(crayons.red("ERROR", bold=True))
+    #         sys.exit("Unable to enable Genomics API")
+    #     else:
+    #         print(crayons.green("ENABLED"))
+    # print("Detecting GCloud service account")
+    # acct, code = service_account()
+    # print("Service Account:  ", end='')
+    # if code != 200:
+    #     print(crayons.red("ERROR", bold=True))
+    #     print(acct['error'])
+    #     sys.exit("Unable to check the current service account")
+    # print(crayons.green(acct))
+    # print("Checking Service Account Registration")
+    # response = getattr(lapdog.fc, '__get')('/api/proxyGroup/%s'%acct)
+    # print("Registration Status:  ", end='')
+    # if response.status_code == 404:
+    #     print(crayons.yellow("UNREGISTERED", bold=True))
+    #     print("Must register service account with Firecloud")
+    #     print("Issuing service account token")
+    #     cmd = "gcloud iam service-accounts keys create --iam-account {} {}".format(
+    #         acct,
+    #         os.path.join(tempdir.name, 'key.json')
+    #     )
+    #     print(cmd)
+    #     subprocess.check_call(cmd, shell=True, executable='/bin/bash')
+    #     print("Registering service account with Firecloud")
+    #     import requests
+    #     from oauth2client.service_account import ServiceAccountCredentials
+    #     scopes = ['https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
+    #     credentials = ServiceAccountCredentials.from_json_keyfile_name(os.path.join(tempdir.name, 'key.json'), scopes=scopes)
+    #     headers = {"Authorization": "bearer " + credentials.get_access_token().access_token}
+    #     headers["User-Agent"] = lapdog.fc.FISS_USER_AGENT
+    #     profile_json = {"firstName":"None", "lastName": "None", "title":"None", "contactEmail":args.email,
+    #                                "institute":"None", "institutionalProgram": "None", "programLocationCity": "None", "programLocationState": "None",
+    #                                "programLocationCountry": "None", "pi": "None", "nonProfitStatus": "false"}
+    #     request = requests.post("https://api.firecloud.org/register/profile", headers=headers, json=profile_json)
+    #     print("Registration Status:  ", end='')
+    #     if request.status_code == 200:
+    #         print(crayons.green("REGISTERED"))
+    #     else:
+    #         print(crayons.red("ERROR", bold=True))
+    #         try:
+    #             print(request.json()['message'])
+    #         except:
+    #             print(request.text)
+    #         sys.exit("Unable to register account")
+    # elif response.status_code >= 400:
+    #     print(crayons.red("ERROR", bold=True))
+    #     print(response.text)
+    #     sys.exit("Unable to check account registration status")
+    # else:
+    #     print(crayons.green("REGISTERED"))
+    # print("Lapdog Initialized")
+    # print(
+    #     "Caveat: To enable lapdog execution support on a workspace, you must grant",
+    #     crayons.black("WRITER", bold=True),
+    #     "access to",
+    #     crayons.black(acct, bold=True)
+    # )
 
 if __name__ == '__main__':
     main()

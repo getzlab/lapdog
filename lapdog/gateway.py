@@ -10,6 +10,7 @@ import requests
 import subprocess
 from hashlib import md5
 from .cache import cached, cache_fetch, cache_write
+from .adapters import getblob
 import time
 import warnings
 import crayons
@@ -38,11 +39,6 @@ def ld_project_for_namespace(namespace):
     prefix = ('ld-'+namespace)[:25]
     suffix = md5(prefix.encode()).hexdigest().lower()
     return prefix + '-' + suffix[:4]
-
-def ld_acct_in_project(account, ld_project):
-    # TEMP
-    warnings.warn("Import ld_acct_in_project from lapdog.cloud")
-    return 'lapdog-worker@broad-cga-aarong-gtex.iam.gserviceaccount.com'
 
 @cached(60, 1)
 def get_account():
@@ -99,6 +95,10 @@ def get_token_expired(token):
 class Gateway(object):
     """Acts as an interface between local lapdog and any resources behind the project's API"""
 
+    def __init__(self, namespace):
+        self.namespace = namespace
+        self.project = ld_project_for_namespace(namespace)
+
     @classmethod
     def initialize_lapdog_for_project(cls, billing_id, project_id):
         """
@@ -153,10 +153,10 @@ class Gateway(object):
         print("TODO : Create user-execution-group in firecloud if not already exists")
         print("TODO : Add new service account to user-execution-group")
 
-    def create_submission(self, submission_id, workflow_options=None):
+    def create_submission(self, bucket, submission_id, workflow_options=None, memory=3):
         """
         Sends a request through the lapdog execution API to start a new submission.
-        Takes the local submission ID and (optionally) the workflow options as a dictionary.
+        Takes the local submission ID.
         Assumes the following files to be in place:
         Workflow Inputs : gs://{workspace bucket}/lapdog-executions/{submission id}/config.json
         Workflow WDL : gs://{workspace bucket}/lapdog-executions/{submission id}/method.wdl
@@ -169,7 +169,39 @@ class Gateway(object):
         The user's service account must have access to the workspace in order to
         download the input files specified in the workflow inputs.
         """
-        print("TODO : Format and submit request to api")
+        warnings.warn("[ALPHA] Gateway Create Submission")
+        response = requests.post(
+            'https://us-central1-{project}.cloudfunctions.net/submit-alpha'.format(
+                project=self.project
+            ),
+            headers={'Content-Type': 'application/json'},
+            json={
+                'token': get_access_token(),
+                'bucket': bucket,
+                'submission_id': submission_id,
+                'workflow_options': workflow_options if workflow_options is not None else {},
+                'memory': memory*1024
+            }
+        )
+        if response.status_code == 200:
+            operation = response.text
+            submission_data_path = 'gs://{bucket}/lapdog-executions/{submission_id}/submission.json'.format(
+                bucket=bucket,
+                submission_id=submission_id
+            )
+            blob = getblob(submission_data_path)
+
+            blob.upload_from_string(
+                json.dumps(
+                    {
+                        **json.loads(blob.download_as_string().decode()),
+                        **{'operation': operation}
+                    }
+                ).encode()
+            )
+            return True, operation
+        return False, response
+
 
     def abort_submission(self, submission_id, operations):
         """

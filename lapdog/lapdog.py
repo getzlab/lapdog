@@ -22,6 +22,7 @@ from . import adapters
 from .adapters import getblob, get_operation_status, mtypes, NoSuchSubmission
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture
+from .gateway import Gateway
 from itertools import repeat
 import pandas as pd
 from socket import gethostname
@@ -255,6 +256,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             timezone
         )
         self.operator = Operator(self)
+        self.gateway = Gateway(self.namespace)
         self._submission_cache = {}
         try:
             target_prefix = 'submission-json.{}'.format(self.bucket_id)
@@ -847,32 +849,17 @@ class WorkspaceManager(dog.WorkspaceManager):
                         wf_template[k] = resolution
             return wf_template
 
-        tempdir = tempfile.TemporaryDirectory()
         wdl_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/method.wdl".format(
             bucket_id=self.get_bucket_id(),
             submission_id=submission_id
         )
-        with dalmatian_api():
-            getblob(wdl_path).upload_from_string(
-                self.operator.get_wdl(
-                    config['methodRepoMethod']['methodNamespace'],
-                    config['methodRepoMethod']['methodName'],
-                    config['methodRepoMethod']['methodVersion']
-                ).encode()
-            )
-
-
-        with open(os.path.join(tempdir.name, 'options.json'), 'w') as w:
-            json.dump(
-                {
-                    'default_runtime_attributes': {
-                        'zones': zone,
-                    },
-                    'write_to_cache': True,
-                    'read_from_cache': True,
-                },
-                w
-            )
+        getblob(wdl_path).upload_from_string(
+            self.operator.get_wdl(
+                config['methodRepoMethod']['methodNamespace'],
+                config['methodRepoMethod']['methodName'],
+                config['methodRepoMethod']['methodVersion']
+            ).encode()
+        )
 
         workflow_inputs = [*status_bar.iter(
             prepare_workflow(workflow_entities),
@@ -918,56 +905,34 @@ class WorkspaceManager(dog.WorkspaceManager):
             for e, t in zip(workflow_entities, workflow_inputs)
         ]
 
-        cmd = (
-            'gcloud alpha genomics pipelines run '
-            '--pipeline-file {source_dir}/cromwell/wdl_pipeline.yaml '
-            '--zones {zone} '
-            '--inputs WDL={wdl_text} '
-            '--inputs WORKFLOW_INPUTS={workflow_template} '
-            '--inputs-from-file WORKFLOW_OPTIONS={options_template} '
-            '--inputs LAPDOG_SUBMISSION_ID={submission_id} '
-            '--inputs WORKSPACE=gs://{bucket_id}/lapdog-executions/{submission_id}/workspace '
-            '--inputs OUTPUTS=gs://{bucket_id}/lapdog-executions/{submission_id}/results '
-            '--inputs SUBMISSION_DATA_PATH={submission_data_path} '
-            '--logging gs://{bucket_id}/lapdog-executions/{submission_id}/logs '
-            '--labels lapdog-submission-id={submission_id},lapdog-execution-role=cromwell '
-            '--service-account-scopes=https://www.googleapis.com/auth/devstorage.read_write'
-        ).format(
-            source_dir=os.path.dirname(__file__),
-            zone=zone,
-            wdl_text=wdl_path,
-            workflow_template=config_path,
-            options_template=os.path.join(tempdir.name, 'options.json'),
-            bucket_id=self.get_bucket_id(),
-            submission_id=submission_id,
-            submission_data_path=submission_data_path
+        blob.upload_from_string(json.dumps(submission_data))
+
+        print("Connecting to Gateway to launch submission...")
+
+        status, result = self.gateway.create_submission(
+            self.bucket_id,
+            submission_id,
+            workflow_options={
+                'default_runtime_attributes': {
+                    'zones': zone,
+                },
+                'write_to_cache': True,
+                'read_from_cache': True,
+            },
+            memory=submission_data['runtime']['memory']
         )
-        if memory != 3:
-            cmd += ' --cpus 2 --memory %d' % memory
 
-        results = subprocess.run(
-            cmd, shell=True, executable='/bin/bash',
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-        ).stdout.decode()
-
-        try:
-            submission_data['operation'] = re.search(
-                r'(operations/\S+)\].',
-                results
-            ).group(1)
-        except AttributeError:
-            print(results)
-            raise
+        if not status:
+            print("(%d)" % result.status_code, ":", result.text, file=sys.stderr)
+            raise ValueError("Gateway failed to launch submission")
 
         print("Created submission", global_id)
-
-        blob.upload_from_string(json.dumps(submission_data))
 
         if resync:
             print("Bringing the workspace back online")
             self.sync()
 
-        return global_id, submission_id, submission_data['operation']
+        return global_id, submission_id, result
 
     def get_submission_cost(self, submission_id):
         """
