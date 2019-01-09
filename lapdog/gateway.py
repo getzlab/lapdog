@@ -14,11 +14,20 @@ import time
 import warnings
 import crayons
 import os
+import json
+from .cloud import get_token_info
 
 id_rsa = os.path.join(
     os.path.expanduser('~'),
     '.ssh',
     'id_rsa'
+)
+
+credentials_file = os.path.join(
+    os.path.expanduser('~'),
+    '.config',
+    'gcloud',
+    'application_default_credentials.json'
 )
 
 @lru_cache()
@@ -32,10 +41,8 @@ def ld_project_for_namespace(namespace):
 
 def ld_acct_in_project(account, ld_project):
     # TEMP
-    warnings.warn("Account for project returns constant")
+    warnings.warn("Import ld_acct_in_project from lapdog.cloud")
     return 'lapdog-worker@broad-cga-aarong-gtex.iam.gserviceaccount.com'
-    # Use a regex replace. can only contain lowercase alphanumeric characters and hyphens
-    return 'lapdog-'+ md5(account.encode()).hexdigest() + '@' + ld_project + '.iam.gserviceaccount.com'
 
 @cached(60, 1)
 def get_account():
@@ -53,19 +60,36 @@ def get_access_token(account=None):
     if token and get_token_expired(token):
         token = None
     if token is None:
-        token = subprocess.run(
-            'gcloud auth application-default print-access-token',
-            shell=True,
-            stdout=subprocess.PIPE
-        ).stdout.decode().strip()
-        cache_write(token, 'token', 'access-token', md5(account.encode()).hexdigest(), google='credentials')
+        if not os.path.isfile(credentials_file):
+            raise FileNotFoundError("Application Default Credentials not found. Please run `gcloud auth application-default login`")
+        with open(credentials_file) as r:
+            credentials = json.load(r)
+        response = requests.post(
+            'https://www.googleapis.com/oauth2/v4/token',
+            data={
+                'client_id': credentials['client_id'],
+                'client_secret': credentials['client_secret'],
+                'refresh_token': credentials['refresh_token'],
+                'grant_type': 'refresh_token'
+            }
+        )
+        if response.status_code == 200:
+            data = response.json()
+            token = data['access_token']
+            expiry = int(time.time() + int(data['expires_in']))
+            cache_write(token, 'token', 'access-token', md5(account.encode()).hexdigest(), google='credentials')
+            cache_write(str(expiry), 'token', 'expiry', token=md5(token.encode()).hexdigest())
+        else:
+            raise ValueError("Unable to refresh access token (%d) : %s" % (response.status_code, response.text))
     return token
 
 def get_token_expired(token):
     expiry = cache_fetch('token', 'expiry', token=md5(token.encode()).hexdigest())
     if expiry is None:
         try:
-            data = requests.get('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token='+token).json()
+            data = get_token_info(token)
+            if data is None:
+                return True
             expiry = int(time.time() + int(data['expires_in']))
             cache_write(str(expiry), 'token', 'expiry', token=md5(token.encode()).hexdigest())
         except:
