@@ -12,6 +12,8 @@ import contextlib
 import re
 import select
 from .cache import cache_fetch, cache_write, cached, cache_path
+from .cloud import getblob
+from .gateway import Gateway
 import traceback
 import sys
 import threading
@@ -103,14 +105,6 @@ def safe_getblob(gs_path):
     if not blob.exists():
         raise FileNotFoundError("No such blob: "+gs_path)
     return blob
-
-def getblob(gs_path, user_project=None):
-    bucket_id = gs_path[5:].split('/')[0]
-    bucket_path = '/'.join(gs_path[5:].split('/')[1:])
-    return storage.Blob(
-        bucket_path,
-        storage.Client().bucket(bucket_id, user_project)
-    )
 
 def do_select(reader, t):
     if isinstance(reader, BytesIO):
@@ -303,6 +297,7 @@ class SubmissionAdapter(object):
         self.identifier = self.data['identifier']
         self.operation = self.data['operation']
         self.raw_workflows = self.data['workflows']
+        self.gateway = Gateway(self.namespace)
         self.workflow_mapping = {}
         self.thread = None
         self.bucket = bucket
@@ -551,7 +546,6 @@ class SubmissionAdapter(object):
         self.update()
         # FIXME: Once everything else works, see if cromwell labels work
         # At that point, we can add an abort here to kill everything with the id
-        abort_operation(self.operation)
         gs_path = os.path.join(
             self.path,
             'submission.json'
@@ -565,13 +559,11 @@ class SubmissionAdapter(object):
             )
         )
         try:
-            for wf in self.workflows.values():
-                wf.abort()
-            # kill_machines('lapdog-submission-id='+self.submission)
-            status = get_operation_status(self.operation, False)
-            result = instance_name_pattern.search(status)
-            if result:
-                kill_machines(result.group(1).strip())
+            # For now, use abort key
+            self.gateway.abort_submission(
+                self.bucket,
+                self.submission_id
+            )
         except:
             traceback.print_exc()
             warnings.warn(
@@ -630,6 +622,17 @@ class SubmissionAdapter(object):
                 + utc_offset
                 + datetime.timedelta(seconds=120)
             )
+        stdout_blob = getblob(os.path.join(
+            'gs://'+self.bucket,
+            'lapdog-executions',
+            self.submission,
+            'logs',
+            'stdout.log'
+        ))
+        if stdout_blob.exists():
+            log_text = stdout_blob.download_as_string()
+            cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
+            return BytesIO(log_text)
         stdout_blob = getblob(os.path.join(
             'gs://'+self.bucket,
             'lapdog-executions',
@@ -759,14 +762,14 @@ class WorkflowAdapter(object):
         # else:
             # print("Discard status", old,'->', new)
 
-    def abort(self):
-        for call in self.calls:
-            print("Aborting", call.operation)
-            abort_operation(call)
-            status = get_operation_status(call.operation, False)
-            result = instance_name_pattern.search(status)
-            if result:
-                kill_machines(result.group(1).strip())
+    # def abort(self):
+    #     for call in self.calls:
+    #         print("Aborting", call.operation)
+    #         abort_operation(call)
+    #         status = get_operation_status(call.operation, False)
+    #         result = instance_name_pattern.search(status)
+    #         if result:
+    #             kill_machines(result.group(1).strip())
         # if len(self.calls):
         #     # print("Aborting", self.calls[-1].operation)
         #     abort_operation(self.calls[-1].operation)

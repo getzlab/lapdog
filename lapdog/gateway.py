@@ -10,13 +10,14 @@ import requests
 import subprocess
 from hashlib import md5
 from .cache import cached, cache_fetch, cache_write
-from .adapters import getblob
 import time
 import warnings
 import crayons
 import os
 import json
-from .cloud import get_token_info
+from .cloud import get_token_info, ld_meta_bucket_for_project, getblob
+from urllib.parse import quote
+import sys
 
 id_rsa = os.path.join(
     os.path.expanduser('~'),
@@ -91,6 +92,28 @@ def get_token_expired(token):
         except:
             return True
     return int(expiry) < time.time()
+
+def generate_core_key(ld_project):
+    warnings.warn("Generating new root authentication key for project")
+    response = requests.post(
+        "https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}/keys".format(
+            project=quote(ld_project, safe=''),
+            account=quote('lapdog-worker@{}.iam.gserviceaccount.com'.format(ld_project), safe='')
+        ),
+        headers={
+            'Authorization': 'Bearer ' + get_access_token()
+        }
+    )
+    if response.status_code == 200:
+        getblob(
+            'gs://{bucket}/worker_key.json'.format(
+                bucket=ld_meta_bucket_for_project(ld_project)
+            )
+        ).upload_from_string(response.text.encode())
+    else:
+        print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+        raise ValueError("Could not generate core key")
+
 
 class Gateway(object):
     """Acts as an interface between local lapdog and any resources behind the project's API"""
