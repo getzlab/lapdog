@@ -13,7 +13,7 @@ import google.oauth2.credentials
 from google.auth.transport.requests import AuthorizedSession
 from google.cloud import kms_v1 as kms
 
-def _deploy(function, endpoint):
+def _deploy(function, endpoint, service_account=None):
     import tempfile
     import shutil
     with tempfile.TemporaryDirectory() as tempdir:
@@ -24,13 +24,14 @@ def _deploy(function, endpoint):
             w.write('cryptography\n')
         shutil.copyfile(
             __file__,
-            os.path.join(tempdir, 'cloud.py')
+            os.path.join(tempdir, 'main.py')
         )
         subprocess.check_call(
-            'gcloud functions deploy {endpoint} --entry-point {function} --runtime python37 --trigger-http --source {path}'.format(
+            'gcloud beta functions deploy {endpoint} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
                 endpoint=endpoint,
                 function=function,
-                path=tempdir
+                path=tempdir,
+                service_account='' if service_account is None else ('--service-account '+service_account)
             ),
             shell=True
         )
@@ -157,7 +158,7 @@ def create_submission(request):
 
     # 4) Submit pipelines request
 
-    if 'memory' in data:
+    if 'memory' in data and data['memory'] > 3072:
         if data['memory'] > 13312:
             mtype = 'custom-2-%d-ext' % data['memory']
         else:
@@ -237,7 +238,30 @@ def create_submission(request):
     )
     try:
         if response.status_code == 200:
-            return response.json()['name'], 200
+            operation = response.json()['name']
+
+            # 5) Sign the operation
+
+            getblob(
+                'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
+                    bucket=data['bucket'],
+                    submission_id=data['submission_id']
+                ),
+                credentials=session.credentials
+            ).upload_from_string(
+                kms.KeyManagementServiceClient(
+                    credentials=core_session.credentials
+                ).asymmetric_sign(
+                    'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1'.format(
+                        ld_project=os.environ.get('GCP_PROJECT')
+                    ),
+                    {'sha256': sha256((
+                        data['submission_id'] + operation
+                    ).encode()).digest()}
+                ).signature
+            )
+
+            return operation, 200
     except:
         pass
     return (
@@ -344,6 +368,12 @@ def fetch_operation_submission_path(token, operation):
 
 @cors('DELETE')
 def abort_submission(request):
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec, padding, utils
+    from hashlib import sha256
+    from google.cloud import kms_v1 as kms
 
     # https://genomics.googleapis.com/google.genomics.v2alpha1.Pipelines
 
@@ -448,13 +478,49 @@ def abort_submission(request):
             400
         )
 
-    core_session = generate_core_session()
-
-    response = core_session.post(
-        "https://genomics.googleapis.com/v2alpha1/{operation}:cancel".format(
-            operation=quote(submission['operation']) # Do not quote slashes here
-        )
+    signature_blob = getblob(
+        'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
+            bucket=bucket,
+            submission_id=submission_id
+        ),
+        credentials=session.credentials
     )
+    if not signature_blob.exists():
+        return (
+            {
+                'error': 'No Signature',
+                'message': 'The submission signature could not be found. Refusing to abort job'
+            },
+            403
+        )
+
+    try:
+        serialization.load_pem_public_key(
+            kms.KeyManagementServiceClient().get_public_key(
+                'projects/%s/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1' % os.environ.get('GCP_PROJECT')
+            ).pem.encode('ascii'),
+            default_backend()
+        ).verify(
+            signature_blob.download_as_string(),
+            sha256((
+                data['submission_id'] + submission['operation']
+            ).encode()).digest(),
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=32
+            ),
+            utils.Prehashed(hashes.SHA256())
+        )
+    except InvalidSignature:
+        return (
+            {
+                'error': 'Invalid Signature',
+                'message': 'Could not validate submission signature. Refusing to abort job'
+            },
+            403
+        )
+
+    core_session = generate_core_session()
 
     # 5) Generate abort key
 
@@ -475,4 +541,26 @@ def abort_submission(request):
         ).signature
     )
 
+    # 6) Abort operation
+
+    response = core_session.post(
+        "https://genomics.googleapis.com/v2alpha1/{operation}:cancel".format(
+            operation=quote(submission['operation']) # Do not quote slashes here
+        )
+    )
+
     return response.text, response.status_code
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser('cloud-deployment')
+    parser.add_argument(
+        'function',
+        help='Name of function in code'
+    )
+    parser.add_argument(
+        'endpoint',
+        help='Name of desired endpoint'
+    )
+    args = parser.parse_args()
+    _deploy(args.function, args.endpoint)

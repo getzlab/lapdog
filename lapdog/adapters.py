@@ -560,10 +560,17 @@ class SubmissionAdapter(object):
         )
         try:
             # For now, use abort key
-            self.gateway.abort_submission(
+            result = self.gateway.abort_submission(
                 self.bucket,
                 self.submission_id
             )
+            if result is not None:
+                # Failed
+                warnings.warn(
+                    "Submission Abort did not complete. Some workflows may continue running unsupervised",
+                    RuntimeWarning
+                )
+                print(result.text, file=sys.stderr)
         except:
             traceback.print_exc()
             warnings.warn(

@@ -21,7 +21,7 @@ def abort(handle):
     from google.cloud import kms_v1 as kms
 
     subprocess.check_call('gsutil cp %s abort.key' % abort_path)
-    with open('abort.key') as r:
+    with open('abort.key', 'rb') as r:
         code = r.read()
 
     try:

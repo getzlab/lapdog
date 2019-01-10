@@ -151,9 +151,86 @@ class Gateway(object):
         print(cmd)
         # subprocess.check_call(cmd, shell=True)
         # TODO
-        print("TODO : ADD CLOUD FUNCTIONS")
-        print("TODO : ADD ROOT SERVICE ACCOUNT")
+        print("Creating Signing Key")
+        cmd = (
+            'gcloud --project {project} kms keyrings create lapdog --location us'.format(
+                project=ld_project_for_namespace(project_id)
+            )
+        )
+        print(cmd)
+        # subprocess.check_call(cmd, shell=True)
+        cmd = (
+            'gcloud --project {project} alpha kms keys create lapdog-sign --location us --keyring'
+            ' lapdog --purpose asymmetric-signing --default-algorithm '
+            'RSA_SIGN_PSS_3072_SHA256 --protection-level SOFTWARE'.format(
+                project=ld_project_for_namespace(project_id)
+            )
+        )
+        print(cmd)
+        # subprocess.check_call(cmd, shell=True)
+
         print("TODO : SETUP LAPDOG ROLES")
+        print("Creating Core Service Account")
+        cmd = (
+            'gcloud --project {project} iam service-accounts create lapdog-worker --display-name lapdog-worker'.format(
+                project=ld_project_for_namespace(project_id)
+            )
+        )
+        print(cmd)
+        # subprocess.check_call(cmd, shell=True)
+        print("Creating Cloud Functions Service Account")
+        cmd = (
+            'gcloud --project {project} iam service-accounts create lapdog-functions --display-name lapdog-functions'.format(
+                project=ld_project_for_namespace(project_id)
+            )
+        )
+        print(cmd)
+        # subprocess.check_call(cmd, shell=True)
+        functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(ld_project_for_namespace(project_id))
+        print("Creating Metadata bucket while service accounts are created")
+        cmd = (
+            'gsutil mb -c Standard -l us-central1 -p {project} {bucket}'.format(
+                project=ld_project_for_namespace(project_id),
+                bucket=ld_meta_bucket_for_project(ld_project_for_namespace(project_id))
+            )
+        )
+        print(cmd)
+        # subprocess.check_call(cmd, shell=True)
+        print("Waiting for service account creation...")
+        time.sleep(30)
+        print("Issuing Core Service Account Key")
+        with tempfile.NamedTemporaryFile('wb') as temp:
+            cmd = (
+                "gcloud --project {project} iam service-accounts keys create "
+                "--iam-account lapdog-worker@{project}.iam.gserviceaccount.com {dest}".format(
+                    project=ld_project_for_namespace(project_id),
+                    dest=temp.name
+                )
+            )
+            print(cmd)
+            # subprocess.check_call(cmd, shell=True)
+            print("Copying Service Account Key to Metadata Bucket")
+            blob = getblob(
+                'gs://{bucket}/auth_key.json'.format(
+                    bucket=ld_meta_bucket_for_project(ld_project_for_namespace(project_id))
+                )
+            )
+            blob.upload_from_filename(temp.name)
+            print("Updating Key Metadata ACL")
+            acl = blob.acl
+            for entity in acl.get_entities():
+                if entity.type == 'project':
+                    if entity.identifier.startswith('editors-'):
+                        entity.revoke_owner()
+                    elif entity.identifier.startswith('viewers-'):
+                        entity.revoke_read()
+            acl.user(functions_account).grant_read()
+            acl.save()
+
+        print("Deploying Cloud Functions")
+        from .cloud import _deploy
+        # _deploy('create_submission', 'submit', functions_account)
+        # _deploy('abort_submission', 'abort', functions_account)
         Gateway.grant_access_to_user(
             project_id,
             get_account(),
@@ -237,7 +314,20 @@ class Gateway(object):
         Cancels the cromwell server operation then cancels all workflow operations,
         then deletes all workflow machines, then finally the cromwell machine.
         """
-        print("TODO: Format and submit requesteroni to the api")
+        warnings.warn("[ALPHA] Gateway Abort Submission")
+        response = requests.post(
+            'https://us-central1-{project}.cloudfunctions.net/abort-alpha'.format(
+                project=self.project
+            ),
+            headers={'Content-Type': 'application/json'},
+            json={
+                'token': get_access_token(),
+                'bucket': bucket,
+                'submission_id': submission_id,
+            }
+        )
+        if response.status_code != 200:
+            return response
 
     def monitor_submission(self, submission_id):
         """
