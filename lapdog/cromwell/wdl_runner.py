@@ -181,6 +181,8 @@ class Runner(object):
                     submission_data['status'] = 'Succeeded'
                 elif 'Failed' in statuses:
                     submission_data['status'] = 'Failed'
+                elif 'Aborted' in statuses:
+                    submission_data['status'] = 'Aborted'
                 else:
                     submission_data['status'] = 'Unknown'
                 with open('submission.json', 'w') as w:
@@ -251,4 +253,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    finally:
+        print("<<<EOF>>>")

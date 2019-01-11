@@ -268,7 +268,7 @@ Other: error_outline
       <div class="col s6" v-if="submission.status == 'Succeeded' || submission.status == 'Failed'">
         <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
       </div>
-      <div class="col s6" v-if="submission.status == 'Running'">
+      <div class="col s6" v-if="submission.status == 'Running' || submission.status == 'Aborting'">
         <button class='btn red darken-3 modal-trigger' data-target="abort-modal">Abort Submission</button>
       </div>
     </div>
@@ -575,6 +575,10 @@ export default {
         .then(response => {
           console.log("Abort results");
           console.log(response);
+          window.materialize.toast({
+            html: "Sent abort signal to submission",
+            displayLength: 5000,
+          });
         })
         .catch(error => {
           window.materialize.toast({

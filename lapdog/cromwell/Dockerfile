@@ -24,7 +24,7 @@ RUN apt-get update && \
     apt-get install python-pip --yes
 
 # Install Python "requests" (for cromwell_driver.py) package
-RUN pip install requests simplejson
+RUN pip install requests simplejson cryptography==0.6.1
 
 # Install Google Python client (for file_util.py) package
 RUN pip install --upgrade google-api-python-client oauth2client
@@ -51,7 +51,7 @@ RUN mkdir /cromwell
 RUN cd /cromwell && \
     curl -L -O https://github.com/broadinstitute/cromwell/releases/download/36/cromwell-36.jar
 RUN ln /cromwell/cromwell-36.jar /cromwell/cromwell.jar
-COPY jes_template.conf /cromwell/
+COPY jes_template.tmp.conf /cromwell/
 
 # Set up the runtime environment
 ENV CROMWELL /cromwell/cromwell.jar

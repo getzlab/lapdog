@@ -910,6 +910,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         print("Connecting to Gateway to launch submission...")
 
         status, result = self.gateway.create_submission(
+            self.workspace,
             self.bucket_id,
             submission_id,
             workflow_options={

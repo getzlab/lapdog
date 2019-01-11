@@ -17,6 +17,8 @@ from .gateway import Gateway
 import traceback
 import sys
 import threading
+from hashlib import md5
+import warnings
 from agutil import ActiveTimeout, TimeoutExceeded, context_lock
 
 # Label filter format: labels.(label name)=(label value)
@@ -305,6 +307,7 @@ class SubmissionAdapter(object):
         self.workflows = {}
         self._internal_reader = None
         self.bucket = bucket
+        self._update_mask = set()
         self.update_lock = threading.Lock()
         if _do_cache_write and not self.live:
             cache_write(json.dumps(self.data), 'submission-json', bucket, submission)
@@ -453,8 +456,12 @@ class SubmissionAdapter(object):
                 reader = self.read_cromwell(_do_wait=self.live)
                 while len(do_select(reader, 1)[0]):
                     message = reader.readline().decode().strip()
+                    code = md5(message.encode()).digest()
                     matcher = Recall()
                     if matcher.apply(workflow_dispatch_pattern.search(message)):
+                        if code in self._update_mask:
+                            continue
+                        self._update_mask.add(code)
                         ids = [
                             wf_id.strip() for wf_id in
                             matcher.value.group(1).split(',')
@@ -468,6 +475,9 @@ class SubmissionAdapter(object):
                             )
                             self.workflow_mapping[data['workflowOutputKey']] = long_id
                     elif matcher.apply(workflow_start_pattern.search(message)):
+                        if code in self._update_mask:
+                            continue
+                        self._update_mask.add(code)
                         # print("New workflow started")
                         long_id = matcher.value.group(1)
                         if long_id in {*self.workflow_mapping.values()}:
@@ -499,6 +509,9 @@ class SubmissionAdapter(object):
                             )
                             self.workflow_mapping[data['workflowOutputKey']] = long_id
                     elif matcher.apply(task_start_pattern.search(message)):
+                        if code in self._update_mask:
+                            continue
+                        self._update_mask.add(code)
                         short = matcher.value.group(1)
                         wf = matcher.value.group(2)
                         task = matcher.value.group(3)
@@ -514,17 +527,26 @@ class SubmissionAdapter(object):
                             operation
                         )
                     elif matcher.apply(msg_pattern.search(message)):
+                        if code in self._update_mask:
+                            continue
+                        self._update_mask.add(code)
                         self._init_workflow(matcher.value.group(1)).handle(
                             'message',
                             matcher.value.string
                         )
                     elif matcher.apply(fail_pattern.search(message)):
+                        if code in self._update_mask:
+                            continue
+                        self._update_mask.add(code)
                         long_id = matcher.value.group(1)
                         self._init_workflow(long_id[:8]).handle(
                             'fail',
                             matcher.groups()[-1]
                         )
                     elif matcher.apply(status_pattern.search(message)):
+                        if code in self._update_mask:
+                            continue
+                        self._update_mask.add(code)
                         short = matcher.value.group(1)
                         task = matcher.value.group(3)
                         call = int(matcher.value.group(5))
@@ -543,26 +565,18 @@ class SubmissionAdapter(object):
             #     print("NO MATCH:", message)
 
     def abort(self):
-        self.update()
+        # self.update()
         # FIXME: Once everything else works, see if cromwell labels work
         # At that point, we can add an abort here to kill everything with the id
-        gs_path = os.path.join(
-            self.path,
-            'submission.json'
-        )
-        getblob(gs_path).upload_from_string(
-            json.dumps(
-                {
-                    **self.data,
-                    **{'status': 'Aborted'}
-                }
-            )
-        )
+        status = self.status
+        if 'done' in status and status['done']:
+            return
         try:
             # For now, use abort key
             result = self.gateway.abort_submission(
                 self.bucket,
-                self.submission_id
+                self.data['submission_id'],
+                self.data['status'] == 'Aborting' # Hard abort if we're already aborting
             )
             if result is not None:
                 # Failed
@@ -586,7 +600,7 @@ class SubmissionAdapter(object):
                 json.dumps(
                     {
                         **self.data,
-                        **{'status': 'Aborted'}
+                        **{'status': 'Aborted' if self.data['status'] == 'Aborting' else 'Aborting'}
                     }
                 )
             )

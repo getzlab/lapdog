@@ -176,11 +176,11 @@ class CromwellDriver(object):
 
                 self.batch_submission = True
 
-                @atexit.register
-                def abort_all_jobs():
-                    if self.batch_submission:
-                        for job in response:
-                            self.abort(job['id'])
+                # @atexit.register
+                # def abort_all_jobs():
+                #     if self.batch_submission:
+                #         for job in response:
+                #             self.abort(job['id'])
 
                 for i in range(12):
                     time.sleep(5)

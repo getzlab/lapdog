@@ -8,6 +8,7 @@
 
 set -o errexit
 set -o nounset
+set -eo pipefail
 
 readonly INPUT_PATH=/pipeline/input
 
@@ -27,6 +28,10 @@ if [ "${LAPDOG_SUBMISSION_ID}" ]
 then
   export BATCH_ARG="--batch ${LAPDOG_SUBMISSION_ID}"
 fi
+
+# Update jes template
+sed s/SERVICEACCOUNT/$(gcloud config get-value account)/ < /cromwell/jes_template.tmp.conf > /cromwell/jes_template.conf
+
 # Execute the wdl_runner
 python -u wdl_runner.py \
  --wdl "${INPUT_PATH}"/wf.wdl \
@@ -34,8 +39,8 @@ python -u wdl_runner.py \
  --working-dir "${WORKSPACE}" \
  --workflow-options "${INPUT_PATH}"/wf.options.json \
  --output-dir "${OUTPUTS}" \
- $BATCH_ARG 2> stderr.log | tee stdout.log | python logger.py $LAPDOG_LOG_PATH/pipeline-stdout.log
+ $BATCH_ARG 2> stderr.log | python logger.py $LAPDOG_LOG_PATH/pipeline-stdout.log > stdout.log
 
-gsutil cp stdout.log stderr.log $LAPDOG_LOG_PATH
+gsutil -h "Content-Type:text/plain" cp stdout.log stderr.log $LAPDOG_LOG_PATH
 
 gsutil rm "${WDL}"

@@ -605,11 +605,11 @@
 
         if (this.preflight_entities > 500) window.materialize.toast({
           html: "Preparing job. This may take a while...",
-          displayLength: 5000,
+          displayLength: 10000,
         })
         else window.materialize.toast({
           html: "Preparing job...",
-          displayLength: 5000,
+          displayLength: 10000,
         })
         axios.post(query)
           .then(response => {

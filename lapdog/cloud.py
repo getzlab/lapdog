@@ -8,10 +8,18 @@ from urllib.parse import quote
 from hashlib import md5, sha256
 import time
 from google.cloud import storage
+import google.auth
 import google.oauth2.service_account
 import google.oauth2.credentials
 from google.auth.transport.requests import AuthorizedSession
 from google.cloud import kms_v1 as kms
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, padding, utils
+import traceback
+import warnings
+import base64
 
 def _deploy(function, endpoint, service_account=None):
     import tempfile
@@ -77,200 +85,245 @@ def cors(*methods):
 
 @cors('POST')
 def create_submission(request):
-    data = request.get_json()
-
-    # 1) Validate the token
-
-    if 'token' not in data:
-        return (
-            {
-                'error': 'Bad Request',
-                'message': 'Missing required parameter "token"'
-            },
-            400
-        )
-
-    token_data = get_token_info(data['token'])
-    if 'error' in token_data:
-        return (
-            {
-                'error': 'Invalid Token',
-                'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
-            },
-            401
-        )
-
-    # 2) Validate user's permission for the bucket
-
-    if 'bucket' not in data:
-        return (
-            {
-                'error': 'Bad Request',
-                'message': 'Missing required parameter "bucket"'
-            },
-            400
-        )
-
-    session = generate_user_session(data['token'])
-
-    read, write = validate_permissions(session, data['bucket'])
-    if read is None:
-        # Error, write will contain a message
-        return (
-            {
-                'error': 'Cannot Validate Bucket Permissions',
-                'message': write
-            },
-            400
-        )
-    if not (read and write):
-        # User doesn't have full permissions to the bucket
-        return (
-            {
-                'error': 'Not Authorized',
-                'message': 'User lacks read/write permissions to the requested bucket'
-            },
-            401
-        )
-
-    # 3) Check that submission.json exists, and is less than 1 Gib
-
-    if 'submission_id' not in data:
-        return (
-            {
-                'error': 'Bad Request',
-                'message': 'Missing required parameter "submission_id"'
-            },
-            400
-        )
-
-    submission = fetch_submission_blob(session, data['bucket'], data['submission_id'])
-
-    result, message = validate_submission_file(submission)
-    if not result:
-        return (
-            {
-                'error': 'Bad Submission',
-                'message': message
-            },
-            400
-        )
-
-    # 4) Submit pipelines request
-
-    if 'memory' in data and data['memory'] > 3072:
-        if data['memory'] > 13312:
-            mtype = 'custom-2-%d-ext' % data['memory']
-        else:
-            mtype = 'custom-2-%d' % data['memory']
-    else:
-        mtype = 'n1-standard-1'
-
-    pipeline = {
-        'pipeline': {
-            'actions': [
-                {
-                    'imageUri': 'gcr.io/broad-cga-aarong-gtex/wdl_runner:gateway',
-                    'commands': [
-                        '/wdl_runner/wdl_runner.sh'
-                    ],
-                    'environment': {
-                        'LAPDOG_PROJECT': os.environ.get('GCP_PROJECT'),
-                        'WDL': "gs://{bucket}/lapdog-executions/{submission_id}/method.wdl".format(
-                            bucket=data['bucket'],
-                            submission_id=data['submission_id']
-                        ),
-                        'WORKFLOW_INPUTS': "gs://{bucket}/lapdog-executions/{submission_id}/config.tsv".format(
-                            bucket=data['bucket'],
-                            submission_id=data['submission_id']
-                        ),
-                        'WORKFLOW_OPTIONS': json.dumps(data['options']) if 'options' in data else '{}',
-                        'LAPDOG_SUBMISSION_ID': data['submission_id'],
-                        'WORKSPACE': "gs://{bucket}/lapdog-executions/{submission_id}/workspace/".format(
-                            bucket=data['bucket'],
-                            submission_id=data['submission_id']
-                        ),
-                        'OUTPUTS': "gs://{bucket}/lapdog-executions/{submission_id}/results".format(
-                            bucket=data['bucket'],
-                            submission_id=data['submission_id']
-                        ),
-                        'SUBMISSION_DATA_PATH': "gs://{bucket}/lapdog-executions/{submission_id}/submission.json".format(
-                            bucket=data['bucket'],
-                            submission_id=data['submission_id']
-                        ),
-                        'LAPDOG_LOG_PATH': "gs://{bucket}/lapdog-executions/{submission_id}/logs".format(
-                            bucket=data['bucket'],
-                            submission_id=data['submission_id']
-                        ),
-                    }
-                }
-            ],
-            'resources': {
-                'projectId': os.environ.get("GCP_PROJECT"),
-                'regions': ['us-central1'], # FIXME
-                'virtualMachine': {
-                    'machineType': mtype,
-                    'preemptible': False,
-                    'labels': {
-                        'lapdog-execution-role': 'cromwell',
-                        'lapdog-submission-id': data['submission_id']
-                    },
-                    'serviceAccount': {
-                        'email': ld_acct_in_project(token_data['email']),
-                        'scopes': [
-                            "https://www.googleapis.com/auth/cloud-platform",
-                            "https://www.googleapis.com/auth/compute",
-                            "https://www.googleapis.com/auth/devstorage.read_write",
-                        ]
-                    },
-                    'bootDiskSizeGb': 20
-                }
-            },
-        }
-    }
-    print(pipeline)
-    response = session.post(
-        'https://genomics.googleapis.com/v2alpha1/pipelines:run',
-        headers={
-            'Content-Type': 'application/json'
-        },
-        json=pipeline
-    )
     try:
-        if response.status_code == 200:
-            operation = response.json()['name']
+        data = request.get_json()
 
-            # 5) Sign the operation
+        # 1) Validate the token
 
-            getblob(
-                'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
-                    bucket=data['bucket'],
-                    submission_id=data['submission_id']
-                ),
-                credentials=session.credentials
-            ).upload_from_string(
-                kms.KeyManagementServiceClient(
-                    credentials=core_session.credentials
-                ).asymmetric_sign(
-                    'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1'.format(
-                        ld_project=os.environ.get('GCP_PROJECT')
-                    ),
-                    {'sha256': sha256((
-                        data['submission_id'] + operation
-                    ).encode()).digest()}
-                ).signature
+        if 'token' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "token"'
+                },
+                400
             )
 
-            return operation, 200
+        token_data = get_token_info(data['token'])
+        if 'error' in token_data:
+            return (
+                {
+                    'error': 'Invalid Token',
+                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                },
+                401
+            )
+
+        # 2) Validate user's permission for the bucket
+
+        if 'bucket' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "bucket"'
+                },
+                400
+            )
+
+        session = generate_user_session(data['token'])
+
+        read, write = validate_permissions(session, data['bucket'])
+        if read is None:
+            # Error, write will contain a message
+            return (
+                {
+                    'error': 'Cannot Validate Bucket Permissions',
+                    'message': write
+                },
+                400
+            )
+        if not (read and write):
+            # User doesn't have full permissions to the bucket
+            return (
+                {
+                    'error': 'Not Authorized',
+                    'message': 'User lacks read/write permissions to the requested bucket'
+                },
+                401
+            )
+
+        # 2.b) Verify that the bucket belongs to this project
+
+        if 'namespace' not in data or 'workspace' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameters "namespace" and "workspace"'
+                },
+                400
+            )
+        core_session = generate_core_session()
+
+        result, message = authenticate_bucket(
+            data['bucket'], data['namespace'], data['workspace'], session, core_session
+        )
+        if not result:
+            return (
+                {
+                    'error': 'Cannot Validate Bucket Signature',
+                    'message': message
+                },
+                400
+            )
+
+        # 3) Check that submission.json exists, and is less than 1 Gib
+
+        if 'submission_id' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "submission_id"'
+                },
+                400
+            )
+
+        submission = fetch_submission_blob(session, data['bucket'], data['submission_id'])
+
+        result, message = validate_submission_file(submission)
+        if not result:
+            return (
+                {
+                    'error': 'Bad Submission',
+                    'message': message
+                },
+                400
+            )
+
+        # 4) Submit pipelines request
+
+        if 'memory' in data and data['memory'] > 3072:
+            if data['memory'] > 13312:
+                mtype = 'custom-2-%d-ext' % data['memory']
+            else:
+                mtype = 'custom-2-%d' % data['memory']
+        else:
+            mtype = 'n1-standard-1'
+
+        pipeline = {
+            'pipeline': {
+                'actions': [
+                    {
+                        'imageUri': 'gcr.io/broad-cga-aarong-gtex/wdl_runner:gateway',
+                        'commands': [
+                            '/wdl_runner/wdl_runner.sh'
+                        ],
+                        'environment': {
+                            'SIGNATURE_ENDPOINT': 'https://{region}-{project}.cloudfunctions.net/signature-alpha'.format(
+                                region=os.environ.get('FUNCTION_REGION'),
+                                project=os.environ.get("GCP_PROJECT")
+                            ),
+                            'LAPDOG_PROJECT': os.environ.get('GCP_PROJECT'),
+                            'WDL': "gs://{bucket}/lapdog-executions/{submission_id}/method.wdl".format(
+                                bucket=data['bucket'],
+                                submission_id=data['submission_id']
+                            ),
+                            'WORKFLOW_INPUTS': "gs://{bucket}/lapdog-executions/{submission_id}/config.tsv".format(
+                                bucket=data['bucket'],
+                                submission_id=data['submission_id']
+                            ),
+                            'WORKFLOW_OPTIONS': json.dumps(data['options']) if 'options' in data else '{}',
+                            'LAPDOG_SUBMISSION_ID': data['submission_id'],
+                            'WORKSPACE': "gs://{bucket}/lapdog-executions/{submission_id}/workspace/".format(
+                                bucket=data['bucket'],
+                                submission_id=data['submission_id']
+                            ),
+                            'OUTPUTS': "gs://{bucket}/lapdog-executions/{submission_id}/results".format(
+                                bucket=data['bucket'],
+                                submission_id=data['submission_id']
+                            ),
+                            'SUBMISSION_DATA_PATH': "gs://{bucket}/lapdog-executions/{submission_id}/submission.json".format(
+                                bucket=data['bucket'],
+                                submission_id=data['submission_id']
+                            ),
+                            'LAPDOG_LOG_PATH': "gs://{bucket}/lapdog-executions/{submission_id}/logs".format(
+                                bucket=data['bucket'],
+                                submission_id=data['submission_id']
+                            ),
+                        }
+                    }
+                ],
+                'resources': {
+                    'projectId': os.environ.get("GCP_PROJECT"),
+                    'regions': ['us-central1'], # FIXME
+                    'virtualMachine': {
+                        'machineType': mtype,
+                        'preemptible': False,
+                        'labels': {
+                            'lapdog-execution-role': 'cromwell',
+                            'lapdog-submission-id': data['submission_id']
+                        },
+                        'serviceAccount': {
+                            'email': ld_acct_in_project(token_data['email']),
+                            'scopes': [
+                                "https://www.googleapis.com/auth/cloud-platform",
+                                "https://www.googleapis.com/auth/compute",
+                                "https://www.googleapis.com/auth/devstorage.read_write",
+                                "https://www.googleapis.com/auth/genomics"
+                            ]
+                        },
+                        'bootDiskSizeGb': 20
+                    }
+                },
+            }
+        }
+        print(pipeline)
+        response = generate_default_session(
+            [
+                "https://www.googleapis.com/auth/cloud-platform",
+                "https://www.googleapis.com/auth/compute",
+                "https://www.googleapis.com/auth/genomics"
+            ]
+        ).post(
+            'https://genomics.googleapis.com/v2alpha1/pipelines:run',
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json=pipeline
+        )
+        try:
+            if response.status_code == 200:
+                operation = response.json()['name']
+
+                # 5) Sign the operation
+
+                sign_object(
+                    (data['submission_id'] + operation).encode(),
+                    getblob(
+                        'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
+                            bucket=data['bucket'],
+                            submission_id=data['submission_id']
+                        ),
+                        credentials=session.credentials
+                    ),
+                    core_session.credentials
+                )
+
+                return operation, 200
+        except:
+            traceback.print_exc()
+            return (
+                {
+                    'error': 'Unable to start submission',
+                    'message': traceback.format_exc()
+                },
+                500
+            )
+        return (
+            {
+                'error': 'Unable to start submission',
+                'message': 'Google rejected the pipeline request (%d) : %s' % (response.status_code, response.text)
+            },
+            400
+        )
     except:
-        pass
-    return (
-        {
-            'error': 'Unable to start submission',
-            'message': 'Google rejected the pipeline request (%d) : %s' % (response.status_code, response.text)
-        },
-        400
-    )
+        traceback.print_exc()
+        return (
+            {
+                'error': 'Unknown Error',
+                'message': traceback.format_exc()
+            },
+            500
+        )
 
 def get_token_info(token):
     try:
@@ -294,6 +347,9 @@ def generate_user_session(token):
         google.oauth2.credentials.Credentials(token)
     )
 
+def generate_default_session(scopes=None):
+    return AuthorizedSession(google.auth.default(scopes=scopes)[0])
+
 def generate_core_session():
     ld_project = os.environ.get('GCP_PROJECT')
     account = 'lapdog-worker@{}.iam.gserviceaccount.com'.format(ld_project)
@@ -311,6 +367,84 @@ def generate_core_session():
         ])
     )
 
+
+def authenticate_bucket(bucket, namespace, workspace, session, core_session):
+    if os.environ.get('GCP_PROJECT') != ld_project_for_namespace(namespace):
+        return False, 'This project is not responsible for the provided namespace'
+    workspace_blob = getblob(
+        'gs://{bucket}/DO_NOT_DELETE_LAPDOG_WORKSPACE_SIGNATURE'.format(
+            bucket=bucket
+        ),
+        credentials=session.credentials
+    )
+    if not workspace_blob.exists():
+        # Must generate signature
+        print("Generating new workspace signature for", workspace)
+        try:
+            response = session.get(
+                'https://api.firecloud.org/api/workspaces/{namespace}/{workspace}'.format(
+                    namespace=namespace,
+                    workspace=workspace
+                ),
+                timeout=5 # Long timeout because this is a 1-time operation
+            )
+            if response.status_code == 200:
+                fc_bucket = response.json()['workspace']['bucketName']
+                if fc_bucket != bucket:
+                    return False, 'The provided bucket does not belong to this workspace'
+                sign_object(
+                    ('{}/{}/{}'.format(namespace, workspace, bucket)).encode(),
+                    workspace_blob,
+                    core_session.credentials
+                )
+                return True, fc_bucket
+        except requests.ReadTimeout:
+            pass
+        return False, 'The Firecloud API is currently offline or took too long to respond'
+    return (
+        verify_signature(workspace_blob, ('{}/{}/{}'.format(namespace, workspace, bucket)).encode()),
+        'Workspace authentication token had an invalid signature'
+    )
+
+def ld_project_for_namespace(namespace):
+    # TEMP
+    warnings.warn("Project for namespace returns constant")
+    return 'broad-cga-aarong-gtex' # Note: we can
+    prefix = ('ld-'+namespace)[:23]
+    suffix = md5(prefix.encode()).hexdigest().lower()
+    return prefix + '-' + suffix[:6]
+
+def sign_object(data, blob, credentials):
+    blob.upload_from_string(
+        kms.KeyManagementServiceClient(
+            credentials=credentials
+        ).asymmetric_sign(
+            'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1'.format(
+                ld_project=os.environ.get('GCP_PROJECT')
+            ),
+            {'sha256': sha256(data).digest()}
+        ).signature
+    )
+
+def verify_signature(blob, data, _is_blob=True):
+    try:
+        serialization.load_pem_public_key(
+            kms.KeyManagementServiceClient().get_public_key(
+                'projects/%s/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1' % os.environ.get('GCP_PROJECT')
+            ).pem.encode('ascii'),
+            default_backend()
+        ).verify(
+            blob.download_as_string() if _is_blob else blob,
+            sha256(data).digest(),
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=32
+            ),
+            utils.Prehashed(hashes.SHA256())
+        )
+        return True
+    except InvalidSignature:
+        return False
 
 def validate_permissions(session, bucket):
     try:
@@ -346,7 +480,7 @@ def validate_submission_file(blob):
     blob.reload()
     if blob.size is None or blob.size >= 1073741824: # 1Gib
         return False, 'Submission.json file exceeded maximum allowed size'
-    return True
+    return True, 'OK'
 
 def fetch_submission_blob(session, bucket, submission_id):
     return getblob(
@@ -368,188 +502,187 @@ def fetch_operation_submission_path(token, operation):
 
 @cors('DELETE')
 def abort_submission(request):
-    from cryptography.exceptions import InvalidSignature
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec, padding, utils
-    from hashlib import sha256
-    from google.cloud import kms_v1 as kms
-
-    # https://genomics.googleapis.com/google.genomics.v2alpha1.Pipelines
-
-    data = request.get_json()
-
-    # 1) Validate the token
-
-    if 'token' not in data:
-        return (
-            {
-                'error': 'Bad Request',
-                'message': 'Missing required parameter "token"'
-            },
-            400
-        )
-
-    token_data = get_token_info(data['token'])
-    if 'error' in token_data:
-        return (
-            {
-                'error': 'Invalid Token',
-                'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
-            },
-            401
-        )
-
-    # 2) Validate user's permission for the bucket
-
-    if 'bucket' not in data:
-        return (
-            {
-                'error': 'Bad Request',
-                'message': 'Missing required parameter "bucket"'
-            },
-            400
-        )
-
-    session = generate_user_session(data['token'])
-
-    read, write = validate_permissions(session, data['bucket'])
-    if read is None:
-        # Error, write will contain a message
-        return (
-            {
-                'error': 'Cannot Validate Bucket Permissions',
-                'message': write
-            },
-            400
-        )
-    if not (read and write):
-        # User doesn't have full permissions to the bucket
-        return (
-            {
-                'error': 'Not Authorized',
-                'message': 'User lacks read/write permissions to the requested bucket'
-            },
-            401
-        )
-
-    # 3) Check that submission.json exists, and is less than 1 Gib
-
-    if 'submission_id' not in data:
-        return (
-            {
-                'error': 'Bad Request',
-                'message': 'Missing required parameter "submission_id"'
-            },
-            400
-        )
-
-    submission = fetch_submission_blob(session, data['bucket'], data['submission_id'])
-
-    result, message = validate_submission_file(submission)
-    if not result:
-        return (
-            {
-                'error': 'Bad Submission',
-                'message': message
-            },
-            400
-        )
-
-    # 4) Download submission and parse operation
-
     try:
-        submission = json.loads(submission.download_as_string().decode())
+
+        # https://genomics.googleapis.com/google.genomics.v2alpha1.Pipelines
+
+        data = request.get_json()
+
+        # 1) Validate the token
+
+        if 'token' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "token"'
+                },
+                400
+            )
+
+        token_data = get_token_info(data['token'])
+        if 'error' in token_data:
+            return (
+                {
+                    'error': 'Invalid Token',
+                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                },
+                401
+            )
+
+        # 2) Validate user's permission for the bucket
+
+        if 'bucket' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "bucket"'
+                },
+                400
+            )
+
+        session = generate_user_session(data['token'])
+
+        read, write = validate_permissions(session, data['bucket'])
+        if read is None:
+            # Error, write will contain a message
+            return (
+                {
+                    'error': 'Cannot Validate Bucket Permissions',
+                    'message': write
+                },
+                400
+            )
+        if not (read and write):
+            # User doesn't have full permissions to the bucket
+            return (
+                {
+                    'error': 'Not Authorized',
+                    'message': 'User lacks read/write permissions to the requested bucket'
+                },
+                401
+            )
+
+        # 3) Check that submission.json exists, and is less than 1 Gib
+
+        if 'submission_id' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "submission_id"'
+                },
+                400
+            )
+
+        submission = fetch_submission_blob(session, data['bucket'], data['submission_id'])
+
+        result, message = validate_submission_file(submission)
+        if not result:
+            return (
+                {
+                    'error': 'Bad Submission',
+                    'message': message
+                },
+                400
+            )
+
+        # 4) Download submission and parse operation
+
+        try:
+            submission = json.loads(submission.download_as_string().decode())
+        except:
+            return (
+                {
+                    'error': 'Invalid Submission',
+                    'message': 'Submission was not valid JSON'
+                },
+                400
+            )
+
+        if 'operation' not in submission:
+            return (
+                {
+                    'error': 'Invalid Submission',
+                    'message': 'Submission contained no operation metadata'
+                },
+                400
+            )
+
+        signature_blob = getblob(
+            'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
+                bucket=data['bucket'],
+                submission_id=data['submission_id']
+            ),
+            credentials=session.credentials
+        )
+        if not signature_blob.exists():
+            return (
+                {
+                    'error': 'No Signature',
+                    'message': 'The submission signature could not be found. Refusing to abort job'
+                },
+                403
+            )
+
+        if not verify_signature(signature_blob, (data['submission_id'] + submission['operation']).encode()):
+            return (
+                {
+                    'error': 'Invalid Signature',
+                    'message': 'Could not validate submission signature. Refusing to abort job'
+                },
+                403
+            )
+
+        core_session = generate_core_session()
+
+        # 5) Generate abort key
+
+        sign_object(
+            data['submission_id'].encode(),
+            getblob(
+                'gs://{bucket}/lapdog-executions/{submission_id}/abort-key'.format(
+                    bucket=data['bucket'],
+                    submission_id=data['submission_id']
+                ),
+                credentials=session.credentials
+            ),
+            core_session.credentials
+        )
+
+        if 'hard' in data and data['hard']:
+            # 6) Abort operation
+            response = core_session.post(
+                "https://genomics.googleapis.com/v2alpha1/{operation}:cancel".format(
+                    operation=quote(submission['operation']) # Do not quote slashes here
+                )
+            )
+
+            return response.text, response.status_code
+        return (
+            {
+                'status': 'Aborting',
+                'message': 'A soft-abort request has been sent.'
+                ' If the submission does not abort soon, abort it with hard=True to force-kill the cromwell server'
+            },
+            200
+        )
     except:
+        traceback.print_exc()
         return (
             {
-                'error': 'Invalid Submission',
-                'message': 'Submission was not valid JSON'
+                'error': 'Unknown Error',
+                'message': traceback.format_exc()
             },
-            400
+            500
         )
 
-    if 'operation' not in submission:
-        return (
-            {
-                'error': 'Invalid Submission',
-                'message': 'Submission contained no operation metadata'
-            },
-            400
-        )
-
-    signature_blob = getblob(
-        'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
-            bucket=bucket,
-            submission_id=submission_id
-        ),
-        credentials=session.credentials
-    )
-    if not signature_blob.exists():
-        return (
-            {
-                'error': 'No Signature',
-                'message': 'The submission signature could not be found. Refusing to abort job'
-            },
-            403
-        )
-
-    try:
-        serialization.load_pem_public_key(
-            kms.KeyManagementServiceClient().get_public_key(
-                'projects/%s/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1' % os.environ.get('GCP_PROJECT')
-            ).pem.encode('ascii'),
-            default_backend()
-        ).verify(
-            signature_blob.download_as_string(),
-            sha256((
-                data['submission_id'] + submission['operation']
-            ).encode()).digest(),
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=32
-            ),
-            utils.Prehashed(hashes.SHA256())
-        )
-    except InvalidSignature:
-        return (
-            {
-                'error': 'Invalid Signature',
-                'message': 'Could not validate submission signature. Refusing to abort job'
-            },
-            403
-        )
-
-    core_session = generate_core_session()
-
-    # 5) Generate abort key
-
-    getblob(
-        'gs://{bucket}/lapdog-executions/{submission_id}/abort-key'.format(
-            bucket=data['bucket'],
-            submission_id=data['submission_id']
-        ),
-        credentials=session.credentials
-    ).upload_from_string(
-        kms.KeyManagementServiceClient(
-            credentials=core_session.credentials
-        ).asymmetric_sign(
-            'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1'.format(
-                ld_project=os.environ.get('GCP_PROJECT')
-            ),
-            {'sha256': sha256(data['submission_id'].encode()).digest()}
-        ).signature
-    )
-
-    # 6) Abort operation
-
-    response = core_session.post(
-        "https://genomics.googleapis.com/v2alpha1/{operation}:cancel".format(
-            operation=quote(submission['operation']) # Do not quote slashes here
-        )
-    )
-
-    return response.text, response.status_code
+@cors("POST")
+def check_abort(request):
+    data = request.get_json()
+    if not ('key' in data and 'id' in data):
+        return "missing params", 400
+    if verify_signature(base64.b64decode(data['key'].encode()), data['id'].encode(), _is_blob=False):
+        return 'OK', 200
+    return 'ERROR', 400
 
 if __name__ == '__main__':
     import argparse

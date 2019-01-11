@@ -1,9 +1,12 @@
+from __future__ import print_function
 import sys
 import subprocess
 import time
 import os
 import tempfile
 import requests
+import threading
+import base64
 
 last_call = None
 
@@ -13,40 +16,28 @@ abort_path = os.path.join(
 )
 
 def abort(handle):
-    from cryptography.exceptions import InvalidSignature
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec, padding, utils
-    from hashlib import sha256
-    from google.cloud import kms_v1 as kms
 
     subprocess.check_call('gsutil cp %s abort.key' % abort_path)
+    print('<<<ABORT KEY DETECTED>>>')
     with open('abort.key', 'rb') as r:
-        code = r.read()
-
-    try:
-        serialization.load_pem_public_key(
-            kms.KeyManagementServiceClient().get_public_key(
-                'projects/%s/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1' % os.environ.get('LAPDOG_PROJECT')
-            ).pem.encode('ascii'),
-            default_backend()
-        ).verify(
-            code,
-            sha256(os.environ.get('LAPDOG_SUBMISSION_ID').encode()).digest(),
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=32
-            ),
-            utils.Prehashed(hashes.SHA256())
+        response = requests.get(
+            os.environ.get("SIGNATURE_ENDPOINT"),
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                'key': base64.b64encode(r.read()),
+                'id': os.environ("LAPDOG_SUBMISSION_ID")
+            }
         )
-        handle.write('<<<ABORT KEY DETECTED>>>')
-        for workflow in requests.get('http://localhost:8000/api/workflows/v1/query').json():
-            handle.write(requests.post('http://localhost:8000/api/workflows/v1/%s/abort' % workflow['id']).text())
-        handle.write("<<<ABORTED>>>")
-        subprocess.check_call('gsutil cp %s %s' % (handle.name, sys.argv[1]), shell=True)
-        sys.exit("Aborted")
-    except InvalidSignature:
-        handle.write('<<<INVALID ABORT KEY>>>')
+    if response.status_code == 200:
+        for workflow in requests.get('http://localhost:8000/api/workflows/v1/query?status=Running').json():
+            requests.post('http://localhost:8000/api/workflows/v1/%s/abort' % workflow['id']).text()
+        print("<<<ABORTED ALL WORKFLOWS. WAITING FOR CROMWELL SHUTDOWN>>>")
+        # subprocess.check_call('gsutil cp %s %s' % (handle.name, sys.argv[1]), shell=True)
+        # sys.exit("Aborted")
+    else:
+        print('<<<INVALID ABORT KEY>>>')
 
 
 def throttle(n):
@@ -60,31 +51,57 @@ def throttle(n):
         return call
     return wrapper
 
-
 def _flush(handle):
+    global volume
     handle.flush()
-    subprocess.check_call('gsutil cp %s %s' % (handle.name, sys.argv[1]), shell=True)
+    subprocess.check_call('gsutil -h "Content-Type:text/plain" cp %s %s' % (handle.name, sys.argv[1]), shell=True)
     if subprocess.call('gsutil ls %s' % abort_path, shell=True) == 0:
         # abort key located
         abort(handle)
-    return os.path.getsize(handle.name)
+    volume += os.path.getsize(handle.name)
 
-flush = throttle(120)(_flush)
-flush_slow = throttle(300)(_flush)
-flush_rare = throttle(3600)(_flush)
+def flush(handle, debounce_interval):
+    global last_call
+    call_time = time.time()
+    last_call = call_time
+    n = debounce_interval / 2
+    for i in range(n):
+        time.sleep(2)
+        if last_call != call_time:
+            return
+    if last_call == call_time:
+        _flush(handle)
 
-def write(handle, volume, line):
+# flush = throttle(120)(_flush)
+# flush_slow = throttle(300)(_flush)
+# flush_rare = throttle(3600)(_flush)
+
+def write(handle, line):
     handle.write(line.rstrip() + '\n')
-    if volume > 1073741824: # 1 Gib
-        upload = flush_rare(handle)
-    elif volume > 52428800: # 50 Mib
-        upload = flush_slow(handle)
-    else:
-        upload = flush(handle)
-    return volume + (upload if upload is not None else 0)
+    while threading.activeCount() >= 1000:
+        time.sleep(1)
+    threading.Thread(
+        target=flush,
+        args=(
+            handle,
+            1800 if volume > 1073741824 else (
+                300 if volume > 52428800 else 60
+            )
+        )
+    ).start()
+    # if volume > 1073741824: # 1 Gib
+    #     upload = flush_rare(handle)
+    # elif volume > 52428800: # 50 Mib
+    #     upload = flush_slow(handle)
+    # else:
+    #     upload = flush(handle)
 
 volume = 0
 with tempfile.NamedTemporaryFile('w') as tmp:
     while True:
-        volume = write(tmp, volume, raw_input()) # Dumb, but will crash when stdin closes
-        tmp.write('\n(VOLUME %d)\n' % volume)
+        line = raw_input() # Dumb, but will crash when stdin closes
+        if line.rstrip() == '<<<EOF>>>':
+            sys.exit(0)
+        write(tmp, line)
+        # tmp.write('\n(VOLUME %d)\n' % volume)
+        print(line.rstrip())

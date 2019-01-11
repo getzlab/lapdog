@@ -15,7 +15,7 @@ import warnings
 import crayons
 import os
 import json
-from .cloud import get_token_info, ld_meta_bucket_for_project, getblob
+from .cloud import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob
 from urllib.parse import quote
 import sys
 
@@ -31,15 +31,6 @@ credentials_file = os.path.join(
     'gcloud',
     'application_default_credentials.json'
 )
-
-@lru_cache()
-def ld_project_for_namespace(namespace):
-    # TEMP
-    warnings.warn("Project for namespace returns constant")
-    return 'broad-cga-aarong-gtex' # Note: we can
-    prefix = ('ld-'+namespace)[:25]
-    suffix = md5(prefix.encode()).hexdigest().lower()
-    return prefix + '-' + suffix[:4]
 
 @cached(60, 1)
 def get_account():
@@ -253,7 +244,7 @@ class Gateway(object):
         print("TODO : Create user-execution-group in firecloud if not already exists")
         print("TODO : Add new service account to user-execution-group")
 
-    def create_submission(self, bucket, submission_id, workflow_options=None, memory=3):
+    def create_submission(self, workspace, bucket, submission_id, workflow_options=None, memory=3):
         """
         Sends a request through the lapdog execution API to start a new submission.
         Takes the local submission ID.
@@ -279,6 +270,8 @@ class Gateway(object):
                 'token': get_access_token(),
                 'bucket': bucket,
                 'submission_id': submission_id,
+                'namespace': self.namespace,
+                'workspace': workspace,
                 'workflow_options': workflow_options if workflow_options is not None else {},
                 'memory': memory*1024
             }
@@ -303,7 +296,7 @@ class Gateway(object):
         return False, response
 
 
-    def abort_submission(self, submission_id, operations):
+    def abort_submission(self, bucket, submission_id, hard=False):
         """
         Sends a request through the lapdog execution API to abort a running submission.
         Takes the local submission ID and a list of operations corresponding to
@@ -315,7 +308,7 @@ class Gateway(object):
         then deletes all workflow machines, then finally the cromwell machine.
         """
         warnings.warn("[ALPHA] Gateway Abort Submission")
-        response = requests.post(
+        response = requests.delete(
             'https://us-central1-{project}.cloudfunctions.net/abort-alpha'.format(
                 project=self.project
             ),
@@ -324,6 +317,7 @@ class Gateway(object):
                 'token': get_access_token(),
                 'bucket': bucket,
                 'submission_id': submission_id,
+                'hard': hard
             }
         )
         if response.status_code != 200:
