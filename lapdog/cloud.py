@@ -22,7 +22,7 @@ import warnings
 import base64
 import sys
 
-def _deploy(function, endpoint, service_account=None):
+def _deploy(function, endpoint, service_account=None, project=None):
     import tempfile
     import shutil
     with tempfile.TemporaryDirectory() as tempdir:
@@ -36,11 +36,12 @@ def _deploy(function, endpoint, service_account=None):
             os.path.join(tempdir, 'main.py')
         )
         subprocess.check_call(
-            'gcloud beta functions deploy {endpoint} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
+            'gcloud {project} beta functions deploy {endpoint} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
                 endpoint=endpoint,
                 function=function,
                 path=tempdir,
-                service_account='' if service_account is None else ('--service-account '+service_account)
+                service_account='' if service_account is None else ('--service-account '+service_account),
+                project='' if project is None else ('--project '+project)
             ),
             shell=True
         )
@@ -1040,6 +1041,69 @@ def register(request):
             },
             400
         )
+    except:
+        traceback.print_exc()
+        return (
+            {
+                'error': 'Unknown Error',
+                'message': traceback.format_exc()
+            },
+            500
+        )
+
+@cors('POST')
+def query_account(request):
+    try:
+        data = request.get_json()
+
+        # 1) Validate the token
+
+        if 'token' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "token"'
+                },
+                400
+            )
+
+        token_data = get_token_info(data['token'])
+        if 'error' in token_data:
+            return (
+                {
+                    'error': 'Invalid Token',
+                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                },
+                401
+            )
+
+        # 2) Check service account
+        default_session = generate_default_session(scopes=['https://www.googleapis.com/auth/cloud-platform'])
+        account_email = ld_acct_in_project(token_data['email'])
+        response = default_session.get(
+            'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}'.format(
+                project=os.environ.get('GCP_PROJECT'),
+                account=quote(account_email)
+            )
+        )
+        if response.status_code >= 400:
+            return (
+                {
+                    'error': 'Unable to query service account',
+                    'message': response.text
+                },
+                400
+            )
+        if response.json()['email'] != account_email:
+            return (
+                {
+                    'error': 'Service account email did not match expected value',
+                    'message': response.json()['email'] + ' != ' + account_email
+                },
+                400
+            )
+        return account_email, 200
+
     except:
         traceback.print_exc()
         return (

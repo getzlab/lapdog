@@ -144,6 +144,31 @@ class Gateway(object):
         print("Enabling billing")
         print(cmd)
         # subprocess.check_call(cmd, shell=True)
+        print("Enabling servies...")
+        services = [
+            'cloudapis.googleapis.com',
+            'clouddebugger.googleapis.com',
+            'cloudfunctions.googleapis.com',
+            'cloudkms.googleapis.com',
+            'cloudresourcemanager.googleapis.com',
+            'cloudtrace.googleapis.com',
+            'compute.googleapis.com',
+            'deploymentmanager.googleapis.com',
+            'genomics.googleapis.com',
+            'iam.googleapis.com',
+            'iamcredentials.googleapis.com',
+            'logging.googleapis.com',
+            'servicemanagement.googleapis.com',
+            'storage-component.googleapis.com',
+            'storage-api.googleapis.com'
+        ]
+        for service in services:
+            cmd = 'gcloud --project {project} services enable {service}'.format(
+                project=ld_project_for_namespace(project_id),
+                service=service
+            )
+            print(cmd)
+            # subprocess.check_call(cmd, shell=True)
         print("Creating Signing Key")
         cmd = (
             'gcloud --project {project} kms keyrings create lapdog --location us'.format(
@@ -319,10 +344,11 @@ class Gateway(object):
 
         print("Deploying Cloud Functions")
         from .cloud import _deploy
-        # _deploy('create_submission', 'submit', functions_account)
-        # _deploy('abort_submission', 'abort', functions_account)
-        # _deploy('check_abort', 'signature', functions_account)
-        # _deploy('register', 'register', functions_account)
+        # _deploy('create_submission', 'submit', functions_account, ld_project_for_namespace(project_id))
+        # _deploy('abort_submission', 'abort', functions_account, ld_project_for_namespace(project_id))
+        # _deploy('check_abort', 'signature', functions_account, ld_project_for_namespace(project_id))
+        # _deploy('register', 'register', functions_account, ld_project_for_namespace(project_id))
+        # _deploy('query_account', 'query', functions_account, ld_project_for_namespace(project_id))
         # Gateway.grant_access_to_user(
         #     project_id,
         #     get_account(),
