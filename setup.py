@@ -6,7 +6,6 @@ setup(
     packages = [
         'lapdog',
         'lapdog.api',
-        'lapdog.cloud'
     ],
     package_data={
         '':[
@@ -34,15 +33,19 @@ setup(
         ]
     },
     install_requires = [
-        'firecloud-dalmatian',
-        'google-cloud-storage>=1.9.0',
-        'pyyaml',
-        'agutil>=4.0.0',
-        'flask_cors',
-        'crayons',
-        'connexion',
+        'firecloud-dalmatian==0.0.4',
+        'google-cloud-storage>=1.13.2',
+        'PyYAML==3.12',
+        'agutil>=4.0.2',
+        'Flask-Cors==3.0.6',
+        'crayons==0.1.2',
+        'connexion==1.5.3',
         'oauth2client',
-        'requests'
+        'requests>=2.18.0',
+        'googleapis-common-protos>=1.5.0',
+        'google-auth>=1.4.0',
+        'google-cloud-kms==0.2.1',
+        'cryptography>=2.1.0'
     ],
     classifiers = [
         "Programming Language :: Python :: 3",

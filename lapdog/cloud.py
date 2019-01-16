@@ -22,6 +22,25 @@ import warnings
 import base64
 import sys
 
+# TODO: Update all endpoints to v1 for release
+__API_VERSION__ = {
+    'submit': 'alpha',
+    'abort': 'alpha',
+    'register': 'alpha',
+    'signature': 'alpha',
+    'query': 'alpha'
+}
+# The api version will allow versioning of cloud functions
+# The patching system will be as follows:
+# End users who update their lapdog will encounter errors because the cloud endpoints do not exist
+# End users contact administrators, asking them to update
+# Administrators can run lapdog patch {namespace} (to be implemented)
+# Lapdog patch will run code from lapdog.patch.__project_admin_apply_patch
+# This function will deploy new cloud functions and run any other arbitrary code
+# Such as updating iam policy bindings or role permissions
+
+__CROMWELL_TAG__ = 'gateway'
+
 def _deploy(function, endpoint, service_account=None, project=None):
     import tempfile
     import shutil
@@ -36,8 +55,9 @@ def _deploy(function, endpoint, service_account=None, project=None):
             os.path.join(tempdir, 'main.py')
         )
         subprocess.check_call(
-            'gcloud {project} beta functions deploy {endpoint} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
+            'gcloud {project} beta functions deploy {endpoint}-{version} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
                 endpoint=endpoint,
+                version=__API_VERSION__[endpoint],
                 function=function,
                 path=tempdir,
                 service_account='' if service_account is None else ('--service-account '+service_account),
@@ -107,6 +127,20 @@ def create_submission(request):
                 {
                     'error': 'Invalid Token',
                     'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                },
+                401
+            )
+
+        # 1.b) Verify the user has a pet account
+        response = query_service_account(
+            generate_default_session(scopes=['https://www.googleapis.com/auth/cloud-platform']),
+            ld_acct_in_project(token_data['email'])
+        )
+        if response.status_code != 200:
+            return (
+                {
+                    'error': 'User has not registered with this Lapdog Engine',
+                    'message': response.text
                 },
                 401
             )
@@ -205,14 +239,15 @@ def create_submission(request):
             'pipeline': {
                 'actions': [
                     {
-                        'imageUri': 'gcr.io/broad-cga-aarong-gtex/wdl_runner:gateway',
+                        'imageUri': 'gcr.io/broad-cga-aarong-gtex/wdl_runner:' + __CROMWELL_TAG__,
                         'commands': [
                             '/wdl_runner/wdl_runner.sh'
                         ],
                         'environment': {
-                            'SIGNATURE_ENDPOINT': 'https://{region}-{project}.cloudfunctions.net/signature-alpha'.format(
+                            'SIGNATURE_ENDPOINT': 'https://{region}-{project}.cloudfunctions.net/signature-{version}'.format(
                                 region=os.environ.get('FUNCTION_REGION'),
-                                project=os.environ.get("GCP_PROJECT")
+                                project=os.environ.get("GCP_PROJECT"),
+                                version=__API_VERSION__['signature']
                             ),
                             'LAPDOG_PROJECT': os.environ.get('GCP_PROJECT'),
                             'WDL': "gs://{bucket}/lapdog-executions/{submission_id}/method.wdl".format(
@@ -1051,6 +1086,14 @@ def register(request):
             500
         )
 
+def query_service_account(session, account):
+    return session.get(
+        'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}'.format(
+            project=os.environ.get('GCP_PROJECT'),
+            account=quote(account)
+        )
+    )
+
 @cors('POST')
 def query_account(request):
     try:
@@ -1080,12 +1123,7 @@ def query_account(request):
         # 2) Check service account
         default_session = generate_default_session(scopes=['https://www.googleapis.com/auth/cloud-platform'])
         account_email = ld_acct_in_project(token_data['email'])
-        response = default_session.get(
-            'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}'.format(
-                project=os.environ.get('GCP_PROJECT'),
-                account=quote(account_email)
-            )
-        )
+        response = query_service_account(default_session, account_email)
         if response.status_code >= 400:
             return (
                 {

@@ -15,7 +15,7 @@ import warnings
 import crayons
 import os
 import json
-from .cloud import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob, proxy_group_for_user, generate_user_session, update_iam_policy
+from .cloud import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob, proxy_group_for_user, generate_user_session, update_iam_policy, __API_VERSION__
 from urllib.parse import quote
 import sys
 import tempfile
@@ -355,6 +355,14 @@ class Gateway(object):
         #     True
         # )
 
+    def query_registration(self):
+        """
+        Verifies that the current user is registered with this gateway
+        """
+        response = requests.post(
+            self.get_endpoint('query')
+        )
+
     @classmethod
     def grant_access_to_user(cls, project_id, target_account, is_moderator=False):
         """
@@ -389,9 +397,7 @@ class Gateway(object):
         """
         warnings.warn("[ALPHA] Gateway Create Submission")
         response = requests.post(
-            'https://us-central1-{project}.cloudfunctions.net/submit-alpha'.format(
-                project=self.project
-            ),
+            self.get_endpoint('submit'),
             headers={'Content-Type': 'application/json'},
             json={
                 'token': get_access_token(),
@@ -436,9 +442,7 @@ class Gateway(object):
         """
         warnings.warn("[ALPHA] Gateway Abort Submission")
         response = requests.delete(
-            'https://us-central1-{project}.cloudfunctions.net/abort-alpha'.format(
-                project=self.project
-            ),
+            self.get_endpoint('abort'),
             headers={'Content-Type': 'application/json'},
             json={
                 'token': get_access_token(),
@@ -447,40 +451,31 @@ class Gateway(object):
                 'hard': hard
             }
         )
+        if response.status_code == 404:
+
         if response.status_code != 200:
             return response
 
-    def monitor_submission(self, submission_id):
+    def get_endpoint(self, endpoint):
         """
-        Sends a request through the lapdog execution API to allow the user to connect
-        to a cromwell instance to monitor the logs.
-        Takes the local submission ID.
-        Assumes the following file to be in place:
-        Submission JSON: gs://{workspace bucket}/lapdog-executions/{submission id}/submission.json
-        Requires that the user has an ssh identity set up at ~/.ssh/id_rsa
-
-        Sends the user's public key (~/.ssh/id_rsa.pub) to the API which copies
-        it to the cromwell instance
+        1) Generates the appropriate url for a given endpoint in this project
+        2) Checks that the endpoint exists by submitting an OPTIONS request
+        3) Returns the full endpoint url
         """
-        instance_ip = cache_fetch(
-            'cromwell-ip',
-            self.workspace.namespace,
-            self.workspace.workspace,
-            submission_id,
-            'ip-address'
+        if endpoint not in __API_VERSION__:
+            raise KeyError("Endpoint not defined: "+endpoint)
+        endpoint_url = 'https://us-central1-{project}.cloudfunctions.net/{endpoint}-{version}'.format(
+            project=self.project,
+            endpoint=quote(endpoint),
+            version=__API_VERSION__[endpoint]
         )
-        if instance_ip is None:
-            # Never connected to this instance before
-            if not os.path.isfile(is_rsa):
-                raise FileNotFoundError("No ssh key found. Please run 'ssh-keygen'")
-            print("TODO : Submit id_rsa.pub to API")
-            print("TODO : Save IP address to instance_ip variable")
-            cache_write(
-                instance_ip,
-                'cromwell-ip',
-                self.workspace.namespace,
-                self.workspace.workspace,
-                submission_id,
-                'ip-address'
-            )
-        return instance_ip # `ssh -i ~/.ssh/id_rsa {instance_ip}`
+        response = requests.options(endpoint_url)
+        if response.status_code == 204:
+            return endpoint_url
+        if response.status_code == 200:
+            print("Lapdog Engine Project", self.project, "for namespace", self.namespace, "does not support api version", __API_VERSION__[endpoint], file=sys.stderr)
+            raise ValueError("This project (%s) does not support api version %s. Please contact the namespace admin" % (
+                self.project,
+                __API_VERSION__[endpoint]
+            ))
+        raise ValueError("Unexpected status (%d) when checking for endpoint" % response.status_code)
