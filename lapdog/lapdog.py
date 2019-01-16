@@ -909,19 +909,23 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         print("Connecting to Gateway to launch submission...")
 
-        status, result = self.gateway.create_submission(
-            self.workspace,
-            self.bucket_id,
-            submission_id,
-            workflow_options={
-                'default_runtime_attributes': {
-                    'zones': zone,
+        try:
+
+            status, result = self.gateway.create_submission(
+                self.workspace,
+                self.bucket_id,
+                submission_id,
+                workflow_options={
+                    'default_runtime_attributes': {
+                        'zones': zone,
+                    },
+                    'write_to_cache': True,
+                    'read_from_cache': True,
                 },
-                'write_to_cache': True,
-                'read_from_cache': True,
-            },
-            memory=submission_data['runtime']['memory']
-        )
+                memory=submission_data['runtime']['memory']
+            )
+        except:
+            blob.delete()
 
         if not status:
             print("(%d)" % result.status_code, ":", result.text, file=sys.stderr)

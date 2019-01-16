@@ -346,12 +346,10 @@ def get_cache(namespace, name):
 def sync_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
     if ws.live:
-        print("DEV GOING OFFLINE")
         ws.populate_cache()
         ws.operator._webcache_ = True
         ws.operator.go_offline()
     else:
-        print("DEV SYNCING")
         ws.sync()
     return get_cache(namespace, name)
 

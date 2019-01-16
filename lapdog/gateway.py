@@ -210,6 +210,7 @@ class Gateway(object):
         #     json={
         #         "roleId": "Pet_account",
         #         "role": {
+        #             "title": "Pet_account"
         #             "includedPermissions": [
         #                 "cloudkms.cryptoKeyVersions.viewPublicKey",
         #                 "resourcemanager.projects.get",
@@ -234,6 +235,7 @@ class Gateway(object):
         #     json={
         #         "roleId": "Core_account",
         #         "role": {
+        #             "title": "Core_account",
         #             "includedPermissions": [
         #                 "cloudkms.cryptoKeyVersions.useToSign",
         #                 "cloudkms.cryptoKeyVersions.viewPublicKey",
@@ -264,7 +266,9 @@ class Gateway(object):
         #     json={
         #         "roleId": "Functions_account",
         #         "role": {
+        #             "title": "Functions_account",
         #             "includedPermissions": [
+        #                 "cloudkms.cryptoKeyVersions.viewPublicKey",
         #                 "iam.serviceAccountKeys.create",
         #                 "iam.serviceAccountKeys.delete",
         #                 "iam.serviceAccountKeys.get",
@@ -278,6 +282,9 @@ class Gateway(object):
         #                 "iam.serviceAccounts.update",
         #                 "resourcemanager.projects.get",
         #                 "resourcemanager.projects.list",
+        #                 "genomics.operations.create",
+        #                 "genomics.operations.get",
+        #                 "genomics.operations.list",
         #                 "resourcemanager.projects.getIamPolicy",
         #                 "resourcemanager.projects.setIamPolicy"
         #             ],

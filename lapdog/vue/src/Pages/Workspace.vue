@@ -142,31 +142,14 @@
           Execution Status:
         </div>
         <div class="col s4">
-          <span v-if="!acl" class="orange-text text-darken-4">
+          <span v-if="!ws" class="orange-text text-darken-4">
             Pending...
           </span>
-          <span v-else-if="acl.failed" class="red-text">
-            <span v-if="acl.reason == 'firecloud'">
-              Firecloud API Error
-            </span>
-            <span v-else-if="acl.reason == 'acl-read'">
-              Unknown (Unable to parse workspace ACL)
-            </span>
-            <span v-else-if="acl.reason == 'permissions'">
-              Unknown (Insufficient permissions access ACL)
-            </span>
-            <span v-else-if="acl.reason == 'registration'">
-              Lapdog Execution not initialized
-            </span>
-            <span v-else>
-              Unknown error: {{acl.reason}}
-            </span>
+          <span v-else-if="ws.gateway" class="green-text">
+            Lapdog Engine Initialized
           </span>
-          <span v-else-if="acl.service_account" class="green-text">
-            Ready to Execute
-          </span>
-          <span v-else-if="!acl.service_account">
-            <a v-on:click="set_acl(namespace, workspace)" class='btn blue'>Enable for this workspace</a>
+          <span v-else class="red-text">
+            Not Ready. Contact Namespace Admin
           </span>
         </div>
       </div>
@@ -681,7 +664,7 @@
             this.entity_types = response.data.entities;
             this.method_configs = response.data.configs;
             if (!this.ws.gateway) {
-              window.materialize.toast({html: "Lapdog is not initialized for this namespace. Please contact an administrator", displayLength: 60000});
+              window.materialize.toast({html: "Lapdog is not initialized for this namespace. Please contact an administrator", displayLength: 20000});
               window.$('.tooltipped').tooltip();
               if (!(this.ws.entities && this.ws.entities.length)) window.$('.execute-container').hover(
                 () => {
