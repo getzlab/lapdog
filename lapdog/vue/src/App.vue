@@ -123,12 +123,6 @@
             <a href="https://github.com/agraubert/lapdog/issues">Lapdog Github repository</a>
           </div>
         </div>
-        <div class="row" style="margin-top: 10px; border: 2px solid red;">
-          <div class="col s10 offset s1 red-text pushpin">
-            <strong>This is the Gateway Dev branch.</strong>
-            All usage is force-billed to broad-cga-aarong-gtex
-          </div>
-        </div>
         <router-view></router-view>
       </div>
     </main>

@@ -24,11 +24,11 @@ import sys
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
-    'submit': 'alpha',
-    'abort': 'alpha',
-    'register': 'alpha',
-    'signature': 'alpha',
-    'query': 'alpha',
+    'submit': 'beta',
+    'abort': 'beta',
+    'register': 'beta',
+    'signature': 'beta',
+    'query': 'beta',
     'existence': 'frozen'
 }
 # The api version will allow versioning of cloud functions
@@ -574,7 +574,7 @@ def update_iam_policy(session, grants, project=None):
                     ]
                 }
             )
-    response = default_session.post(
+    response = session.post(
         'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:setIamPolicy'.format(
             project=project
         ),
@@ -858,23 +858,33 @@ def register(request):
 
         default_session = generate_default_session(scopes=['https://www.googleapis.com/auth/cloud-platform'])
         account_email = ld_acct_in_project(token_data['email'])
-        account_name = account_name.split('@')[0]
-        response = default_session.post(
-            'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts'.format(
-                project=os.environ.get('GCP_PROJECT')
-            ),
-            headers={'Content-Type': 'application/json'},
-            json={
-                'accountId': account_name,
-                'serviceAccount': {
-                    'displayName': account_name
+        response = query_service_account(default_session, account_email)
+        if response.status_code == 404:
+            account_name = account_email.split('@')[0]
+            response = default_session.post(
+                'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts'.format(
+                    project=os.environ.get('GCP_PROJECT')
+                ),
+                headers={'Content-Type': 'application/json'},
+                json={
+                    'accountId': account_name,
+                    'serviceAccount': {
+                        'displayName': token_data['email']
+                    }
                 }
-            }
-        )
-        if response.status_code >= 400:
+            )
+            if response.status_code >= 400:
+                return (
+                    {
+                        'error': 'Unable to issue service account',
+                        'message': response.text
+                    },
+                    400
+                )
+        elif response.status_code >= 400:
             return (
                 {
-                    'error': 'Unable to issue service account',
+                    'error': 'Unable to query service account',
                     'message': response.text
                 },
                 400
@@ -890,7 +900,7 @@ def register(request):
 
         # 4) Update worker bindings
 
-        default_session.post(
+        response = default_session.post(
             'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}:setIamPolicy'.format(
                 project=os.environ.get('GCP_PROJECT'),
                 account=account_email
@@ -911,6 +921,14 @@ def register(request):
                 "updateMask": "bindings"
             }
         )
+
+        if response.status_code != 200:
+            return (
+                {
+                    'error': 'Unable to update service account bindings',
+                    'message': '(%d) : %s' % (response.status_code, response.text)
+                }
+            )
 
         # 5) Update project bindings
 
@@ -935,7 +953,7 @@ def register(request):
         response = default_session.post(
             'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{email}/keys'.format(
                 project=os.environ.get('GCP_PROJECT'),
-                account=account_email
+                email=quote(account_email)
             )
         )
         if response.status_code >= 400:
@@ -1007,7 +1025,7 @@ def register(request):
                 # 9) Register Account in Group
                 response = session.put(
                     'https://api.firecloud.org/api/groups/{group}/member/{email}'.format(
-                        group=target_group+'@firecloud.org',
+                        group=target_group,
                         email=quote(account_email)
                     )
                 )

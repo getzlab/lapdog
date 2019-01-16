@@ -189,7 +189,7 @@ class Gateway(object):
         cmd = (
             'gcloud --project {project} alpha kms keys create lapdog-sign --location us --keyring'
             ' lapdog --purpose asymmetric-signing --default-algorithm '
-            'RSA_SIGN_PSS_3072_SHA256 --protection-level SOFTWARE'.format(
+            'rsa-sign-pss-3072-sha256 --protection-level software'.format(
                 project=ld_project_for_namespace(project_id)
             )
         )
@@ -309,7 +309,7 @@ class Gateway(object):
         functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(ld_project_for_namespace(project_id))
         print("Creating Metadata bucket while service accounts are created")
         cmd = (
-            'gsutil mb -c Standard -l us-central1 -p {project} {bucket}'.format(
+            'gsutil mb -c Standard -l us-central1 -p {project} gs://{bucket}'.format(
                 project=ld_project_for_namespace(project_id),
                 bucket=ld_meta_bucket_for_project(ld_project_for_namespace(project_id))
             )
@@ -365,7 +365,11 @@ class Gateway(object):
         Verifies that the current user is registered with this gateway
         """
         response = requests.post(
-            self.get_endpoint('query')
+            self.get_endpoint('query'),
+            headers={'Content-Type': 'application/json'},
+            json={
+                'token': get_access_token(),
+            }
         )
         return response.status_code == 200
 
@@ -482,7 +486,7 @@ class Gateway(object):
         response = requests.options(endpoint_url)
         if response.status_code == 204:
             return endpoint_url
-        if response.status_code == 200:
+        if response.status_code == 200 or response.status_code == 404:
             print("Lapdog Engine Project", self.project, "for namespace", self.namespace, "does not support api version", __API_VERSION__[endpoint], file=sys.stderr)
             raise ValueError("The project api for %s does not support %s version %s. Please contact the namespace admin" % (
                 self.project,
