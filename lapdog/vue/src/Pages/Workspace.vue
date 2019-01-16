@@ -177,28 +177,18 @@
         <div class="col s4">
           {{ws.accessLevel}}
         </div>
-        <div class="col s2">
+        <div class="col s3">
           Workspace Cache State:
         </div>
-        <div class="col s2">
-          <span v-if="!cache_state" class="amber-text text-darken-4">
-            Fetching...
-          </span>
-          <span v-else-if="cache_state == 'up-to-date'" class="green-text">
-            Online
-          </span>
-          <span v-else-if="cache_state == 'sync'" class="cyan-text">
-            Syncing...
-          </span>
-          <span v-else-if="cache_state == 'outdated'" class="amber-text text-darken-3">
-            Offline
-          </span>
-          <span v-else-if="cache_state == 'not-loaded'" class="red-text">
-            Not Loaded
-          </span>
-        </div>
-        <div class="col s2">
-          <a class='btn blue' v-if="cache_state != 'sync'" v-on:click="sync_cache">Sync</a>
+        <div class="col s2 left">
+          <div class="switch">
+            <label>
+              Offline
+              <input v-bind:disabled="syncing" v-bind:checked="cache_state" class="" type="checkbox" v-on:change="sync_cache">
+              <span class="lever"></span>
+              Online
+            </label>
+          </div>
         </div>
       </div>
       <div class="row">
@@ -455,7 +445,8 @@
         lodash: _,
         ws: null,
         acl: null,
-        cache_state: null,
+        cache_state: true,
+        syncing: false,
         method_configs:null,
         entity_types: null,
         entity_field: "",
@@ -680,6 +671,8 @@
         this.batch_size = 250;
         this.query_size = 100;
         this.cached_submissions = true;
+        this.cache_state = true;
+        this.syncing = false;
         // window.$('.execute-button').tooltip('close');
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
@@ -706,7 +699,7 @@
             axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
               .then(response => {
                 console.log(response.data);
-                this.cache_state = response.data;
+                this.cache_state = response.data.state;
                 console.log("Fetching submissions");
                   axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions?cache=true')
                     .then(response => {
@@ -783,16 +776,19 @@
       //     })
       // },
       sync_cache() {
-        this.cache_state = 'sync';
+        this.syncing = true;
+        this.cache_state = !this.cache_state;
         axios.put(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache')
           .then(response => {
             console.log(response.data);
-            this.cache_state = response.data
+            this.cache_state = response.data.state;
+            this.syncing = false;
           })
           .catch(error => {
             console.error("FAIL")
             console.error(error)
-            window.materialize.toast("Failed to sync the workspace cache: "+error.response.data)
+            window.materialize.toast({html:"Failed to sync the workspace cache: "+error.response.data});
+            this.syncing = false;
           })
       },
       get_configs() {
@@ -823,6 +819,7 @@
     },
     beforeRouteUpdate(to, from, next) {
       this.ws = null;
+      this.syncing = false;
       this.acl = null;
       this.entities = null;
       this.method_configs = null;
@@ -859,6 +856,14 @@
   td.trunc {
     max-width: 100px;
     direction: rtl;
+  }
+
+  .switch label input[type=checkbox]:checked+.lever {
+    background-color: #1e88e5;
+  }
+
+  .switch label input[type=checkbox]:checked+.lever:after {
+    background-color: #1e88e5;
   }
 
 </style>

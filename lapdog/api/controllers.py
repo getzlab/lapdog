@@ -335,16 +335,18 @@ def get_entities(namespace, name, etype, start=0, end=None):
 
 def get_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
-    if ws.operator._webcache_:
-        if ws.live and not (len(ws.operator.dirty) or len(ws.operator.pending)):
-            return 'up-to-date'
-        return 'outdated'
-    return 'not-loaded'
+    return {'state': ws.live}, 200
 
 def sync_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
-    ws.populate_cache()
-    ws.operator._webcache_ = True
+    if ws.live:
+        print("DEV GOING OFFLINE")
+        ws.populate_cache()
+        ws.operator._webcache_ = True
+        ws.operator.go_offline()
+    else:
+        print("DEV SYNCING")
+        ws.sync()
     return get_cache(namespace, name)
 
 def create_workspace(namespace, name, parent):
