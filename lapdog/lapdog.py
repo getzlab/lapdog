@@ -658,7 +658,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Returns a submission adapter for a lapdog submission
         """
-        return adapters.SubmissionAdapter(self.get_bucket_id(), submission_id)
+        return adapters.SubmissionAdapter(self.get_bucket_id(), submission_id, self.gateway)
 
     def list_submissions(self, config=None, lapdog_only=False, cached=False):
         """

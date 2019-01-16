@@ -272,7 +272,7 @@ class CommandReader(object):
 ## 2) Adapter:
 
 class SubmissionAdapter(object):
-    def __init__(self, bucket, submission):
+    def __init__(self, bucket, submission, gateway=None):
         # print("Constructing adapter")
         self.path = os.path.join(
             'gs://'+bucket,
@@ -299,7 +299,7 @@ class SubmissionAdapter(object):
         self.identifier = self.data['identifier']
         self.operation = self.data['operation']
         self.raw_workflows = self.data['workflows']
-        self.gateway = Gateway(self.namespace)
+        self.gateway = Gateway(self.namespace) if gateway is None else gateway
         self.workflow_mapping = {}
         self.thread = None
         self.bucket = bucket

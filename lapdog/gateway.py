@@ -115,6 +115,12 @@ class Gateway(object):
     def __init__(self, namespace):
         self.namespace = namespace
         self.project = ld_project_for_namespace(namespace)
+        if not self.query_registration():
+            warnings.warn(
+                "Gateway for namespace {} not initialized. Please run Gateway.register()".format(
+                    self.namespace
+                )
+            )
 
     @classmethod
     def initialize_lapdog_for_project(cls, billing_id, project_id):
@@ -126,6 +132,7 @@ class Gateway(object):
         of the service and the only user capable of using it.
         Call authorize_user to allow another user to use the service
         """
+        warnings.warn('Initialization disabled')
         cmd = (
             'gcloud projects create {project_id}'.format(
                 project_id=ld_project_for_namespace(project_id)
@@ -362,22 +369,29 @@ class Gateway(object):
         response = requests.post(
             self.get_endpoint('query')
         )
+        return response.status_code == 200
 
-    @classmethod
-    def grant_access_to_user(cls, project_id, target_account, is_moderator=False):
+    def register(self, workspace, bucket):
         """
-        Grants the listed account access to the lapdog execution API for the given
-        firecloud project. NOTE: This does not grant the user access to any data
-        in any workspaces. This allocates a new service account for the user and
-        grants required permissions to interact with the API.
-
-        If is_moderator is set to True, the user will also have permissions to grant
-        other users access to the lapdog execution API
+        Registers the currently logged in account with the api
+        Must provide a workspace name and the associated bucket to prove that you have access
+        to at least one workspace for this namespace
         """
-        print("TODO : GRANT ROLES TO TARGET")
-        print("TODO : ISSUE SERVICE ACCOUNT FOR TARGET")
-        print("TODO : Create user-execution-group in firecloud if not already exists")
-        print("TODO : Add new service account to user-execution-group")
+        warnings.warn("[ALPHA] Gateway Register")
+        response = requests.post(
+            self.get_endpoint('register'),
+            headers={'Content-Type': 'application/json'},
+            json={
+                'token': get_access_token(),
+                'bucket': bucket,
+                'namespace': self.namespace,
+                'workspace': workspace,
+            }
+        )
+        if response.status_code != 200:
+            print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Gateway failed to register user")
+        return response.text # your account email
 
     def create_submission(self, workspace, bucket, submission_id, workflow_options=None, memory=3):
         """
@@ -451,8 +465,6 @@ class Gateway(object):
                 'hard': hard
             }
         )
-        if response.status_code == 404:
-
         if response.status_code != 200:
             return response
 
@@ -474,8 +486,9 @@ class Gateway(object):
             return endpoint_url
         if response.status_code == 200:
             print("Lapdog Engine Project", self.project, "for namespace", self.namespace, "does not support api version", __API_VERSION__[endpoint], file=sys.stderr)
-            raise ValueError("This project (%s) does not support api version %s. Please contact the namespace admin" % (
+            raise ValueError("The project api for %s does not support %s version %s. Please contact the namespace admin" % (
                 self.project,
+                endpoint,
                 __API_VERSION__[endpoint]
             ))
         raise ValueError("Unexpected status (%d) when checking for endpoint" % response.status_code)
