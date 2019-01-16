@@ -20,6 +20,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, utils
 import traceback
 import warnings
 import base64
+import sys
 
 def _deploy(function, endpoint, service_account=None):
     import tempfile
@@ -495,6 +496,63 @@ def fetch_submission_blob(session, bucket, submission_id):
         credentials=session.credentials
     )
 
+def check_user_service_account(account, session=None):
+    if session is None:
+        session = generate_default_session([
+            'https://www.googleapis.com/auth/cloud-platform',
+            'https://www.googleapis.com/auth/iam'
+        ])
+    response = session.get(
+        'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}'.format(
+            project=os.environ.get('GCP_PROJECT'),
+            account=quote(account)
+        )
+    )
+    if response.status_code == 200:
+        return response.json()
+    return None
+
+def update_iam_policy(session, grants, project=None):
+    if project is None:
+        project = os.environ.get('GCP_PROJECT')
+    policy = session.post(
+        'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:getIamPolicy'.format(
+            project=project
+        )
+    ).json()
+    for account_email, role in grants.items():
+        target_role = 'projects/{}/roles/{}'.format(
+            project,
+            role
+        )
+        if target_role in {binding['role'] for binding in policy['bindings']}:
+            for i, binding in enumerate(policy['bindings']):
+                if binding['role'] == target_role:
+                    policy['bindings'][i]['members'].append(
+                        account_email
+                    )
+        else:
+            policy['bindings'].append(
+                {
+                    'role': target_role,
+                    'members': [
+                        account_email
+                    ]
+                }
+            )
+    response = default_session.post(
+        'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:setIamPolicy'.format(
+            project=project
+        ),
+        headers={'Content-Type': 'application/json'},
+        json={
+            "policy": policy,
+            "updateMask": "bindings"
+        }
+    )
+    return response.status_code == 200, response
+
+
 @cors('DELETE')
 def abort_submission(request):
     try:
@@ -822,45 +880,22 @@ def register(request):
 
         # 5) Update project bindings
 
-        policy = default_session.post(
-            'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:getIamPolicy'.format(
-                project=os.environ.get('GCP_PROJECT')
-            )
-        ).json()
-        target_role = 'projects/{}/roles/Pet_account'.format(os.environ.get('GCP_PROJECT'))
-        if target_role in {binding['role'] for binding in policy['bindings']}:
-            for i, binding in enumerate(policy['bindings']):
-                if binding['role'] == target_role:
-                    policy['bindings'][i]['members'].append(
-                        account_email
-                    )
-        else:
-            policy['bindings'].append(
-                {
-                    'role': target_role,
-                    'members': [
-                        account_email
-                    ]
-                }
-            )
-        response = default_session.post(
-            'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:setIamPolicy'.format(
-                project=os.environ.get('GCP_PROJECT')
-            ),
-            headers={'Content-Type': 'application/json'},
-            json={
-                "policy": policy,
-                "updateMask": "bindings"
+        status, response = update_iam_policy(
+            default_session,
+            {
+                'serviceAccount:'+account_email: 'Pet_account'
             }
         )
-        if response.status_code >= 400:
+
+        if not status:
             return (
                 {
                     'error': 'Unable to update project IAM policy',
-                    'message': response.text
+                    'message': '(%d) : %s' % (response.status_code, response.text)
                 },
                 400
             )
+
         # 6) Generate Key
 
         response = default_session.post(
