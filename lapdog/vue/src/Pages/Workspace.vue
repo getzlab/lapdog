@@ -215,8 +215,8 @@
           </a>
         </div>
         <div class="col s6 execute-container">
-          <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-bind:class="ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
-            v-bind:data-tooltip="ws.entities && ws.entities.length ? '' : 'There are no entities in this workspace'"
+          <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-bind:class="ws.gateway && ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
+            v-bind:data-tooltip="ws.gateway ? (ws.entities && ws.entities.length ? '' : 'There are no entities in this workspace') : 'Lapdog is not initialized for this namespace'"
           >
             Execute new job
           </a>
@@ -680,6 +680,20 @@
             this.ws = response.data;
             this.entity_types = response.data.entities;
             this.method_configs = response.data.configs;
+            if (!this.ws.gateway) {
+              window.materialize.toast({html: "Lapdog is not initialized for this namespace. Please contact an administrator", displayLength: 60000});
+              window.$('.tooltipped').tooltip();
+              if (!(this.ws.entities && this.ws.entities.length)) window.$('.execute-container').hover(
+                () => {
+                  window.$('.execute-button').tooltip('open');
+                },
+                () => {
+                  setTimeout(() => {
+                    window.$('.execute-button').tooltip('close');
+                  }, 100);
+                }
+              );
+            }
             window.$('.modal').modal();
             setTimeout(() => {
               window.$('.tooltipped').tooltip();

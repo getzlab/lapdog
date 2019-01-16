@@ -28,7 +28,8 @@ __API_VERSION__ = {
     'abort': 'alpha',
     'register': 'alpha',
     'signature': 'alpha',
-    'query': 'alpha'
+    'query': 'alpha',
+    'existence': 'frozen'
 }
 # The api version will allow versioning of cloud functions
 # The patching system will be as follows:
@@ -444,9 +445,6 @@ def authenticate_bucket(bucket, namespace, workspace, session, core_session):
     )
 
 def ld_project_for_namespace(namespace):
-    # TEMP
-    warnings.warn("Project for namespace returns constant")
-    return 'broad-cga-aarong-gtex' # Note: we can
     prefix = ('ld-'+namespace)[:23]
     suffix = md5(prefix.encode()).hexdigest().lower()
     return prefix + '-' + suffix[:6]
@@ -1151,6 +1149,10 @@ def query_account(request):
             },
             500
         )
+
+@cors('GET')
+def existence(request):
+    return 'OK', 200
 
 if __name__ == '__main__':
     import argparse

@@ -115,7 +115,9 @@ class Gateway(object):
     def __init__(self, namespace):
         self.namespace = namespace
         self.project = ld_project_for_namespace(namespace)
-        if not self.query_registration():
+        if not self.exists():
+            warnings.warn("Gateway does not exist")
+        elif not self.query_registration():
             warnings.warn(
                 "Gateway for namespace {} not initialized. Please run Gateway.register()".format(
                     self.namespace
@@ -356,11 +358,7 @@ class Gateway(object):
         # _deploy('check_abort', 'signature', functions_account, ld_project_for_namespace(project_id))
         # _deploy('register', 'register', functions_account, ld_project_for_namespace(project_id))
         # _deploy('query_account', 'query', functions_account, ld_project_for_namespace(project_id))
-        # Gateway.grant_access_to_user(
-        #     project_id,
-        #     get_account(),
-        #     True
-        # )
+        # _deploy('existence', 'existence', functions_account, ld_project_for_namespace(project_id))
 
     def query_registration(self):
         """
@@ -492,3 +490,9 @@ class Gateway(object):
                 __API_VERSION__[endpoint]
             ))
         raise ValueError("Unexpected status (%d) when checking for endpoint" % response.status_code)
+
+    def exists(self):
+        try:
+            return requests.get(self.get_endpoint('existence')).status_code == 200
+        except ValueError:
+            return False

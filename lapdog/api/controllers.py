@@ -36,6 +36,11 @@ def get_workspace_object(namespace, name):
     ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
     if ws is None:
         ws = lapdog.WorkspaceManager(namespace, name)
+        if ws.gateway.exists() and not ws.gateway.query_registration():
+            ws.gateway.register(
+                ws.workspace,
+                ws.bucket_id
+            )
         if readvar(current_app.config, 'storage', 'cache') is None:
             current_app.config['storage']['cache'] = {}
         if readvar(current_app.config, 'storage', 'cache', namespace) is None:
@@ -149,6 +154,7 @@ def workspace(namespace, name):
     ]
     data['configs'] = get_configs(namespace, name)
     data['attributes'] = ws.attributes
+    data['gateway'] = ws.gateway.exists()
     return data, 200
 
 @cached(120)
