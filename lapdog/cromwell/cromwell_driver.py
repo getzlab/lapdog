@@ -165,7 +165,7 @@ class CromwellDriver(object):
                     logging.info("Raw response: " + repr(response))
 
                     for job in response:
-                        if job['status'] != 'Submitted':
+                        if job['status'] != 'Submitted' and job['status'] != 'Running':
                             for job in response:
                                 self.abort(job['id'])
                             sys_util.exit_with_error(
@@ -176,11 +176,11 @@ class CromwellDriver(object):
 
                 self.batch_submission = True
 
-                # @atexit.register
-                # def abort_all_jobs():
-                #     if self.batch_submission:
-                #         for job in response:
-                #             self.abort(job['id'])
+                @atexit.register
+                def abort_all_jobs():
+                    if self.batch_submission:
+                        for job in response:
+                            self.abort(job['id'])
 
                 for i in range(12):
                     time.sleep(5)
@@ -241,6 +241,11 @@ class CromwellDriver(object):
                     }
                     for job in status_json
                 ]
+
+                if 'Aborted' in statuses:
+                    # Quit now. No reason to start a new batch to get aborted
+                    sys.stderr.write("There were aborted workflows. Aborting submission now.")
+                    return output
         return output
 
 

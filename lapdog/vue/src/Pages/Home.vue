@@ -51,6 +51,7 @@
     },
 
     created() {
+      window.materialize.toast({html:"Bark Bark!"});
       this.getStatus();
       axios.get(API_URL+'/api/v1/version')
         .then(response => {

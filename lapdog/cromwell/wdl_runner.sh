@@ -39,8 +39,8 @@ python -u wdl_runner.py \
  --working-dir "${WORKSPACE}" \
  --workflow-options "${INPUT_PATH}"/wf.options.json \
  --output-dir "${OUTPUTS}" \
- $BATCH_ARG 2> stderr.log | python logger.py $LAPDOG_LOG_PATH/pipeline-stdout.log > stdout.log
+ $BATCH_ARG 2> stderr.log | python logger.py $LAPDOG_LOG_PATH/pipeline-stdout.log > stdout.log 2> pipeline-stderr.log
 
-gsutil -h "Content-Type:text/plain" cp stdout.log stderr.log $LAPDOG_LOG_PATH
+gsutil -h "Content-Type:text/plain" cp stdout.log stderr.log pipeline-stderr.log $LAPDOG_LOG_PATH
 
 gsutil rm "${WDL}"

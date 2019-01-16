@@ -21,6 +21,7 @@ from glob import glob
 import yaml
 from ..cache import cached, cache_fetch, cache_write, cache_init
 from ..adapters import NoSuchSubmission
+from ..gateway import get_account, proxy_group_for_user
 import re
 
 def readvar(obj, *args):
@@ -150,36 +151,9 @@ def workspace(namespace, name):
     data['attributes'] = ws.attributes
     return data, 200
 
-@cached(600)
+@cached(120)
 def service_account():
-    try:
-        buff = io.StringIO(subprocess.check_output(
-            'gcloud iam service-accounts list --format=json',
-            shell=True,
-            stderr=subprocess.PIPE
-        ).decode())
-    except:
-        traceback.print_exc()
-        return {
-            'msg': 'Unable to read active service account',
-            'error': traceback.format_exc()
-        }, 500
-    try:
-        for acct in json.load(buff):
-            if 'displayName' in acct and acct['displayName'] == 'Compute Engine default service account':
-                return acct['email'], 200
-        buff.seek(0,0)
-        return {
-            'msg': 'Unable to locate service account',
-            'error': buff.read()
-        }, 500
-    except:
-        traceback.print_exc()
-        buff.seek(0,0)
-        return {
-            'msg': 'Unable to parse gcloud output',
-            'error': buff.read()
-        }, 500
+    return proxy_group_for_user(get_account())+'@firecloud.org', 200
 
 @cached(60)
 def get_acl(namespace, name):

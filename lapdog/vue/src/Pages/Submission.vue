@@ -66,15 +66,15 @@ Other: error_outline
               <!-- <div class="col s12">
                 Calls
               </div> -->
-              <h5>Calls</h5>
+              <h5>Tasks</h5>
             </div>
             <ul class="collapsible">
               <li v-for="call in active_workflow.calls">
 
                 <div class="collapsible-header" v-bind:title="call.status">
                   <i v-if="call.status == 'Success'" class="material-icons">check_cicle</i>
-                  <i v-else-if="call.status == 'Preempted'" class="material-icons">sync_disabled</i>
-                  <i v-else-if="call.status == 'Failed'  || call.status == 'Cancelled'" class="material-icons">sync_problem</i>
+                  <i v-else-if="call.status == 'Preempted' || call.status == 'Cancelled'" class="material-icons">sync_disabled</i>
+                  <i v-else-if="call.status == 'Failed'" class="material-icons">sync_problem</i>
                   <i v-else-if="call.status == 'Running'" class="material-icons">sync</i>
                   <i v-else class="material-icons">error_outline</i>
                   {{call.task}}
@@ -356,7 +356,7 @@ Other: error_outline
         <tbody>
           <tr v-for="workflow in workflows">
             <td>{{workflow.entity}}</td>
-            <td v-bind:class="workflow.status == 'Success' ? 'green-text' : workflow.status == 'Failed' ? 'red-text' : 'black-text'">
+            <td v-bind:class="workflow.status == 'Success' ? 'green-text' : (workflow.status == 'Failed' || workflow.status == 'Error')? 'red-text' : 'black-text'">
               {{workflow.status}}
             </td>
             <td>
@@ -415,6 +415,7 @@ export default {
   },
   methods: {
     init(namespace, workspace, sid) {
+      window.$('body').css('overflow', '');
       window.$('.modal').modal();
       this.submission = null;
       this.workflows = null;

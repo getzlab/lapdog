@@ -15,7 +15,7 @@ import warnings
 import crayons
 import os
 import json
-from .cloud import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob
+from .cloud import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob, proxy_group_for_user
 from urllib.parse import quote
 import sys
 
@@ -190,12 +190,13 @@ class Gateway(object):
         print("Waiting for service account creation...")
         time.sleep(30)
         print("Issuing Core Service Account Key")
-        with tempfile.NamedTemporaryFile('wb') as temp:
+        with tempfile.TemporaryDirectory() as temp:
+            tempname = os.path.join(temp, 'key.json')
             cmd = (
                 "gcloud --project {project} iam service-accounts keys create "
                 "--iam-account lapdog-worker@{project}.iam.gserviceaccount.com {dest}".format(
                     project=ld_project_for_namespace(project_id),
-                    dest=temp.name
+                    dest=tempname
                 )
             )
             print(cmd)
@@ -206,7 +207,7 @@ class Gateway(object):
                     bucket=ld_meta_bucket_for_project(ld_project_for_namespace(project_id))
                 )
             )
-            blob.upload_from_filename(temp.name)
+            blob.upload_from_filename(tempname)
             print("Updating Key Metadata ACL")
             acl = blob.acl
             for entity in acl.get_entities():

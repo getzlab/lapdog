@@ -15,24 +15,30 @@ abort_path = os.path.join(
     'abort-key'
 )
 
-def abort(handle):
+def abort():
 
-    subprocess.check_call('gsutil cp %s abort.key' % abort_path)
+    if not os.path.exists(abort_path):
+        subprocess.check_call('gsutil cp %s abort.key' % abort_path, shell=True)
     print('<<<ABORT KEY DETECTED>>>')
     with open('abort.key', 'rb') as r:
-        response = requests.get(
+        response = requests.post(
             os.environ.get("SIGNATURE_ENDPOINT"),
             headers={
                 'Content-Type': 'application/json'
             },
             json={
                 'key': base64.b64encode(r.read()),
-                'id': os.environ("LAPDOG_SUBMISSION_ID")
+                'id': os.environ.get("LAPDOG_SUBMISSION_ID")
             }
         )
     if response.status_code == 200:
-        for workflow in requests.get('http://localhost:8000/api/workflows/v1/query?status=Running').json():
-            requests.post('http://localhost:8000/api/workflows/v1/%s/abort' % workflow['id']).text()
+        response = requests.get('http://localhost:8000/api/workflows/v1/query?status=Running')
+        print("(%d) : %s" % (response.status_code, response.text))
+        for workflow in response.json()['results']:
+            print("WORKFLOW:", workflow)
+            print(requests.post('http://localhost:8000/api/workflows/v1/%s/abort' % workflow['id']).text)
+        # for workflow in requests.get('http://localhost:8000/api/workflows/v1/query?status=Running').json():
+        #     print(requests.post('http://localhost:8000/api/workflows/v1/%s/abort' % workflow['id']).text)
         print("<<<ABORTED ALL WORKFLOWS. WAITING FOR CROMWELL SHUTDOWN>>>")
         # subprocess.check_call('gsutil cp %s %s' % (handle.name, sys.argv[1]), shell=True)
         # sys.exit("Aborted")
@@ -55,9 +61,6 @@ def _flush(handle):
     global volume
     handle.flush()
     subprocess.check_call('gsutil -h "Content-Type:text/plain" cp %s %s' % (handle.name, sys.argv[1]), shell=True)
-    if subprocess.call('gsutil ls %s' % abort_path, shell=True) == 0:
-        # abort key located
-        abort(handle)
     volume += os.path.getsize(handle.name)
 
 def flush(handle, debounce_interval):
@@ -80,7 +83,7 @@ def write(handle, line):
     handle.write(line.rstrip() + '\n')
     while threading.activeCount() >= 1000:
         time.sleep(1)
-    threading.Thread(
+    thread = threading.Thread(
         target=flush,
         args=(
             handle,
@@ -88,13 +91,31 @@ def write(handle, line):
                 300 if volume > 52428800 else 60
             )
         )
-    ).start()
+    ) # Debounced log thread
+    thread.daemon = True
+    thread.start()
     # if volume > 1073741824: # 1 Gib
     #     upload = flush_rare(handle)
     # elif volume > 52428800: # 50 Mib
     #     upload = flush_slow(handle)
     # else:
     #     upload = flush(handle)
+
+def abort_worker():
+    while True:
+        for i in range(60):
+            time.sleep(2)
+        print("CHECKING ABORT KEY")
+        if subprocess.call('gsutil ls %s' % abort_path, shell=True) == 0:
+            # abort key located
+            print("ABORTING")
+            abort()
+
+thread = threading.Thread(
+    target=abort_worker
+) # abort thread
+thread.daemon = True
+thread.start()
 
 volume = 0
 with tempfile.NamedTemporaryFile('w') as tmp:

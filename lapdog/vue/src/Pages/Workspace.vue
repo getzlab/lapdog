@@ -621,6 +621,8 @@
                 html: "It may take several minutes for the submission to check in",
                 displayLength: 10000,
               })
+              window.$('#submission-modal').modal();
+              window.$('#submission-modal').modal('close');
               this.$router.push({
                 name: 'submission',
                 params: {

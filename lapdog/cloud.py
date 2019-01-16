@@ -426,6 +426,10 @@ def sign_object(data, blob, credentials):
         ).signature
     )
 
+def proxy_group_for_user(account):
+    info = account.split('@')
+    return info[0]+'-'+info[1].split('.')[0]+'-lapdog'
+
 def verify_signature(blob, data, _is_blob=True):
     try:
         serialization.load_pem_public_key(
@@ -490,15 +494,6 @@ def fetch_submission_blob(session, bucket, submission_id):
         ),
         credentials=session.credentials
     )
-
-def fetch_operation_submission_path(token, operation):
-    try:
-        response = requests.get(
-            "https://genomics.googleapis.com/v2alpha1/{name=projects/*/operations/*}"
-        )
-    except:
-        pass
-
 
 @cors('DELETE')
 def abort_submission(request):
@@ -683,6 +678,342 @@ def check_abort(request):
     if verify_signature(base64.b64decode(data['key'].encode()), data['id'].encode(), _is_blob=False):
         return 'OK', 200
     return 'ERROR', 400
+
+@cors("POST")
+def register(request):
+    try:
+        data = request.get_json()
+
+        # 1) Validate the token
+
+        if 'token' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "token"'
+                },
+                400
+            )
+
+        token_data = get_token_info(data['token'])
+        if 'error' in token_data:
+            return (
+                {
+                    'error': 'Invalid Token',
+                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                },
+                401
+            )
+
+        # 2) Validate user's permission for the bucket
+
+        if 'bucket' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameter "bucket"'
+                },
+                400
+            )
+
+        session = generate_user_session(data['token'])
+
+        read, write = validate_permissions(session, data['bucket'])
+        if read is None:
+            # Error, write will contain a message
+            return (
+                {
+                    'error': 'Cannot Validate Bucket Permissions',
+                    'message': write
+                },
+                400
+            )
+        if not (read and write):
+            # User doesn't have full permissions to the bucket
+            return (
+                {
+                    'error': 'Not Authorized',
+                    'message': 'User lacks read/write permissions to the requested bucket'
+                },
+                401
+            )
+
+        # 2.b) Verify that the bucket belongs to this project
+
+        if 'namespace' not in data or 'workspace' not in data:
+            return (
+                {
+                    'error': 'Bad Request',
+                    'message': 'Missing required parameters "namespace" and "workspace"'
+                },
+                400
+            )
+        core_session = generate_core_session()
+
+        result, message = authenticate_bucket(
+            data['bucket'], data['namespace'], data['workspace'], session, core_session
+        )
+        if not result:
+            return (
+                {
+                    'error': 'Cannot Validate Bucket Signature',
+                    'message': message
+                },
+                400
+            )
+
+        # 3) Issue worker account
+
+        default_session = generate_default_session(scopes=['https://www.googleapis.com/auth/cloud-platform'])
+        account_email = ld_acct_in_project(token_data['email'])
+        account_name = account_name.split('@')[0]
+        response = default_session.post(
+            'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts'.format(
+                project=os.environ.get('GCP_PROJECT')
+            ),
+            headers={'Content-Type': 'application/json'},
+            json={
+                'accountId': account_name,
+                'serviceAccount': {
+                    'displayName': account_name
+                }
+            }
+        )
+        if response.status_code >= 400:
+            return (
+                {
+                    'error': 'Unable to issue service account',
+                    'message': response.text
+                },
+                400
+            )
+        if response.json()['email'] != account_email:
+            return (
+                {
+                    'error': 'Service account email did not match expected value',
+                    'message': response.json()['email'] + ' != ' + account_email
+                },
+                400
+            )
+
+        # 4) Update worker bindings
+
+        default_session.post(
+            'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}:setIamPolicy'.format(
+                project=os.environ.get('GCP_PROJECT'),
+                account=account_email
+            ),
+            headers={'Content-Type': 'application/json'},
+            json={
+                "policy": {
+                    "bindings": [
+                        {
+                            "role": "roles/iam.serviceAccountUser",
+                            "members": [
+                                "serviceAccount:{email}".format(email=os.environ.get("FUNCTION_IDENTITY")),
+                                "serviceAccount:{email}".format(email=account_email)
+                            ]
+                        }
+                    ]
+                },
+                "updateMask": "bindings"
+            }
+        )
+
+        # 5) Update project bindings
+
+        policy = default_session.post(
+            'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:getIamPolicy'.format(
+                project=os.environ.get('GCP_PROJECT')
+            )
+        ).json()
+        target_role = 'projects/{}/roles/Pet_account'.format(os.environ.get('GCP_PROJECT'))
+        if target_role in {binding['role'] for binding in policy['bindings']}:
+            for i, binding in enumerate(policy['bindings']):
+                if binding['role'] == target_role:
+                    policy['bindings'][i]['members'].append(
+                        account_email
+                    )
+        else:
+            policy['bindings'].append(
+                {
+                    'role': target_role,
+                    'members': [
+                        account_email
+                    ]
+                }
+            )
+        response = default_session.post(
+            'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:setIamPolicy'.format(
+                project=os.environ.get('GCP_PROJECT')
+            ),
+            headers={'Content-Type': 'application/json'},
+            json={
+                "policy": policy,
+                "updateMask": "bindings"
+            }
+        )
+        if response.status_code >= 400:
+            return (
+                {
+                    'error': 'Unable to update project IAM policy',
+                    'message': response.text
+                },
+                400
+            )
+        # 6) Generate Key
+
+        response = default_session.post(
+            'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{email}/keys'.format(
+                project=os.environ.get('GCP_PROJECT'),
+                account=account_email
+            )
+        )
+        if response.status_code >= 400:
+            return (
+                {
+                    'error': 'Unable to issue service account key',
+                    'message': response.text
+                },
+                400
+            )
+
+        # 7) Register with Firecloud
+
+        pet_session = AuthorizedSession(
+            google.oauth2.service_account.Credentials.from_service_account_info(
+                json.loads(base64.b64decode(response.json()['privateKeyData']).decode())
+            ).with_scopes([
+                'https://www.googleapis.com/auth/userinfo.profile',
+                'https://www.googleapis.com/auth/userinfo.email'
+            ])
+        )
+        response = pet_session.post(
+            "https://api.firecloud.org/register/profile",
+            headers={
+                'User-Agent': 'FISS/0.16.9',
+                'Content-Type': 'application/json'
+            },
+            json={
+                "firstName":"Service",
+                "lastName": "Account",
+                "title":"None",
+                "contactEmail":token_data['email'],
+                "institute":"None",
+                "institutionalProgram": "None",
+                "programLocationCity": "None",
+                "programLocationState": "None",
+                "programLocationCountry": "None",
+                "pi": "None",
+                "nonProfitStatus": "false"
+            },
+            timeout=5
+        )
+        if response.status_code != 200:
+            return (
+                {
+                    'error': "Unable to register account with firecloud",
+                    'message': response.text
+                },
+                400
+            )
+
+        # 8) Check ProxyGroup
+
+        response = session.get('https://api.firecloud.org/api/groups', headers={'User-Agent': 'FISS/0.16.9'}, timeout=5)
+
+        if response.status_code != 200:
+            return (
+                {
+                    'error': "Unable to enumerate user's groups",
+                    'message': response.text
+                },
+                400
+            )
+
+        target_group = proxy_group_for_user(token_data['email'])
+
+        for group in response.json():
+            if group['groupName'] == target_group:
+                # 9) Register Account in Group
+                response = session.put(
+                    'https://api.firecloud.org/api/groups/{group}/member/{email}'.format(
+                        group=target_group+'@firecloud.org',
+                        email=quote(account_email)
+                    )
+                )
+                if response.status_code != 204:
+                    return (
+                        {
+                            'error': 'Unable to add pet account to proxy group',
+                            'message': "Please manually add {email} to {group}".format(
+                                group=target_group,
+                                email=quote(account_email)
+                            )
+                        },
+                        400
+                    )
+                else:
+                    return (
+                        account_email,
+                        200
+                    )
+
+        # 8.b) Create Group
+        response = sesion.post(
+            'https://api.firecloud.org/api/groups/{group}'.format(
+                group=target_group
+            ),
+            timeout=5
+        )
+        if response.status_code >= 400:
+            return (
+                {
+                    'error': 'Unable to create Firecloud proxy group',
+                    'message': response.text
+                },
+                400
+            )
+        # 9) Register Account in Group
+        response = session.put(
+            'https://api.firecloud.org/api/groups/{group}/member/{email}'.format(
+                group=target_group,
+                email=quote(account_email)
+            )
+        )
+        if response.status_code != 204:
+            return (
+                {
+                    'error': 'Unable to add pet account to proxy group',
+                    'message': "Please manually add {email} to {group}".format(
+                        group=target_group+'@firecloud.org',
+                        email=quote(account_email)
+                    )
+                },
+                400
+            )
+        else:
+            return (
+                account_email,
+                200
+            )
+    except requests.ReadTimeout:
+        return (
+            {
+                'error': 'timeout to firecloud',
+                'message': 'Took longer than 5 seconds for Firecloud to respond. Please try again later'
+            },
+            400
+        )
+    except:
+        traceback.print_exc()
+        return (
+            {
+                'error': 'Unknown Error',
+                'message': traceback.format_exc()
+            },
+            500
+        )
 
 if __name__ == '__main__':
     import argparse
