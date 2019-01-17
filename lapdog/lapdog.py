@@ -924,20 +924,22 @@ class WorkspaceManager(dog.WorkspaceManager):
                 },
                 memory=submission_data['runtime']['memory']
             )
+
+            if not status:
+                print("(%d)" % result.status_code, ":", result.text, file=sys.stderr)
+                raise ValueError("Gateway failed to launch submission")
+
+            print("Created submission", global_id)
+
+            if resync:
+                print("Bringing the workspace back online")
+                self.sync()
+
+            return global_id, submission_id, result
+
         except:
             blob.delete()
-
-        if not status:
-            print("(%d)" % result.status_code, ":", result.text, file=sys.stderr)
-            raise ValueError("Gateway failed to launch submission")
-
-        print("Created submission", global_id)
-
-        if resync:
-            print("Bringing the workspace back online")
-            self.sync()
-
-        return global_id, submission_id, result
+            raise
 
     def get_submission_cost(self, submission_id):
         """

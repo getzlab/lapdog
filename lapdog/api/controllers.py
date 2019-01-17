@@ -370,6 +370,14 @@ def create_workspace(namespace, name, parent):
             'failed': True,
             'reason': text
         }, 200
+    fc.update_workspace_acl(
+        namespace,
+        name,
+        [{
+            'email': service_account()[0],
+            'accessLevel': 'WRITER',
+        }]
+    )
     return {
         'failed': False,
         'reason': 'success'

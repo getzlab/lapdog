@@ -295,6 +295,26 @@ class Gateway(object):
         if response.status_code != 200:
             print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
             raise ValueError("Invalid response from Google API")
+        print("POST", roles_url)
+        response = user_session.post(
+            roles_url,
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                "roleId": "Lapdog_user",
+                "role": {
+                    "title": "Lapdog_user",
+                    "includedPermissions": [
+                        "genomics.operations.get",
+                    ],
+                    "stage": "GA"
+                }
+            }
+        )
+        if response.status_code != 200:
+            print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Invalid response from Google API")
 
         print("Creating Core Service Account")
         cmd = (

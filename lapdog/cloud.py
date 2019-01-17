@@ -935,7 +935,8 @@ def register(request):
         status, response = update_iam_policy(
             default_session,
             {
-                'serviceAccount:'+account_email: 'Pet_account'
+                'serviceAccount:'+account_email: 'Pet_account',
+                'user:'+token_data['email']: 'Lapdog_user'
             }
         )
 

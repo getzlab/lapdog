@@ -12,7 +12,10 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
     - If you already have lapdog installed, you can upgrade it with
     `pip install --upgrade lapdog`
 2. (Optional) Enable the Lapdog User Interface:
+    - The UI runs locally by default. If you are installing Lapdog on a server, you'll
+    need to set up an SSH tunnel for ports 4200 and 4201
     - Install `node` and `npm` if you don't already have them installed
+        - If you're on Mac OS, run `brew install node npm`
     - Run `lapdog ui --install`. This may take a while
 
 ## Usage
