@@ -77,7 +77,9 @@
                 <input v-model="cromwell_mem" class="blue-text" type="range" name="cromwell-mem" min="3" max="624" step="1" value="3">
               </div>
               <div class="col s2">
-                {{cromwell_mem}} GB
+                {{cromwell_mem}} GB ${{
+                  Math.floor((cromwell_mem == 3 ? 0.05 : 0.063222 + (0.004237 * lodash.min([13, cromwell_mem]) ) + (cromwell_mem > 13 ? 0.009550 * (cromwell_mem - 13): 0))*100)/100
+                }}/hr
               </div>
             </div>
             <div class="row">

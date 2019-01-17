@@ -82,7 +82,7 @@ def get_hourly_cost(mtype, preempt=False):
             return mtypes[mtype][int(preempt)]
         else:
             custom, cores, mem = mtype.split('-')
-            return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*int(mem)/1024) + max(0, extended_price[int(preempt)]*(int(mem)-(int(cores)*1024*6.5))/1024)
+            return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*max(int(mem), int(cores) * 1024 * 6.5)/1024) + max(0, extended_price[int(preempt)]*(int(mem)-(int(cores)*1024*6.5))/1024)
     except:
         traceback.print_exc()
         print(mtype, "unknown machine type")
