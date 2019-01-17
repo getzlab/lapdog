@@ -24,6 +24,7 @@ setup(
         ],
     },
     description = 'A relaxed wrapper for FISS and dalmatian',
+    url = 'https://github.com/broadinstitute/lapdog',
     author = 'Aaron Graubert - Broad Institute - Cancer Genome Computational Analysis',
     author_email = 'aarong@broadinstitute.org',
     long_description = 'A wrapper for FISS and dalmatian',
@@ -35,7 +36,7 @@ setup(
     install_requires = [
         'firecloud-dalmatian==0.0.4',
         'google-cloud-storage>=1.13.2',
-        'PyYAML==3.12',
+        'PyYAML==4.2b1',
         'agutil>=4.0.2',
         'Flask-Cors==3.0.6',
         'crayons==0.1.2',

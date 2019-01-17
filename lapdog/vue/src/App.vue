@@ -54,7 +54,7 @@
             </div>
             <div class="collection-item" v-else>
               <div class="input-field">
-                <input id="search_bar" type="text" v-model="search">
+                <input autocomplete="off" id="search_bar" type="text" v-model="search">
                 <label for="search_bar">Search Workspaces</label>
               </div>
             </div>
@@ -120,7 +120,7 @@
         <div class="row" style="margin-top: 10px; border: 2px solid orange;">
           <div class="col s10 offset s1 orange-text pushpin">
             Lapdog is still in beta. Please submit any bug reports to the
-            <a href="https://github.com/agraubert/lapdog/issues">Lapdog Github repository</a>
+            <a href="https://github.com/broadinstitute/lapdog/issues">Lapdog Github repository</a>
           </div>
         </div>
         <router-view></router-view>

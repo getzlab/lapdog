@@ -8,10 +8,18 @@ This function may:
 * Update iam policy or bindings
 * Regenerate signing keys
 """
-from .cloud import _deploy, __API_VERSION__
+from .cloud import ld_project_for_namespace, _deploy, __API_VERSION__
 
-def __project_admin_apply_patch():
+_deploy(function, endpoint, service_account=None, project=None)
+
+def __project_admin_apply_patch(namespace):
     """
-    PATCH SPEC:
+    PATCH SPEC: Beta -> V1
     """
-    pass
+    project = ld_project_for_namespace(namespace)
+    functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(project)
+    _deploy('create_submission', 'submit', functions_account, project)
+    _deploy('abort_submission', 'abort', functions_account, project)
+    _deploy('check_abort', 'signature', functions_account, project)
+    _deploy('register', 'register', functions_account, project)
+    _deploy('query', 'query', functions_account, project)

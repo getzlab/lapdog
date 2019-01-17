@@ -142,7 +142,7 @@ class Gateway(object):
         )
         print("Creating project")
         print(cmd)
-        # subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
         cmd = (
             'gcloud beta billing projects link {project_id} --billing-account '
             '{billing_id}'.format(
@@ -152,7 +152,7 @@ class Gateway(object):
         )
         print("Enabling billing")
         print(cmd)
-        # subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
         print("Enabling servies...")
         services = [
             'cloudapis.googleapis.com',
@@ -177,7 +177,7 @@ class Gateway(object):
                 service=service
             )
             print(cmd)
-            # subprocess.check_call(cmd, shell=True)
+            subprocess.check_call(cmd, shell=True)
         print("Creating Signing Key")
         cmd = (
             'gcloud --project {project} kms keyrings create lapdog --location us'.format(
@@ -185,7 +185,7 @@ class Gateway(object):
             )
         )
         print(cmd)
-        # subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
         cmd = (
             'gcloud --project {project} alpha kms keys create lapdog-sign --location us --keyring'
             ' lapdog --purpose asymmetric-signing --default-algorithm '
@@ -194,7 +194,7 @@ class Gateway(object):
             )
         )
         print(cmd)
-        # subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
 
         print("Creating Lapdog Roles")
         roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
@@ -202,99 +202,99 @@ class Gateway(object):
         )
         user_session = generate_user_session(get_access_token())
         print("POST", roles_url)
-        # response = user_session.post(
-        #     roles_url,
-        #     headers={
-        #         'Content-Type': 'application/json'
-        #     },
-        #     json={
-        #         "roleId": "Pet_account",
-        #         "role": {
-        #             "title": "Pet_account"
-        #             "includedPermissions": [
-        #                 "cloudkms.cryptoKeyVersions.viewPublicKey",
-        #                 "resourcemanager.projects.get",
-        #                 "genomics.operations.cancel",
-        #                 "genomics.operations.create",
-        #                 "genomics.operations.get",
-        #                 "genomics.operations.list"
-        #             ],
-        #             "stage": "GA"
-        #         }
-        #     }
-        # )
-        # if response.status_code != 200:
-        #     print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
-        #     raise ValueError("Invalid response from Google API")
+        response = user_session.post(
+            roles_url,
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                "roleId": "Pet_account",
+                "role": {
+                    "title": "Pet_account",
+                    "includedPermissions": [
+                        "cloudkms.cryptoKeyVersions.viewPublicKey",
+                        "resourcemanager.projects.get",
+                        "genomics.operations.cancel",
+                        "genomics.operations.create",
+                        "genomics.operations.get",
+                        "genomics.operations.list"
+                    ],
+                    "stage": "GA"
+                }
+            }
+        )
+        if response.status_code != 200:
+            print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Invalid response from Google API")
         print("POST", roles_url)
-        # response = user_session.post(
-        #     roles_url,
-        #     headers={
-        #         'Content-Type': 'application/json'
-        #     },
-        #     json={
-        #         "roleId": "Core_account",
-        #         "role": {
-        #             "title": "Core_account",
-        #             "includedPermissions": [
-        #                 "cloudkms.cryptoKeyVersions.useToSign",
-        #                 "cloudkms.cryptoKeyVersions.viewPublicKey",
-        #                 "resourcemanager.projects.get",
-        #                 "genomics.datasets.create",
-        #                 "genomics.datasets.delete",
-        #                 "genomics.datasets.get",
-        #                 "genomics.datasets.list",
-        #                 "genomics.datasets.update",
-        #                 "genomics.operations.cancel",
-        #                 "genomics.operations.create",
-        #                 "genomics.operations.get",
-        #                 "genomics.operations.list"
-        #             ],
-        #             "stage": "GA"
-        #         }
-        #     }
-        # )
-        # if response.status_code != 200:
-        #     print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
-        #     raise ValueError("Invalid response from Google API")
+        response = user_session.post(
+            roles_url,
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                "roleId": "Core_account",
+                "role": {
+                    "title": "Core_account",
+                    "includedPermissions": [
+                        "cloudkms.cryptoKeyVersions.useToSign",
+                        "cloudkms.cryptoKeyVersions.viewPublicKey",
+                        "resourcemanager.projects.get",
+                        "genomics.datasets.create",
+                        "genomics.datasets.delete",
+                        "genomics.datasets.get",
+                        "genomics.datasets.list",
+                        "genomics.datasets.update",
+                        "genomics.operations.cancel",
+                        "genomics.operations.create",
+                        "genomics.operations.get",
+                        "genomics.operations.list"
+                    ],
+                    "stage": "GA"
+                }
+            }
+        )
+        if response.status_code != 200:
+            print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Invalid response from Google API")
         print("POST", roles_url)
-        # response = user_session.post(
-        #     roles_url,
-        #     headers={
-        #         'Content-Type': 'application/json'
-        #     },
-        #     json={
-        #         "roleId": "Functions_account",
-        #         "role": {
-        #             "title": "Functions_account",
-        #             "includedPermissions": [
-        #                 "cloudkms.cryptoKeyVersions.viewPublicKey",
-        #                 "iam.serviceAccountKeys.create",
-        #                 "iam.serviceAccountKeys.delete",
-        #                 "iam.serviceAccountKeys.get",
-        #                 "iam.serviceAccountKeys.list",
-        #                 "iam.serviceAccounts.create",
-        #                 "iam.serviceAccounts.delete",
-        #                 "iam.serviceAccounts.get",
-        #                 "iam.serviceAccounts.getIamPolicy",
-        #                 "iam.serviceAccounts.list",
-        #                 "iam.serviceAccounts.setIamPolicy",
-        #                 "iam.serviceAccounts.update",
-        #                 "resourcemanager.projects.get",
-        #                 "resourcemanager.projects.list",
-        #                 "genomics.operations.create",
-        #                 "genomics.operations.get",
-        #                 "genomics.operations.list",
-        #                 "resourcemanager.projects.getIamPolicy",
-        #                 "resourcemanager.projects.setIamPolicy"
-        #             ],
-        #             "stage": "GA"
-        #         }
-        #     }
-        # )
-        # if response.status_code != 200:
-        #     print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
-        #     raise ValueError("Invalid response from Google API")
+        response = user_session.post(
+            roles_url,
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                "roleId": "Functions_account",
+                "role": {
+                    "title": "Functions_account",
+                    "includedPermissions": [
+                        "cloudkms.cryptoKeyVersions.viewPublicKey",
+                        "iam.serviceAccountKeys.create",
+                        "iam.serviceAccountKeys.delete",
+                        "iam.serviceAccountKeys.get",
+                        "iam.serviceAccountKeys.list",
+                        "iam.serviceAccounts.create",
+                        "iam.serviceAccounts.delete",
+                        "iam.serviceAccounts.get",
+                        "iam.serviceAccounts.getIamPolicy",
+                        "iam.serviceAccounts.list",
+                        "iam.serviceAccounts.setIamPolicy",
+                        "iam.serviceAccounts.update",
+                        "resourcemanager.projects.get",
+                        "resourcemanager.projects.list",
+                        "genomics.operations.create",
+                        "genomics.operations.get",
+                        "genomics.operations.list",
+                        "resourcemanager.projects.getIamPolicy",
+                        "resourcemanager.projects.setIamPolicy"
+                    ],
+                    "stage": "GA"
+                }
+            }
+        )
+        if response.status_code != 200:
+            print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Invalid response from Google API")
 
         print("Creating Core Service Account")
         cmd = (
@@ -303,7 +303,7 @@ class Gateway(object):
             )
         )
         print(cmd)
-        # subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
         core_account = 'lapdog-worker@{}.iam.gserviceaccount.com'.format(ld_project_for_namespace(project_id))
         print("Creating Cloud Functions Service Account")
         cmd = (
@@ -312,7 +312,7 @@ class Gateway(object):
             )
         )
         print(cmd)
-        # subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
         functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(ld_project_for_namespace(project_id))
         print("Creating Metadata bucket while service accounts are created")
         cmd = (
@@ -322,50 +322,50 @@ class Gateway(object):
             )
         )
         print(cmd)
-        # subprocess.check_call(cmd, shell=True)
+        subprocess.check_call(cmd, shell=True)
         print("Updating project IAM policy while service accounts are created")
         policy = {
             'serviceAccount:'+core_account: 'Core_account',
             'serviceAccount:'+functions_account: 'Functions_account'
         }
         print(policy)
-        # status, response = update_iam_policy(
-        #     user_session,
-        #     policy,
-        #     ld_project_for_namespace(project_id)
-        # )
-        # if not status:
-        #     print('(%d) : %s' % (response.status_code, response.text), file=sys.stderr)
-        #     raise ValueError("Invalid Response from Google API")
+        status, response = update_iam_policy(
+            user_session,
+            policy,
+            ld_project_for_namespace(project_id)
+        )
+        if not status:
+            print('(%d) : %s' % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Invalid Response from Google API")
         print("Waiting for service account creation...")
         time.sleep(30)
         print("Issuing Core Service Account Key")
-        # generate_core_key(ld_project_for_namespace(project_id), user_session)
+        generate_core_key(ld_project_for_namespace(project_id), user_session)
         print("Updating Key Metadata ACL")
-        # blob = getblob(
-        #     'gs://{bucket}/auth_key.json'.format(
-        #         bucket=ld_meta_bucket_for_project(ld_project_for_namespace(project_id))
-        #     )
-        # )
-        # acl = blob.acl
-        # for entity in acl.get_entities():
-        #     if entity.type == 'project':
-        #         if entity.identifier.startswith('editors-'):
-        #             entity.revoke_owner()
-        #         elif entity.identifier.startswith('viewers-'):
-        #             entity.revoke_read()
-        # acl.user(functions_account).grant_read()
-        # acl.save()
+        blob = getblob(
+            'gs://{bucket}/auth_key.json'.format(
+                bucket=ld_meta_bucket_for_project(ld_project_for_namespace(project_id))
+            )
+        )
+        acl = blob.acl
+        for entity in acl.get_entities():
+            if entity.type == 'project':
+                if entity.identifier.startswith('editors-'):
+                    entity.revoke_owner()
+                elif entity.identifier.startswith('viewers-'):
+                    entity.revoke_read()
+        acl.user(functions_account).grant_read()
+        acl.save()
 
 
         print("Deploying Cloud Functions")
         from .cloud import _deploy
-        # _deploy('create_submission', 'submit', functions_account, ld_project_for_namespace(project_id))
-        # _deploy('abort_submission', 'abort', functions_account, ld_project_for_namespace(project_id))
-        # _deploy('check_abort', 'signature', functions_account, ld_project_for_namespace(project_id))
-        # _deploy('register', 'register', functions_account, ld_project_for_namespace(project_id))
-        # _deploy('query_account', 'query', functions_account, ld_project_for_namespace(project_id))
-        # _deploy('existence', 'existence', functions_account, ld_project_for_namespace(project_id))
+        _deploy('create_submission', 'submit', functions_account, ld_project_for_namespace(project_id))
+        _deploy('abort_submission', 'abort', functions_account, ld_project_for_namespace(project_id))
+        _deploy('check_abort', 'signature', functions_account, ld_project_for_namespace(project_id))
+        _deploy('register', 'register', functions_account, ld_project_for_namespace(project_id))
+        _deploy('query_account', 'query', functions_account, ld_project_for_namespace(project_id))
+        _deploy('existence', 'existence', functions_account, ld_project_for_namespace(project_id))
 
     def query_registration(self):
         """

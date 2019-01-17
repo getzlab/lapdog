@@ -14,12 +14,6 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
 2. (Optional) Enable the Lapdog User Interface:
     - Install `node` and `npm` if you don't already have them installed
     - Run `lapdog ui --install`. This may take a while
-3. (Optional) Enable the Lapdog Execution Service
-    - Run `lapdog init {your account email}`
-        * `{your account email}` should be the email registered to your account in firecloud
-        * This requires that you have "Services Admin", "Compute Admin", and "Genomics Admin" on your current Google Cloud Project
-    - If this succeeds, the Lapdog Execution Service will be enabled on your current Google Cloud Project
-    - Execution must be enabled on each Firecloud workspace by granting WRITER access to your service account
 
 ## Usage
 1. `lapdog` may be imported within python as a drop-in replacement for `dalmatian`
@@ -39,12 +33,47 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
   monitor lapdog executions
     - Run `lapdog ui` to launch the user interface
 
+## Job Execution
+
+Lapdog executes jobs through dedicated Google Projects ("Engines") for each FireCloud Namespace.
+A Lapdog Engine can only be initialized for a given Namespace by a billing account admin.
+To initialize a new Engine, contact your Namespace admin and ask them to run `lapdog initialize-project`.
+
+After an Engine is initialized, you will have to register with it:
+
+* The Lapdog User Interface will automatically register you when you load a workspace
+in a namespace that you're not registered to
+* The Lapdog python module supports manual registration
+    * When you create a `WorkspaceManager` in an unregistered Namespace, you will get a warning
+    * You can also check your registration status with `WorkspaceManager.gateway.query_registration()`
+    * You can then register by using `WorkspaceManager.gateway.register()`
+    * If registration fails due to any FireCloud errors, simply wait a few minutes
+    then try calling `register()` again
+* The Lapdog CLI does not support registration. You can register through the UI or
+python module
+
+### Workspace Permissions
+
+In the UI, at the bottom of every page, you will find a **firecloud.org** email.
+This is a proxy group email which contains you, and all your service accounts.
+To allow the Lapdog Engine to run jobs, that proxy group email must be granted
+WRITE access to FireCloud workspaces where jobs will run. You may grant the group
+READ access to workspaces where data will be read from, but jobs cannot execute
+in workspaces without WRITE permissions. The proxy group email can be found by
+calling `lapdog.cloud.proxy_group_for_user(YOUR_EMAIL)`.
+
+**NOTE:** Due to a bug in FireCloud, permissions will not be granted if the group
+was already granted access to a workspace before you registered to that namespace's
+Lapdog Engine. If your proxy email definitely was granted access to a workspace,
+but your jobs are still failing with permissions errors, try removing access and then
+re-granting it. You can see FireCloud's response to this bug report [here](https://gatkforums.broadinstitute.org/firecloud/discussion/23350/account-not-inheriting-permissions-when-added-to-group)
+
 ---
 
 ### Roadmap
 (Subject to change)
 1. ~~Add Data view~~ **Done**
-2. Enable Multi-Project mode
+2. ~~Enable Multi-Project mode~~ **Done**
 3. Add better timeouts when interacting with Firecloud
     * Lapdog should switch to its internal cache more eagerly than it does now
     * Goal: enforce a ~5s timeout if the desired data is already cached
@@ -55,6 +84,7 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
 
 ##### Pros
 * Each submission has a dedicated Cromwell instance. Your jobs will never queue, unless you hit a Google usage quota
+* Lapdog supports Requester Pays buckets and GPUs
 * Workspace cache: Lapdog caches most data received from Firecloud.
     * In the event of a Firecloud error, Lapdog will attempt to keep running by using it's cached data. Any data updates will by pushed back to Firecloud when the workspace is synced
 * Data caches: The Lapdog API caches data sent to the UI and read from Google
@@ -66,8 +96,8 @@ Lapdog requires the Google Cloud SDK, which can be installed [here](https://clou
     * Automatic reference uploads. When you call `update_attributes`, any values which refer to local filepaths will be uploaded in the background (just like `prepare_entity_df`). `update_attributes` now returns a dictionary containing the attributes exactly as uploaded
 
 ##### Cons
-* **Lapdog uses your personal GCloud account**. Lapdog does not operate using the billing account of the workspace
-  * In the future, Lapdog will use a dedicated service account for each Firecloud billing account, but this is still in development and is a 'far-future' feature
 * You pay an additional 5¢/hour fee for each submission to run the Cromwell server
 * There is no call cache in Lapdog yet. This is still in development
 * Submission results must be manually uploaded to Firecloud by clicking the `Upload Results` button in the UI.
+* There are small overhead costs billed to the Lapdog Engine for operation. These costs
+are for calls to the API and for storage of metadata, both of which should be very cheap

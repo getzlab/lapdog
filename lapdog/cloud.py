@@ -967,6 +967,8 @@ def register(request):
 
         # 7) Register with Firecloud
 
+        time.sleep(10)
+
         pet_session = AuthorizedSession(
             google.oauth2.service_account.Credentials.from_service_account_info(
                 json.loads(base64.b64decode(response.json()['privateKeyData']).decode())
@@ -975,27 +977,32 @@ def register(request):
                 'https://www.googleapis.com/auth/userinfo.email'
             ])
         )
-        response = pet_session.post(
-            "https://api.firecloud.org/register/profile",
-            headers={
-                'User-Agent': 'FISS/0.16.9',
-                'Content-Type': 'application/json'
-            },
-            json={
-                "firstName":"Service",
-                "lastName": "Account",
-                "title":"None",
-                "contactEmail":token_data['email'],
-                "institute":"None",
-                "institutionalProgram": "None",
-                "programLocationCity": "None",
-                "programLocationState": "None",
-                "programLocationCountry": "None",
-                "pi": "None",
-                "nonProfitStatus": "false"
-            },
-            timeout=5
-        )
+        while True:
+            try:
+                response = pet_session.post(
+                    "https://api.firecloud.org/register/profile",
+                    headers={
+                        'User-Agent': 'FISS/0.16.9',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        "firstName":"Service",
+                        "lastName": "Account",
+                        "title":"None",
+                        "contactEmail":token_data['email'],
+                        "institute":"None",
+                        "institutionalProgram": "None",
+                        "programLocationCity": "None",
+                        "programLocationState": "None",
+                        "programLocationCountry": "None",
+                        "pi": "None",
+                        "nonProfitStatus": "false"
+                    },
+                    timeout=10
+                )
+                break
+            except google.auth.exceptions.RefreshError:
+                time.sleep(10) # need more time for key to propagate
         if response.status_code != 200:
             return (
                 {
@@ -1027,7 +1034,8 @@ def register(request):
                     'https://api.firecloud.org/api/groups/{group}/member/{email}'.format(
                         group=target_group,
                         email=quote(account_email)
-                    )
+                    ),
+                    timeout=5
                 )
                 if response.status_code != 204:
                     return (
@@ -1066,7 +1074,8 @@ def register(request):
             'https://api.firecloud.org/api/groups/{group}/member/{email}'.format(
                 group=target_group,
                 email=quote(account_email)
-            )
+            ),
+            timeout=5
         )
         if response.status_code != 204:
             return (
