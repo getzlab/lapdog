@@ -7,7 +7,7 @@ import csv
 from google.cloud import storage
 from agutil.parallel import parallelize, parallelize2
 from agutil import status_bar, byteSize, cmd as execute_command
-from threading import Lock
+from threading import Lock, Thread
 import sys
 import re
 import tempfile
@@ -22,6 +22,7 @@ from . import adapters
 from .adapters import getblob, get_operation_status, mtypes, NoSuchSubmission
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture
+from .cloud import proxy_group_for_user
 from .gateway import Gateway
 from itertools import repeat
 import pandas as pd
@@ -334,7 +335,35 @@ class WorkspaceManager(dog.WorkspaceManager):
             stdout.seek(0,0)
             stderr.seek(0,0)
             text = stdout.read() + stderr.read()
-        return bool(creation_success_pattern.search(text))
+        if bool(creation_success_pattern.search(text)):
+
+            def update_acl():
+                time.sleep(20)
+                try:
+                    from .gateway import get_access_token, get_token_info
+                    response = fc.update_workspace_acl(
+                        self.namespace,
+                        self.workspace,
+                        [{
+                            'email': proxy_group_for_user(get_token_info(get_access_token())['email']),
+                            'accessLevel': 'WRITER',
+                        }]
+                    )
+                    if response.status_code != 200 and response.status_code != 204:
+                        warnings.warn("Unable to update new workspace ACL: (%d) : %s" % (
+                            response.status_code,
+                            response.text
+                        ))
+                except:
+                    warnings.warn("Unable to update new workspace ACL: %s" % (
+                        traceback.format_exc()
+                    ))
+
+            print("Updating ACL in a background thread")
+            Thread(target=update_acl, daemon=True).start()
+            self.sync()
+            return True
+        return False
 
     def get_samples(self):
         """

@@ -144,10 +144,10 @@
           Execution Status:
         </div>
         <div class="col s4">
-          <span v-if="!ws" class="orange-text text-darken-4">
+          <span v-if="!gateway" class="orange-text text-darken-4">
             Pending...
           </span>
-          <span v-else-if="ws.gateway" class="green-text">
+          <span v-else-if="gateway.registered" class="green-text">
             Lapdog Engine Initialized
           </span>
           <span v-else class="red-text">
@@ -200,8 +200,8 @@
           </a>
         </div>
         <div class="col s6 execute-container">
-          <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-bind:class="ws.gateway && ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
-            v-bind:data-tooltip="ws.gateway ? (ws.entities && ws.entities.length ? '' : 'There are no entities in this workspace') : 'Lapdog is not initialized for this namespace'"
+          <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-bind:class="gateway && gateway.registered && ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
+            v-bind:data-tooltip="gateway ? (ws.entities && ws.entities.length ? '' : 'There are no entities in this workspace') : 'Lapdog is not initialized for this namespace'"
           >
             Execute new job
           </a>
@@ -452,7 +452,8 @@
         cromwell_mem: 3,
         batch_size: 250,
         query_size: 100,
-        cached_submissions: true
+        cached_submissions: true,
+        gateway: null,
         // entities: null
       }
     },
@@ -658,6 +659,7 @@
         this.cached_submissions = true;
         this.cache_state = true;
         this.syncing = false;
+        this.gateway = null;
         // window.$('.execute-button').tooltip('close');
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
@@ -665,20 +667,6 @@
             this.ws = response.data;
             this.entity_types = response.data.entities;
             this.method_configs = response.data.configs;
-            if (!this.ws.gateway) {
-              window.materialize.toast({html: "Lapdog is not initialized for this namespace. Please contact an administrator", displayLength: 20000});
-              window.$('.tooltipped').tooltip();
-              if (!(this.ws.entities && this.ws.entities.length)) window.$('.execute-container').hover(
-                () => {
-                  window.$('.execute-button').tooltip('open');
-                },
-                () => {
-                  setTimeout(() => {
-                    window.$('.execute-button').tooltip('close');
-                  }, 100);
-                }
-              );
-            }
             window.$('.modal').modal();
             setTimeout(() => {
               window.$('.tooltipped').tooltip();
@@ -734,11 +722,28 @@
       },
 
      get_acl(namespace, workspace) {
-        axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/acl')
+        axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway')
           .then(response => {
             console.log("RESPONSE");
             console.log(response.data);
-            this.acl = response.data
+            if (response.data.exists && !response.data.registered) {
+              this.set_acl(this.namespace, this.workspace);
+            }
+            else this.gateway = response.data;
+            if (!this.gateway.exists) {
+              window.materialize.toast({html: "Lapdog is not initialized for this namespace. Please contact an administrator", displayLength: 20000});
+              window.$('.tooltipped').tooltip();
+              if (!(this.ws.entities && this.ws.entities.length)) window.$('.execute-container').hover(
+                () => {
+                  window.$('.execute-button').tooltip('open');
+                },
+                () => {
+                  setTimeout(() => {
+                    window.$('.execute-button').tooltip('close');
+                  }, 100);
+                }
+              );
+            }
           })
           .catch(error => {
             console.error("FAIL")
@@ -748,11 +753,11 @@
       set_acl(namespace, workspace) {
         console.log("UPDATING ACL");
         this.acl = null;
-         axios.post(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/acl')
+         axios.post(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway')
            .then(response => {
              console.log("RESPONSE");
              console.log(response.data);
-             this.acl = response.data
+             this.gateway = response.data
            })
            .catch(error => {
              console.error("FAIL")

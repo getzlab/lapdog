@@ -48,7 +48,7 @@ After an Engine is initialized, you will have to register with it:
 in a namespace that you're not registered to
 * The Lapdog python module supports manual registration
     * When you create a `WorkspaceManager` in an unregistered Namespace, you will get a warning
-    * You can also check your registration status with `WorkspaceManager.gateway.query_registration()`
+    * You can also check your registration status by checking the value of `WorkspaceManager.gateway.registered`
     * You can then register by using `WorkspaceManager.gateway.register()`
     * If registration fails due to any FireCloud errors, simply wait a few minutes
     then try calling `register()` again

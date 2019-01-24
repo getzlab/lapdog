@@ -153,7 +153,7 @@ paths:
           description: The active service account
           schema:
             type: string
-  /api/v1/workspaces/{namespace}/{name}/acl:
+  /api/v1/workspaces/{namespace}/{name}/gateway:
     get:
       parameters:
         -
@@ -168,15 +168,15 @@ paths:
           required: true
           type: string
           description: The workspaces name
-      operationId: lapdog.api.controllers.service_acl
-      summary: Checks ACL and returns whether or not the active service account is on the workspace
+      operationId: lapdog.api.controllers.get_namespace_registered
+      summary: Checks the Lapdog Gateway to see if the Engine is initialized for this Namespace
       responses:
         default:
           description: Error
         200:
-          description: Returns if the service accout has WRITER access
+          description: Returns the status of the current gateway
           schema:
-            $ref: "#/definitions/ACL_Update"
+            type: object
     post:
       parameters:
         -
@@ -191,15 +191,15 @@ paths:
           required: true
           type: string
           description: The workspaces name
-      operationId: lapdog.api.controllers.set_acl
-      summary: Ensures the current service account is added to the firecloud workspace
+      operationId: lapdog.api.controllers.register
+      summary: Registers with the current namespace
       responses:
         default:
           description: Error
         200:
-          description: A list of workspace summaries
+          description: Returns the status of the current gateway
           schema:
-            $ref: "#/definitions/ACL_Update"
+            type: object
   /api/v1/workspaces/{namespace}/{name}/entities/{etype}:
     get:
       parameters:
