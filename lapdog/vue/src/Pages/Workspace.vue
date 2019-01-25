@@ -78,7 +78,11 @@
               </div>
               <div class="col s2">
                 {{cromwell_mem}} GB ${{
-                  Math.floor((cromwell_mem == 3 ? 0.05 : 0.063222 + (0.004237 * lodash.min([13, cromwell_mem]) ) + (cromwell_mem > 13 ? 0.009550 * (cromwell_mem - 13): 0))*100)/100
+                  //Math.floor((cromwell_mem == 3 ? 0.05 : 0.063222 + (0.004237 * lodash.min([13, cromwell_mem]) ) + (cromwell_mem > 13 ? 0.009550 * (cromwell_mem - 13): 0))*100)/100
+                  cromwell_mem == 3 ? 0.5 : Math.floor((
+                    (Math.ceil(cromwell_mem/13) * 0.066348) + //core cost
+                    (0.004446 * cromwell_mem) //mem cost
+                  )*100)/100
                 }}/hr
               </div>
             </div>
@@ -150,6 +154,9 @@
           <span v-else-if="gateway.registered" class="green-text">
             Lapdog Engine Initialized
           </span>
+          <span v-else-if="gateway.exists" class="red-text">
+            Not Registered. Insufficient Permissions
+          </span>
           <span v-else class="red-text">
             Not Ready. Contact Namespace Admin
           </span>
@@ -165,7 +172,7 @@
         <div class="col s3">
           Workspace Cache State:
         </div>
-        <div class="col s2 left">
+        <div class="col s2 left tooltipped" v-bind:data-tooltip="syncing ? 'Syncing... Please Wait' : ('Pending Operations: ' + pending_ops)" data-position="right">
           <div class="switch">
             <label>
               Offline
@@ -201,7 +208,7 @@
         </div>
         <div class="col s6 execute-container">
           <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-bind:class="gateway && gateway.registered && ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
-            v-bind:data-tooltip="gateway ? (ws.entities && ws.entities.length ? '' : 'There are no entities in this workspace') : 'Lapdog is not initialized for this namespace'"
+            v-bind:data-tooltip="gateway && gateway.exists ? (ws.entities && ws.entities.length ? 'Ready' : 'There are no entities in this workspace') : 'Lapdog is not initialized for this namespace'"
           >
             Execute new job
           </a>
@@ -454,6 +461,7 @@
         query_size: 100,
         cached_submissions: true,
         gateway: null,
+        pending_ops: 0
         // entities: null
       }
     },
@@ -660,7 +668,11 @@
         this.cache_state = true;
         this.syncing = false;
         this.gateway = null;
+        this.pending_ops = 0;
+        window.$('.tooltipped').tooltip();
+        window.$('.execute-button').tooltip('destroy');
         // window.$('.execute-button').tooltip('close');
+        this.$emit('on-namespace-update', namespace);
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
           .then(response => {
             console.log(response.data);
@@ -682,11 +694,13 @@
                   }, 100);
                 }
               );
+              else window.$('.execute-button').tooltip('destroy');
             }, 100);
             axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
               .then(response => {
                 console.log(response.data);
                 this.cache_state = response.data.state;
+                this.pending_ops = response.data.pending;
                 console.log("Fetching submissions");
                   axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions?cache=true')
                     .then(response => {
@@ -733,7 +747,7 @@
             if (!this.gateway.exists) {
               window.materialize.toast({html: "Lapdog is not initialized for this namespace. Please contact an administrator", displayLength: 20000});
               window.$('.tooltipped').tooltip();
-              if (!(this.ws.entities && this.ws.entities.length)) window.$('.execute-container').hover(
+              window.$('.execute-container').hover(
                 () => {
                   window.$('.execute-button').tooltip('open');
                 },
@@ -786,6 +800,7 @@
           .then(response => {
             console.log(response.data);
             this.cache_state = response.data.state;
+            this.pending_ops = response.data.pending;
             this.syncing = false;
           })
           .catch(error => {
@@ -833,6 +848,11 @@
       this.submission_expression = "";
       this.submissions = null;
       this.active_entity = null;
+      this.cached_submissions = true;
+      this.cache_state = true;
+      this.syncing = false;
+      this.gateway = null;
+      this.pending_ops = 0;
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();

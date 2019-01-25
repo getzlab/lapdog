@@ -123,7 +123,7 @@
             <a href="https://github.com/broadinstitute/lapdog/issues">Lapdog Github repository</a>
           </div>
         </div>
-        <router-view></router-view>
+        <router-view @on-namespace-update="fetchQuotas"></router-view>
       </div>
     </main>
     <footer class="grey lighten-1">
@@ -132,7 +132,7 @@
           Powered by <a href="https://github.com/broadinstitute/dalmatian">Dalmatian</a>
         </div>
         <div v-if="acct" class="col s5">
-          Your google service account: {{acct}}
+          Your Lapdog service account: {{acct}}
         </div>
         <div v-if="cache_size" class="col s2">
           Cache size: {{cache_size}}
@@ -175,7 +175,8 @@ export default {
       parent_workspace: '',
       create_failed: null,
       cache_size: null,
-      quotas: null
+      quotas: null,
+      namespace: null
     }
   },
 
@@ -201,11 +202,15 @@ export default {
         }, 30000);
       })
       setInterval(() => {
-        axios.get(API_URL+'/api/v1/quotas')
-          .then(response => {
-            this.quotas = response.data;
-          })
-      }, 120000);
+        if (this.namespace) {
+          axios.get(API_URL+'/api/v1/quotas/'+this.namespace)
+            .then(response => {
+              console.log("Quotas");
+              console.log(response.data);
+              this.quotas = response.data
+            });
+        }
+      }, 120000)
   },
 
   methods: {
@@ -292,6 +297,19 @@ export default {
         .catch(error => {
           console.error("FAIL!")
         })
+    },
+    fetchQuotas(namespace) {
+      console.log("Updating Namespace");
+      if (namespace != this.namespace) {
+        this.quotas = null;
+        axios.get(API_URL+'/api/v1/quotas/'+namespace)
+          .then(response => {
+            console.log("Quotas");
+            console.log(response.data);
+            this.quotas = response.data
+          });
+      };
+      this.namespace = namespace;
     }
   }
 }

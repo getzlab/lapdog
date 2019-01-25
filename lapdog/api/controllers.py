@@ -20,7 +20,7 @@ from itertools import repeat
 from glob import glob
 import yaml
 from ..cache import cached, cache_fetch, cache_write, cache_init
-from ..adapters import NoSuchSubmission
+from ..adapters import NoSuchSubmission, Gateway
 from ..gateway import get_account, proxy_group_for_user
 import re
 
@@ -354,7 +354,7 @@ def get_entities(namespace, name, etype, start=0, end=None):
 
 def get_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
-    return {'state': ws.live}, 200
+    return {'state': ws.live, 'pending': len(ws.operator.pending)}, 200
 
 def sync_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
@@ -684,52 +684,9 @@ def cache_size():
     return byteSize(total), 200
 
 @cached(120)
-def quotas(region):
-    try:
-        text = subprocess.run(
-            'gcloud compute project-info describe',
-            shell=True,
-            executable='/bin/bash',
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        ).stdout.decode()
-        data = yaml.load(io.StringIO(text))['quotas']
-    except:
-        print(text)
-        raise
-    try:
-        text = subprocess.run(
-            'gcloud compute regions describe %s' % region,
-            shell=True,
-            executable='/bin/bash',
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        ).stdout.decode()
-        data += [
-            {
-                **r,
-                **{
-                    'metric': region+'.'+r['metric']
-                }
-            }
-            for r in yaml.load(io.StringIO(text))['quotas']
-        ]
-    except:
-        print(text)
-        raise
-    alerts = [
-        {
-            **r,
-            **{
-                'percent': '%0.2f%%' % (100 * r['usage'] / r['limit'])
-            }
-        }
-        for r in data if r['limit'] > 0 and r['usage']/r['limit'] > .5
-    ]
-    return {
-        'alerts': alerts,
-        'raw': data
-    }, 200
+def quotas(namespace):
+    return Gateway(namespace).quota_usage
+
 
 @cached(60)
 def get_config(namespace, name, config_namespace, config_name):

@@ -119,7 +119,7 @@ class Gateway(object):
             warnings.warn("Gateway does not exist")
         elif not self.registered:
             warnings.warn(
-                "Gateway for namespace {} not initialized. Please run Gateway.register()".format(
+                "Gateway for namespace {} not registered. Please run Gateway.register()".format(
                     self.namespace
                 )
             )
@@ -217,7 +217,8 @@ class Gateway(object):
                         "genomics.operations.cancel",
                         "genomics.operations.create",
                         "genomics.operations.get",
-                        "genomics.operations.list"
+                        "genomics.operations.list",
+                        "serviceusage.services.use" # for requester pays
                     ],
                     "stage": "GA"
                 }
@@ -286,7 +287,9 @@ class Gateway(object):
                         "genomics.operations.get",
                         "genomics.operations.list",
                         "resourcemanager.projects.getIamPolicy",
-                        "resourcemanager.projects.setIamPolicy"
+                        "resourcemanager.projects.setIamPolicy",
+                        "compute.projects.get",
+                        "compute.regions.get"
                     ],
                     "stage": "GA"
                 }
@@ -377,7 +380,6 @@ class Gateway(object):
         acl.user(functions_account).grant_read()
         acl.save()
 
-
         print("Deploying Cloud Functions")
         from .cloud import _deploy
         _deploy('create_submission', 'submit', functions_account, ld_project_for_namespace(project_id))
@@ -385,6 +387,7 @@ class Gateway(object):
         _deploy('check_abort', 'signature', functions_account, ld_project_for_namespace(project_id))
         _deploy('register', 'register', functions_account, ld_project_for_namespace(project_id))
         _deploy('query_account', 'query', functions_account, ld_project_for_namespace(project_id))
+        _deploy('quotas', 'quotas', functions_account, ld_project_for_namespace(project_id))
         _deploy('existence', 'existence', functions_account, ld_project_for_namespace(project_id))
 
     @property
@@ -407,7 +410,7 @@ class Gateway(object):
         Must provide a workspace name and the associated bucket to prove that you have access
         to at least one workspace for this namespace
         """
-        warnings.warn("[ALPHA] Gateway Register")
+        warnings.warn("[BETA] Gateway Register")
         response = requests.post(
             self.get_endpoint('register'),
             headers={'Content-Type': 'application/json'},
@@ -439,7 +442,7 @@ class Gateway(object):
         The user's service account must have access to the workspace in order to
         download the input files specified in the workflow inputs.
         """
-        warnings.warn("[ALPHA] Gateway Create Submission")
+        warnings.warn("[BETA] Gateway Create Submission")
         response = requests.post(
             self.get_endpoint('submit'),
             headers={'Content-Type': 'application/json'},
@@ -484,7 +487,7 @@ class Gateway(object):
         Cancels the cromwell server operation then cancels all workflow operations,
         then deletes all workflow machines, then finally the cromwell machine.
         """
-        warnings.warn("[ALPHA] Gateway Abort Submission")
+        warnings.warn("[BETA] Gateway Abort Submission")
         response = requests.delete(
             self.get_endpoint('abort'),
             headers={'Content-Type': 'application/json'},
@@ -516,6 +519,8 @@ class Gateway(object):
             return endpoint_url
         if response.status_code == 200 or response.status_code == 404:
             print("Lapdog Engine Project", self.project, "for namespace", self.namespace, "does not support api version", __API_VERSION__[endpoint], file=sys.stderr)
+            if endpoint =='existence':
+                raise ValueError("The existence endpoint could not be found. Project %s may not be initialized. Please contact the namespace admin" % self.project)
             raise ValueError("The project api for %s does not support %s version %s. Please contact the namespace admin" % (
                 self.project,
                 endpoint,
@@ -529,3 +534,18 @@ class Gateway(object):
             return requests.get(self.get_endpoint('existence')).status_code == 200
         except ValueError:
             return False
+
+    @property
+    def quota_usage(self):
+        warnings.warn("[BETA] Gateway Quotas")
+        response = requests.post(
+            self.get_endpoint('quotas'),
+            headers={'Content-Type': 'application/json'},
+            json={
+                'token': get_access_token()
+            }
+        )
+        if response.status_code == 200:
+            return response.json()
+        print("Quota error (%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+        raise ValueError("Unable to fetch quotas: status %d" % response.status_code)

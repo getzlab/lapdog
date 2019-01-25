@@ -81,6 +81,8 @@ def get_hourly_cost(mtype, preempt=False):
         if mtype in mtypes:
             return mtypes[mtype][int(preempt)]
         else:
+            if mtype.endswith('-ext'):
+                mtype = mtype[:-4]
             custom, cores, mem = mtype.split('-')
             return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*max(int(mem), int(cores) * 1024 * 6.5)/1024) + max(0, extended_price[int(preempt)]*(int(mem)-(int(cores)*1024*6.5))/1024)
     except:
@@ -634,7 +636,7 @@ class SubmissionAdapter(object):
         cromwell_text = cache_fetch('submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
         if cromwell_text is not None:
             return BytesIO(cromwell_text)
-        while 'metadata' not in status or 'startTime' not in status['metadata']:
+        while 'metadata' not in status or ('startTime' not in status['metadata'] and 'endTime' not in status['metadata']):
             status = self.status
             time.sleep(1)
         if _do_wait:

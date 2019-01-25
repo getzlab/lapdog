@@ -27,18 +27,17 @@ paths:
           description: A Status Object representing the current Firecloud status
           schema:
             $ref: "#/definitions/Status"
-  /api/v1/quotas:
+  /api/v1/quotas/{namespace}:
     get:
       operationId: lapdog.api.controllers.quotas
-      summary: Returns firecloud status
+      summary: Returns quota usage in a particular gateway
       parameters:
         -
-          in: query
-          name: region
-          required: false
+          in: path
+          name: namespace
+          required: true
           type: string
-          description: Google cloud region
-          default: us-east1
+          description: The workspaces namespace
       responses:
         default:
           description: Error

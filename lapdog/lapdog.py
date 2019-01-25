@@ -744,7 +744,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         return True, config, entity, etype, workflow_entities, template, invalid_inputs
 
 
-    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False, memory=3, batch_limit=None, query_limit=None):
+    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=1000):
         """
         Validates config parameters then executes a job directly on GCP
         Config name may either be a full slug (config namespace/config name)
@@ -826,7 +826,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 print("Aborted", file=sys.stderr)
                 return
 
-        if len(workflow_entities) > 1000:
+        if len(workflow_entities) > offline_threshold:
             resync = True
             print("This submission contains a large amount of workflows")
             print("Please wait while the workspace loads data to prepare the submission in offline mode...")

@@ -415,6 +415,7 @@ export default {
   },
   methods: {
     init(namespace, workspace, sid) {
+      this.$emit('on-namespace-update', namespace);
       window.$('body').css('overflow', '');
       window.$('.modal').modal();
       this.submission = null;
