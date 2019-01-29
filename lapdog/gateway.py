@@ -20,6 +20,7 @@ from urllib.parse import quote
 import sys
 import tempfile
 import base64
+from agutil import cmd as run_cmd
 
 id_rsa = os.path.join(
     os.path.expanduser('~'),
@@ -134,7 +135,6 @@ class Gateway(object):
         of the service and the only user capable of using it.
         Call authorize_user to allow another user to use the service
         """
-        warnings.warn('Initialization disabled')
         cmd = (
             'gcloud projects create {project_id}'.format(
                 project_id=ld_project_for_namespace(project_id)
@@ -142,7 +142,9 @@ class Gateway(object):
         )
         print("Creating project")
         print(cmd)
-        subprocess.check_call(cmd, shell=True)
+        result = run_cmd(cmd)
+        if result.returncode != 0 and b'already in use' not in result.buffer:
+            raise ValueError("Unable to create project")
         print("Enabling servies...")
         services = [
             'cloudbilling.googleapis.com',
@@ -186,7 +188,9 @@ class Gateway(object):
             )
         )
         print(cmd)
-        subprocess.check_call(cmd, shell=True)
+        result = run_cmd(cmd)
+        if result.returncode != 0 and b'ALREADY_EXISTS' not in result.buffer:
+            raise ValueError("Unable to create Keyring")
         cmd = (
             'gcloud --project {project} alpha kms keys create lapdog-sign --location us --keyring'
             ' lapdog --purpose asymmetric-signing --default-algorithm '
@@ -195,7 +199,9 @@ class Gateway(object):
             )
         )
         print(cmd)
-        subprocess.check_call(cmd, shell=True)
+        result = run_cmd(cmd)
+        if result.returncode != 0 and b'ALREADY_EXISTS' not in result.buffer:
+            raise ValueError("Unable to create signing key")
 
         print("Creating Lapdog Roles")
         roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
@@ -225,7 +231,7 @@ class Gateway(object):
                 }
             }
         )
-        if response.status_code != 200:
+        if response.status_code != 200 and 'ALREADY_EXISTS' not in response.text:
             print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
             raise ValueError("Invalid response from Google API")
         print("POST", roles_url)
@@ -256,7 +262,7 @@ class Gateway(object):
                 }
             }
         )
-        if response.status_code != 200:
+        if response.status_code != 200 and 'ALREADY_EXISTS' not in response.text:
             print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
             raise ValueError("Invalid response from Google API")
         print("POST", roles_url)
@@ -295,7 +301,7 @@ class Gateway(object):
                 }
             }
         )
-        if response.status_code != 200:
+        if response.status_code != 200 and 'ALREADY_EXISTS' not in response.text:
             print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
             raise ValueError("Invalid response from Google API")
         print("POST", roles_url)
@@ -315,7 +321,7 @@ class Gateway(object):
                 }
             }
         )
-        if response.status_code != 200:
+        if response.status_code != 200 and 'ALREADY_EXISTS' not in response.text:
             print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
             raise ValueError("Invalid response from Google API")
 
@@ -326,7 +332,9 @@ class Gateway(object):
             )
         )
         print(cmd)
-        subprocess.check_call(cmd, shell=True)
+        result = run_cmd(cmd)
+        if result.returncode != 0 and b'already exists' not in result.buffer:
+            raise ValueError("Unable to create service account")
         core_account = 'lapdog-worker@{}.iam.gserviceaccount.com'.format(ld_project_for_namespace(project_id))
         print("Creating Cloud Functions Service Account")
         cmd = (
@@ -335,7 +343,9 @@ class Gateway(object):
             )
         )
         print(cmd)
-        subprocess.check_call(cmd, shell=True)
+        result = run_cmd(cmd)
+        if result.returncode != 0 and b'already exists' not in result.buffer:
+            raise ValueError("Unable to create service account")
         functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(ld_project_for_namespace(project_id))
         print("Creating Metadata bucket while service accounts are created")
         cmd = (
@@ -345,7 +355,9 @@ class Gateway(object):
             )
         )
         print(cmd)
-        subprocess.check_call(cmd, shell=True)
+        result = run_cmd(cmd)
+        if result.returncode != 0 and b'already exists' not in result.buffer:
+            raise ValueError("Unable to create bucket")
         print("Updating project IAM policy while service accounts are created")
         policy = {
             'serviceAccount:'+core_account: 'Core_account',
