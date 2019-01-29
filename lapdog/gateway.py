@@ -143,18 +143,9 @@ class Gateway(object):
         print("Creating project")
         print(cmd)
         subprocess.check_call(cmd, shell=True)
-        cmd = (
-            'gcloud beta billing projects link {project_id} --billing-account '
-            '{billing_id}'.format(
-                project_id=ld_project_for_namespace(project_id),
-                billing_id=billing_id
-            )
-        )
-        print("Enabling billing")
-        print(cmd)
-        subprocess.check_call(cmd, shell=True)
         print("Enabling servies...")
         services = [
+            'cloudbilling.googleapis.com',
             'cloudapis.googleapis.com',
             'clouddebugger.googleapis.com',
             'cloudfunctions.googleapis.com',
@@ -178,6 +169,16 @@ class Gateway(object):
             )
             print(cmd)
             subprocess.check_call(cmd, shell=True)
+        cmd = (
+            'gcloud beta billing projects link {project_id} --billing-account '
+            '{billing_id}'.format(
+                project_id=ld_project_for_namespace(project_id),
+                billing_id=billing_id
+            )
+        )
+        print("Enabling billing")
+        print(cmd)
+        subprocess.check_call(cmd, shell=True)
         print("Creating Signing Key")
         cmd = (
             'gcloud --project {project} kms keyrings create lapdog --location us'.format(
@@ -282,7 +283,6 @@ class Gateway(object):
                         "iam.serviceAccounts.setIamPolicy",
                         "iam.serviceAccounts.update",
                         "resourcemanager.projects.get",
-                        "resourcemanager.projects.list",
                         "genomics.operations.create",
                         "genomics.operations.get",
                         "genomics.operations.list",
