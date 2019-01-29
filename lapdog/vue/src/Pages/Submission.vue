@@ -581,6 +581,8 @@ export default {
             html: "Sent abort signal to submission",
             displayLength: 5000,
           });
+          if (this.submission.status == 'Running') this.submission.status = 'Aborting';
+          else this.submission.status = 'Aborted';
         })
         .catch(error => {
           window.materialize.toast({

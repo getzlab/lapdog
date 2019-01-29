@@ -25,6 +25,7 @@ import requests
 import sys_util
 import sys
 import atexit
+import traceback
 import itertools
 
 def clump(seq, length):
@@ -49,16 +50,17 @@ while True:
 
 def unpack(data):
     for k,v in data.items():
-        if v.startswith('[') and v.endswith(']'):
-            try:
-                data[k] = json.loads(v.replace("\\'", '~<BACKQUOTE>').replace("'", '"').replace('~<BACKQUOTE>', "\\'"))
-            except:
-                pass
-        elif v.startswith('{') and v.endswith('}'):
-            try:
-                data[k] = json.loads(v.replace("\\'", '~<BACKQUOTE>').replace("'", '"').replace('~<BACKQUOTE>', "\\'"))
-            except:
-                pass
+        if isinstance(v, str):
+            if v.startswith('[') and v.endswith(']'):
+                try:
+                    data[k] = json.loads(v.replace("\\'", '~<BACKQUOTE>').replace("'", '"').replace('~<BACKQUOTE>', "\\'"))
+                except:
+                    pass
+            elif v.startswith('{') and v.endswith('}'):
+                try:
+                    data[k] = json.loads(v.replace("\\'", '~<BACKQUOTE>').replace("'", '"').replace('~<BACKQUOTE>', "\\'"))
+                except:
+                    pass
     return data
 
 class CromwellDriver(object):
@@ -88,16 +90,30 @@ class CromwellDriver(object):
 
         logging.info("Started Cromwell")
 
-    def fetch(self, wf_id=None, post=False, files=None, method=None):
+    def fetch(self, session, wf_id=None, post=False, files=None, method=None):
         url = 'http://localhost:8000/api/workflows/v1'
         if wf_id is not None:
             url = os.path.join(url, wf_id)
         if method is not None:
             url = os.path.join(url, method)
         if post:
-            r = requests.post(url, files=files)
+            r = session.post(url, files=files)
         else:
-            r = requests.get(url)
+            for attempt in range(3):
+                try:
+                    r = session.get(url)
+                    assert r.status_code < 400
+                    break
+                except requests.ConnectionError:
+                    logging.info("Request failed (%d) : %s" % (r.status_code, r.text))
+                    if attempt == 2:
+                        raise
+                    time.sleep(10)
+                except AssertionError:
+                    logging.info("Request failed (%d) : %s" % (r.status_code, r.text))
+                    if attempt == 2:
+                        raise
+                    time.sleep(10)
         return r.json()
 
     def abort(self, workflow_id):
@@ -124,128 +140,133 @@ class CromwellDriver(object):
         first = True
         with open(inputs, 'rb') as inputReader:
             reader = csv.DictReader(inputReader, delimiter='\t', lineterminator='\n')
-            for batch in clump(reader, batch_limit):
-                logging.info("Running a new batch of %d workflows" % batch_limit)
+            with requests.Session() as session:
+                for batch in clump(reader, batch_limit):
+                    logging.info("Running a new batch of %d workflows" % batch_limit)
 
-                chunk = []
+                    chunk = []
 
-                if not first:
-                    logging.info("Restarting cromwell...")
-                    self.cromwell_proc.kill()
-                    self.cromwell_proc = None
-                    time.sleep(10)
-                    self.start(self.mem)
-                    time.sleep(20)
-                    logging.info("Resuming next batch")
-                else:
-                    first = False
+                    if not first:
+                        logging.info("Restarting cromwell...")
+                        self.cromwell_proc.kill()
+                        self.cromwell_proc = None
+                        time.sleep(10)
+                        self.start(self.mem)
+                        time.sleep(20)
+                        logging.info("Resuming next batch")
+                    else:
+                        first = False
 
-                for group in clump(batch, query_limit):
-                    logging.info("Starting a chunk of %d workflows" % query_limit)
-                    response = None
-                    for attempt in range(10):
-                        try:
-                            data['workflowInputs'] = json.dumps([unpack(line) for line in group])
-                            response = requests.post(
-                                'http://localhost:8000/api/workflows/v1/batch',
-                                files=data
-                            ).json()
-                            logging.info("Submitted jobs. Begin polling")
-                            break
-                        except requests.exceptions.ConnectionError as e:
-                            logging.info("Failed to connect to Cromwell (attempt %d): %s",
-                                attempt + 1, e)
-                            time.sleep(30)
+                    for group in clump(batch, query_limit):
+                        logging.info("Starting a chunk of %d workflows" % query_limit)
+                        group = [line for line in group]
+                        logging.info("There are %d workflows in this group" % len(group))
+                        response = None
+                        for attempt in range(10):
+                            try:
+                                data['workflowInputs'] = json.dumps([unpack(line) for line in group])
+                                response = session.post(
+                                    'http://localhost:8000/api/workflows/v1/batch',
+                                    files=data
+                                ).json()
+                                logging.info("Submitted jobs. Begin polling")
+                                break
+                            except requests.exceptions.ConnectionError as e:
+                                traceback.print_exc()
+                                logging.info("State: "+str(self.cromwell_proc.poll()))
+                                logging.info("Failed to connect to Cromwell (attempt %d): %s",
+                                    attempt + 1, e)
+                                time.sleep(30)
 
-                    if not response:
-                        sys_util.exit_with_error(
-                                "Failed to connect to Cromwell after {0} seconds".format(
-                                        300))
+                        if not response:
+                            sys_util.exit_with_error(
+                                    "Failed to connect to Cromwell after {0} seconds".format(
+                                            300))
 
-                    logging.info("Raw response: " + repr(response))
+                        logging.info("Raw response: " + repr(response))
 
-                    for job in response:
-                        if job['status'] != 'Submitted' and job['status'] != 'Running':
+                        for job in response:
+                            if job['status'] != 'Submitted' and job['status'] != 'Running':
+                                for job in response:
+                                    self.abort(job['id'])
+                                sys_util.exit_with_error(
+                                        "Job {} status from Cromwell was not 'Submitted', instead '{}'".format(
+                                                job['id'], job['status']))
+                            else:
+                                chunk.append(job)
+
+                    self.batch_submission = True
+
+                    @atexit.register
+                    def abort_all_jobs():
+                        if self.batch_submission:
                             for job in response:
                                 self.abort(job['id'])
-                            sys_util.exit_with_error(
-                                    "Job {} status from Cromwell was not 'Submitted', instead '{}'".format(
-                                            job['id'], job['status']))
-                        else:
-                            chunk.append(job)
 
-                self.batch_submission = True
-
-                @atexit.register
-                def abort_all_jobs():
-                    if self.batch_submission:
-                        for job in response:
-                            self.abort(job['id'])
-
-                for i in range(12):
-                    time.sleep(5)
-
-                attempt = 0
-                max_failed_attempts = 3
-                known_failures = set()
-                while True:
-                    for i in range(3):
+                    for i in range(12):
                         time.sleep(5)
 
-                    # Cromwell occassionally fails to respond to the status request.
-                    # Only give up after 3 consecutive failed requests.
-                    try:
-                        status_json = [
-                            self.fetch(wf_id=job['id'], method='status')
-                            for job in chunk
-                        ]
-                        attempt = 0
-                    except requests.exceptions.ConnectionError as e:
-                        attempt += 1
-                        logging.info("Error polling Cromwell job status (attempt %d): %s",
-                            attempt, e)
+                    attempt = 0
+                    max_failed_attempts = 3
+                    known_failures = set()
+                    while True:
+                        for i in range(3):
+                            time.sleep(5)
 
-                        if attempt >= max_failed_attempts:
-                            sys_util.exit_with_error(
-                                "Cromwell did not respond for %d consecutive requests" % attempt)
+                        # Cromwell occassionally fails to respond to the status request.
+                        # Only give up after 3 consecutive failed requests.
+                        try:
+                            status_json = [
+                                self.fetch(session, wf_id=job['id'], method='status')
+                                for job in chunk
+                            ]
+                            attempt = 0
+                        except requests.exceptions.ConnectionError as e:
+                            attempt += 1
+                            logging.info("Error polling Cromwell job status (attempt %d): %s",
+                                attempt, e)
 
-                        continue
+                            if attempt >= max_failed_attempts:
+                                sys_util.exit_with_error(
+                                    "Cromwell did not respond for %d consecutive requests" % attempt)
 
-                    statuses = {job['status'] for job in status_json}
-                    # logging.info("<WORKFLOW STATUS UPDATE> %s" % json.dumps(status_json))
-                    if 'Failed' in statuses:
-                        new_failures = [
-                            job for job in status_json
-                            if job['status'] == 'Failed' and job['id'] not in known_failures
-                        ]
-                        if len(new_failures):
-                            sys.stderr.write(
-                                 "The following jobs failed: %s\n" % (
-                                     ', '.join('%s (%s)' % (job['id'], job['status']) for job in new_failures)
+                            continue
+
+                        statuses = {job['status'] for job in status_json}
+                        # logging.info("<WORKFLOW STATUS UPDATE> %s" % json.dumps(status_json))
+                        if 'Failed' in statuses:
+                            new_failures = [
+                                job for job in status_json
+                                if job['status'] == 'Failed' and job['id'] not in known_failures
+                            ]
+                            if len(new_failures):
+                                sys.stderr.write(
+                                     "The following jobs failed: %s\n" % (
+                                         ', '.join('%s (%s)' % (job['id'], job['status']) for job in new_failures)
+                                     )
                                  )
-                             )
-                        known_failures |= {job['id'] for job in new_failures}
-                    if not len(statuses - {'Succeeded', 'Failed', 'Aborted'}):
-                        logging.info("All workflows in terminal states")
-                        break
+                            known_failures |= {job['id'] for job in new_failures}
+                        if not len(statuses - {'Succeeded', 'Failed', 'Aborted'}):
+                            logging.info("All workflows in terminal states")
+                            break
 
-                self.batch_submission = False
-                logging.info("<SUBMISSION COMPLETE. FINALIZING DATA>")
+                    self.batch_submission = False
+                    logging.info("<SUBMISSION COMPLETE. FINALIZING DATA>")
 
-                output += [
-                    {
-                        'workflow_id':job['id'],
-                        'workflow_status':job['status'],
-                        'workflow_output': self.fetch(wf_id=job['id'], method='outputs') if job['status'] == 'Succeeded' else None,
-                        'workflow_metadata': self.fetch(wf_id=job['id'], method='metadata') if job['status'] == 'Succeeded' else None,
-                    }
-                    for job in status_json
-                ]
+                    output += [
+                        {
+                            'workflow_id':job['id'],
+                            'workflow_status':job['status'],
+                            'workflow_output': self.fetch(session, wf_id=job['id'], method='outputs') if job['status'] == 'Succeeded' else None,
+                            'workflow_metadata': self.fetch(session, wf_id=job['id'], method='metadata') if job['status'] == 'Succeeded' else None,
+                        }
+                        for job in status_json
+                    ]
 
-                if 'Aborted' in statuses:
-                    # Quit now. No reason to start a new batch to get aborted
-                    sys.stderr.write("There were aborted workflows. Aborting submission now.")
-                    return output
+                    if 'Aborted' in statuses:
+                        # Quit now. No reason to start a new batch to get aborted
+                        sys.stderr.write("There were aborted workflows. Aborting submission now.")
+                        return output
         return output
 
 
@@ -280,7 +301,7 @@ class CromwellDriver(object):
         time.sleep(wait_interval)
         for attempt in range(max_time_wait/wait_interval):
             try:
-                job = self.fetch(post=True, files=files)
+                job = self.fetch(session, post=True, files=files)
                 break
             except requests.exceptions.ConnectionError as e:
                 logging.info("Failed to connect to Cromwell (attempt %d): %s",
@@ -310,7 +331,7 @@ class CromwellDriver(object):
             # Cromwell occassionally fails to respond to the status request.
             # Only give up after 3 consecutive failed requests.
             try:
-                status_json = self.fetch(wf_id=cromwell_id, method='status')
+                status_json = self.fetch(session, wf_id=cromwell_id, method='status')
                 attempt = 0
             except requests.exceptions.ConnectionError as e:
                 attempt += 1
@@ -337,8 +358,8 @@ class CromwellDriver(object):
         logging.info("Cromwell job status: %s", status)
 
         # Cromwell produces a list of outputs and full job details
-        outputs = self.fetch(wf_id=cromwell_id, method='outputs')
-        metadata = self.fetch(wf_id=cromwell_id, method='metadata')
+        outputs = self.fetch(session, wf_id=cromwell_id, method='outputs')
+        metadata = self.fetch(session, wf_id=cromwell_id, method='metadata')
 
         return outputs, metadata
 

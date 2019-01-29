@@ -158,7 +158,7 @@ class Runner(object):
                     )
                 file_util.gsutil_cp(['workflows.json'], self.args.output_dir+'/')
                 for data in job_data:
-                    logging.info("Workflow %s exited with stats %s" % (data['workflow_id'], data['workflow_status']))
+                    logging.info("Workflow %s exited with status %s" % (data['workflow_id'], data['workflow_status']))
                     # if data['workflow_output'] is not None:
                     #     metadata_filename = '%s.%s' % (
                     #         data['workflow_id'],

@@ -105,4 +105,3 @@ def verify_gcs_dir_empty_or_missing(path):
 
 if __name__ == '__main__':
   pass
-

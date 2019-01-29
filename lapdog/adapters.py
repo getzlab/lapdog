@@ -334,8 +334,14 @@ class SubmissionAdapter(object):
                         )
                     ).download_as_string())
                     cost = 0
-                    maxTime = 0
                     total = 0
+                    status = self.status
+                    if 'metadata' in status and 'startTime' in status['metadata']:
+                        maxTime = (
+                            parse_time(status['metadata']['endTime']) if 'endTime' in status['metadata']
+                            else datetime.datetime.utcnow()
+                        ) - parse_time(status['metadata']['startTime'])
+                        maxTime = maxTime.total_seconds() / 3600
                     for wf in workflow_metadata:
                         if wf['workflow_metadata'] is not None and 'calls' in wf['workflow_metadata']:
                             for calls in wf['workflow_metadata']['calls'].values():
@@ -347,8 +353,8 @@ class SubmissionAdapter(object):
                                             parse_time(call['end']) - parse_time(call['start'])
                                         )
                                         delta = delta.total_seconds() / 3600
-                                        if delta > maxTime:
-                                            maxTime = delta
+                                        # if delta > maxTime:
+                                        #     maxTime = delta
                                         total += delta
                                         if 'jes' in call and 'machineType' in call['jes']:
                                             cost += delta * get_hourly_cost(
@@ -399,8 +405,8 @@ class SubmissionAdapter(object):
                                     else datetime.datetime.utcnow()
                                 ) - parse_time(call['metadata']['startTime'])
                                 delta = delta.total_seconds() / 3600
-                                if delta > maxTime:
-                                    maxTime = delta
+                                # if delta > maxTime:
+                                #     maxTime = delta
                                 total += delta
                                 if 'jes' in call and 'machineType' in call['jes']:
                                     cost += delta * get_hourly_cost(
@@ -416,13 +422,11 @@ class SubmissionAdapter(object):
                 print("Took longer than 60 seconds to load workflow costs. Skipping")
             status = self.status
             if 'metadata' in status and 'startTime' in status['metadata']:
-                delta = (
+                maxTime = (
                     parse_time(status['metadata']['endTime']) if 'endTime' in status['metadata']
                     else datetime.datetime.utcnow()
                 ) - parse_time(status['metadata']['startTime'])
-                delta = delta.total_seconds() / 3600
-                if delta > maxTime:
-                    maxTime = delta
+                maxTime = maxTime.total_seconds() / 3600
             cost += maxTime * get_hourly_cost(
                 get_cromwell_type(self.data['runtime']) if 'runtime' in self.data else 'n1-standard-1',
                 False
@@ -464,44 +468,33 @@ class SubmissionAdapter(object):
                         if code in self._update_mask:
                             continue
                         self._update_mask.add(code)
+                        # This event helps establish the order of workflows
+                        # The message is posted with the exact order of workflow-ids
+                        # Which will match the order of entities dispatched in the submission
+                        # It creates a new workflow object and inserts the mapping
+                        # of key->id into the table
                         ids = [
                             wf_id.strip() for wf_id in
                             matcher.value.group(1).split(',')
                         ]
                         # print(len(ids), 'workflow(s) dispatched')
-                        for long_id, data in zip(ids, self.raw_workflows):
+                        for long_id, data in zip(ids, self.raw_workflows[len(self.workflow_mapping):]):
                             self._init_workflow(
                                 long_id[:8],
                                 data['workflowOutputKey'],
                                 long_id
                             )
                             self.workflow_mapping[data['workflowOutputKey']] = long_id
-                    elif matcher.apply(workflow_start_pattern.search(message)):
+                    if matcher.apply(workflow_start_pattern.search(message)):
                         if code in self._update_mask:
                             continue
                         self._update_mask.add(code)
-                        # print("New workflow started")
+                        # This event captures a start message for a workflow which somehow
+                        # was not captured by the above dispatch event
                         long_id = matcher.value.group(1)
-                        if long_id in {*self.workflow_mapping.values()}:
-                            # dispatch event on fully started workflow
-                            self.workflows[long_id[:8]].handle(
-                                'start',
-                                {v:k for k,v in self.workflow_mapping.items()}[long_id],
-                                long_id
-                            )
-                        elif long_id[:8] in self.workflows:
-                            # dispatch event on half-started workflow
-                            # this will syncup and replay events
-                            idx = len(self.workflow_mapping)
-                            data = self.raw_workflows[idx]
-                            self.workflows[long_id[:8]].handle(
-                                'start',
-                                data['workflowOutputKey'],
-                                long_id
-                            )
-                            self.workflow_mapping[data['workflowOutputKey']] = long_id
-                        else:
-                            # instead initialize new workflow
+                        if long_id not in {*self.workflow_mapping.values()}:
+                            warnings.warn("Unexpected state")
+                            traceback.print_stack()
                             idx = len(self.workflow_mapping)
                             data = self.raw_workflows[idx]
                             self._init_workflow(
@@ -510,6 +503,7 @@ class SubmissionAdapter(object):
                                 long_id
                             )
                             self.workflow_mapping[data['workflowOutputKey']] = long_id
+
                     elif matcher.apply(task_start_pattern.search(message)):
                         if code in self._update_mask:
                             continue
