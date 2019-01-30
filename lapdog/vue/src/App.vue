@@ -135,7 +135,7 @@
           Your Lapdog service account: {{acct}}
         </div>
         <div v-if="cache_size" class="col s2">
-          Cache size: {{cache_size}}
+          Offline Cache Size: {{cache_size}}
         </div>
       </div>
     </footer>

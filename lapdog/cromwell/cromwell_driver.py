@@ -61,6 +61,8 @@ def unpack(data):
                     data[k] = json.loads(v.replace("\\'", '~<BACKQUOTE>').replace("'", '"').replace('~<BACKQUOTE>', "\\'"))
                 except:
                     pass
+    if len(json.dumps(data)) >= 10485760:
+        raise ValueError("The size of input metadata for an individual workflow cannot exceed 10 Mib")
     return data
 
 class CromwellDriver(object):

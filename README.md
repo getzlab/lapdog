@@ -4,13 +4,26 @@
 
 A relaxed wrapper for dalmatian and FISS
 
-## Requirements
-Lapdog requires the Google Cloud SDK, which can be installed [here](https://cloud.google.com/sdk/)
+## Prerequisites
+* Lapdog requires MacOS or Linux. Windows is not officially supported
+* Lapdog requires Python >= 3.3
+* Lapdog requires the Google Cloud SDK, which can be installed [here](https://cloud.google.com/sdk/).
+    * Your `gcloud --version` should be at least `232.0.0`. If it is not, please run `gcloud components update`
+* Lapdog uses your Gcloud application-default credentials
+    * Use `gcloud auth application-default login` and `gcloud config set account {account}` before running Lapdog
+* Lapdog requires the Alpha and Beta suite for Gcloud
+    * Alpha and Beta suite can be installed with `gcloud components install alpha beta`
+* (Optional) The Lapdog User Interface requires node and npm, which can be installed using your system's package manager
+    * MacOS: `brew install node npm`
+    * Linux: Install through system package manager or [from source](https://nodejs.org/en/download/)
+    * Lapdog requires `node --version` >= 10.15.1
+    * Lapdog requires `npm --version` >= 6.4.1
 
 ## Installing
 1. Install lapdog via pip: `pip install lapdog`
     - If you already have lapdog installed, you can upgrade it with
     `pip install --upgrade lapdog`
+    - If you encounter an error with PyYAML see the [PyYaml Note](#pyyaml-note) below
 2. (Optional) Enable the Lapdog User Interface:
     - The UI runs locally by default. If you are installing Lapdog on a server, you'll
     need to set up an SSH tunnel for ports 4200 and 4201
@@ -74,14 +87,9 @@ re-granting it. You can see FireCloud's response to this bug report [here](https
 ---
 
 ### Roadmap
-(Subject to change)
-1. ~~Add Data view~~ **Done**
-2. ~~Enable Multi-Project mode~~ **Done**
-3. Add better timeouts when interacting with Firecloud
-    * Lapdog should switch to its internal cache more eagerly than it does now
-    * Goal: enforce a ~5s timeout if the desired data is already cached
-    * 20s timeout otherwise
-4. Enable call caching
+
+See the [milestones page](https://github.com/broadinstitute/lapdog/milestones) to
+read the development roadmap.
 
 ### Pro/Con with Firecloud
 
@@ -104,3 +112,35 @@ re-granting it. You can see FireCloud's response to this bug report [here](https
 * Submission results must be manually uploaded to Firecloud by clicking the `Upload Results` button in the UI.
 * There are small overhead costs billed to the Lapdog Engine for operation. These costs
 are for calls to the API and for storage of metadata, both of which should be very cheap
+
+## PyYAML Note
+
+Often, when installing Lapdog, the installation fails when upgrading PyYAML because
+it is unable to uninstall the current PyYAML version.
+
+This is because some older versions of PyYAML were distributed through `distutils`
+which prevents packages from being uninstalled. New versions of PyYAML are distributed
+through `setuptools` which can be successfully uninstalled.
+
+To resolve this issue, navigate to your Python site-packages directory. The site-packages
+directory usually ends with `.../lib/python{version}/site-packages/`. The exact location
+depends on your platform, environment manager, and python configuration.
+
+* For anaconda, this path is within anaconda's installation folder: `/{path to anaconda}/envs/{environment}/lib/python{version}/site-packages`
+* For virtualenvs, this path is within the environment's installation folder: `/{path to environment}/lib/python{version}/site-packages`
+* For system python on Unix systems: `/usr/local/lib/python{version}/site-packages`
+
+An easy way to locate this folder is to open python and then:
+```python
+import yaml
+yaml
+```
+
+This expression will evaluate and print the path to the `yaml` module, which will be
+within your site-packages directory.
+
+After locating the site-packages directory, you must remove the following two directories:
+* `.../site-packages/yaml/`
+* `.../site-packages/PyYAML*.egg-info`
+
+Once removed, you can try the installation command for lapdog again.

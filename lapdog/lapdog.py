@@ -910,21 +910,22 @@ class WorkspaceManager(dog.WorkspaceManager):
             lineterminator='\n'
         )
         writer.writeheader()
-        writer.writerows(
-            {
-                **{
-                    column: None
-                    for column in columns
-                },
-                **row
-            }
-            for row in workflow_inputs
-        )
+        for row in workflow_inputs:
+            if len(json.dumps(row)) >= 10485760:
+                raise ValueError("The size of input metadata cannot exceed 10 Mib for an individual workflow")
+            writer.writerow(
+                {
+                    **{
+                        column: None
+                        for column in columns
+                    },
+                    **row
+                }
+            )
         getblob(config_path).upload_from_string(
             # json.dumps(workflow_inputs).encode()
             buff.getvalue().encode()
         )
-
 
         submission_data['workflows'] = [
             {
