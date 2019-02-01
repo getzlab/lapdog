@@ -8,6 +8,20 @@ Other: error_outline
 -->
 <template lang="html">
   <div id="submission">
+    <div class="modal" id="rerun-modal">
+      <div class="modal-content">
+        Created rerun entity set <span v-if="rerun_set"><code>{{rerun_set.name}}</code></span>
+        <br>Automatically rerun?
+      </div>
+      <div class="modal-footer">
+        <div class="row">
+          <div class="col s6 offset-s3">
+            <a class="modal-close red-text left" v-on:click="submit_rerun">YES</a>
+            <a class="modal-close right">NO</a>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="modal" id="abort-modal">
       <div class="modal-content">
         <h4>Abort Submission?</h4>
@@ -268,6 +282,9 @@ Other: error_outline
       <div class="col s6" v-if="submission.status == 'Succeeded' || submission.status == 'Failed'">
         <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
       </div>
+      <div class="col s6" v-if="(submission.status == 'Error' || submission.status == 'Failed') && workflows && failed_workflows.length">
+        <button class='btn blue' data-target="rerun-modal" v-on:click="rerun">Rerun Failures</button>
+      </div>
       <div class="col s6" v-if="submission.status == 'Running' || submission.status == 'Aborting'">
         <button class='btn red darken-3 modal-trigger' data-target="abort-modal">Abort Submission</button>
       </div>
@@ -310,7 +327,7 @@ Other: error_outline
         <span v-else>Waiting for {{pending_workflows}} workflows to check in...</span>
       </div>
     </div>
-    <div class="workflow-container" v-if="workflows">
+    <div class="workflow-container" v-if="workflows && workflows.length">
       <!-- <ul class="collapsible popout">
         <li v-for="workflow in workflows">
           <div class="collapsible-header">
@@ -366,7 +383,7 @@ Other: error_outline
         </tbody>
       </table>
     </div>
-    <div v-else>
+    <div v-else-if="!workflows">
       <div class="progress">
         <div class="indeterminate blue"></div>
       </div>
@@ -382,6 +399,7 @@ export default {
   props: ['namespace', 'workspace', 'submission_id'],
   data() {
     return {
+      lodash: _,
       submission: null,
       workflows: null,
       display_cromwell: false,
@@ -392,7 +410,9 @@ export default {
       active_log: null,
       sort_key: null,
       reversed: false,
-      cost: null
+      cost: null,
+      rerun_set: null,
+      rerun_type: null
     }
   },
   computed: {
@@ -401,6 +421,13 @@ export default {
         return this.workflows ? this.submission.workflows.length - this.workflows.length : this.submission.workflows.length;
       }
       return 0;
+    },
+    failed_workflows() {
+      if (this.workflows) {
+        return _.filter(this.workflows, (workflow) => {
+          return workflow.status == 'Failed' || workflow.status == 'Error';
+        });
+      } else return null;
     }
   },
   created() {
@@ -428,6 +455,7 @@ export default {
       this.sort_key = null;
       this.reversed = false;
       this.cost = null;
+      this.rerun_set = null;
       axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid)
         .then(response => {
           console.log("Got submission");
@@ -617,6 +645,69 @@ export default {
             html: "Unable to upload results: " + response.data.message,
             displayLength: 10000,
           });
+        })
+    },
+    rerun() {
+      window.materialize.toast({
+        html: "Creating entity set for " + (this.failed_workflows.length) + " failed entitites",
+        displayLength: 4000
+      });
+      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/rerun')
+        .then(response => {
+          console.log("Rerun set");
+          console.log(response.data);
+          this.rerun_set = response.data;
+          window.$('#rerun-modal').modal();
+          window.$('#rerun-modal').modal('open');
+        })
+        .catch(response => {
+          console.log("Failed to create rerun set");
+          console.error(response);
+          window.materialize.toast({
+            html: "Unable to create rerun set"
+          })
+        })
+    },
+    submit_rerun() {
+      let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
+      query += "config="+encodeURIComponent(this.submission.methodConfigurationNamespace+'/'+this.submission.methodConfigurationName);
+      query += "&entity="+encodeURIComponent(this.rerun_set.name);
+      if (this.rerun_set.expression) query += "&expression="+encodeURIComponent(this.rerun_set.expression);
+      if (this.rerun_set.type) query += "&etype="+encodeURIComponent(this.rerun_set.type);
+      // if (this.cromwell_mem % 2 == 1) this.cromwell_mem += 1;
+      // query += "&memory=3&batch=250&query=100";
+      window.materialize.toast({
+        html: "Preparing job...",
+        displayLength: 10000,
+      })
+      axios.post(query)
+        .then(response => {
+          console.log("Execution returned");
+          console.log(response);
+          let result = response.data;
+          if (result.ok && !result.failed) {
+            window.materialize.toast({
+              html: "It may take several minutes for the submission to check in",
+              displayLength: 10000,
+            })
+            window.$('#rerun-modal').modal();
+            window.$('#rerun-modal').modal('close');
+            this.$router.push({
+              name: 'submission',
+              params: {
+                namespace: this.namespace,
+                workspace: this.workspace,
+                submission_id: response.data.local_id
+              }
+            });
+          }
+          else {
+            alert(response.data.message);
+          }
+        })
+        .catch(response => {
+          console.error("FAILED");
+          console.error(response)
         })
     }
   },

@@ -609,6 +609,36 @@ paths:
           description: Upload response and submission stats
           schema:
             type: object
+  /api/v1/submissions/expanded/{namespace}/{name}/{id}/rerun:
+    put:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The submission namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The submission workspace
+        -
+          in: path
+          name: id
+          required: true
+          type: string
+          description: The submission local id
+      summary: Generates a rerun entity set
+      operationId: lapdog.api.controllers.rerun_submission
+      responses:
+        default:
+          description: Error
+        200:
+          description: Upload response and submission stats
+          schema:
+            type: object
   /api/v1/submissions/expanded/{namespace}/{name}/{id}/cromwell:
     get:
       parameters:

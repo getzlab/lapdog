@@ -23,6 +23,22 @@ from ..cache import cached, cache_fetch, cache_write, cache_init
 from ..adapters import NoSuchSubmission, Gateway
 from ..gateway import get_account, proxy_group_for_user
 import re
+import contextlib
+
+@contextlib.contextmanager
+def log_controller(func):
+    try:
+        start = time.time()
+        print("Started serving", func.__name__)
+        yield
+    finally:
+        print("Finished serving", func.__name__, "in %0.1f seconds" % (time.time() - start))
+
+def controller(func):
+    def wrapper(*args, **kwargs):
+        with log_controller(func):
+            return func(*args, **kwargs)
+    return wrapper
 
 def readvar(obj, *args):
     current = obj
@@ -51,6 +67,7 @@ def get_workspace_object(namespace, name):
     return ws
 
 @lru_cache()
+@controller
 def version():
     with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), '__init__.py')) as reader:
         result = re.search(r'__version__ = \"(\d+\.\d+\.\d+.*?)\"', reader.read())
@@ -89,6 +106,7 @@ def get_lines(namespace, workspace, submission):
     return lines
 
 @cached(30)
+@controller
 def status():
     obj = {
         'health': requests.get('https://api.firecloud.org/health').text,
@@ -106,6 +124,7 @@ def status():
     return obj, 200
 
 @cached(120)
+@controller
 def list_workspaces():
     try:
         return sorted([
@@ -140,6 +159,7 @@ def list_workspaces():
     }, 500
 
 @cached(120)
+@controller
 def workspace(namespace, name):
     ws = get_workspace_object(namespace, name)
     data = ws.operator.firecloud_workspace
@@ -153,6 +173,7 @@ def workspace(namespace, name):
 
 
 @cached(600)
+@controller
 def get_namespace_registered(namespace, name):
     ws = get_workspace_object(namespace, name)
     exists = ws.gateway.exists
@@ -161,6 +182,7 @@ def get_namespace_registered(namespace, name):
         'registered': exists and ws.gateway.registered
     }
 
+@controller
 def register(namespace, name):
     ws = get_workspace_object(namespace, name)
     if ws.gateway.exists and not ws.gateway.registered:
@@ -171,10 +193,12 @@ def register(namespace, name):
 
 
 @cached(120)
+@controller
 def service_account():
     return proxy_group_for_user(get_account())+'@firecloud.org', 200
 
 @cached(60)
+@controller
 def get_acl(namespace, name):
     failure = 'NONE'
     result = fc.get_workspace_acl(namespace, name)
@@ -205,6 +229,7 @@ def get_acl(namespace, name):
     }, 200
 
 @cached(60)
+@controller
 def service_acl(namespace, name):
     data, code = get_acl(namespace, name)
     if code != 200 or (data['failed'] and data['reason'] != 'permissions'):
@@ -249,6 +274,7 @@ def service_acl(namespace, name):
         'service_account': len(account_data) and len({acct['access'] for acct in account_data} & {'WRITER', 'OWNER', 'ADMIN', 'PROJECT_OWNER'})
     }, 200
 
+@controller
 def set_acl(namespace, name):
     account, code = service_account()
     if code != 200:
@@ -329,6 +355,7 @@ def _get_entitites_df(namespace, name, etype):
     return ws.operator.get_entities_df(etype)
 
 @cached(10)
+@controller
 def get_entities(namespace, name, etype, start=0, end=None):
     # result = get_workspace_object(namespace, name).operator.entity_types
     # return {
@@ -352,10 +379,12 @@ def get_entities(namespace, name, etype, start=0, end=None):
         df.to_json(buffer, 'records')
     return json.loads(buffer.getvalue())
 
+@controller
 def get_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
     return {'state': ws.live, 'pending': len(ws.operator.pending)}, 200
 
+@controller
 def sync_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
     if ws.live:
@@ -366,6 +395,7 @@ def sync_cache(namespace, name):
         ws.sync()
     return get_cache(namespace, name)
 
+@controller
 def create_workspace(namespace, name, parent):
     ws = lapdog.WorkspaceManager(namespace, name)
     parent = None if '/' not in parent else lapdog.WorkspaceManager(parent)
@@ -389,11 +419,13 @@ def create_workspace(namespace, name, parent):
     }
 
 @cached(60)
+@controller
 def get_configs(namespace, name):
     ws = get_workspace_object(namespace, name)
     return ws.list_configs()
 
 @cached(20)
+@controller
 def list_submissions(namespace, name, cache):
     from ..lapdog import timestamp_format
     ws = get_workspace_object(namespace, name)
@@ -410,6 +442,7 @@ def list_submissions(namespace, name, cache):
         reverse=True
     )
 
+@controller
 def preflight(namespace, name, config, entity, expression="", etype=""):
     ws = get_workspace_object(namespace, name)
     try:
@@ -447,6 +480,7 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
             'invalid_inputs': 'None'
         }, 200
 
+@controller
 def execute(namespace, name, config, entity, expression="", etype="", memory=3, batch=250, query=100):
     ws = get_workspace_object(namespace, name)
     try:
@@ -468,13 +502,14 @@ def execute(namespace, name, config, entity, expression="", etype="", memory=3, 
             'operation_id': operation_id
         }, 200
     except:
-        print(traceback.format_exc())
+        traceback.print_exc()
         return {
             'failed': True,
             'ok': False,
-            'message': "Failure: "+repr(sys.exc_info()),
+            'message': traceback.format_exc(),
         }, 200
 
+@controller
 def decode_submission(submission_id):
     if submission_id.startswith('lapdog/'):
         ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
@@ -485,7 +520,7 @@ def decode_submission(submission_id):
         }, 200
     return "Not a valid submission id", 404
 
-
+@controller
 def get_submission(namespace, name, id):
     ws = get_workspace_object(namespace, name)
     try:
@@ -504,6 +539,7 @@ def get_submission(namespace, name, id):
         }
     }, 200
 
+@controller
 def get_cost(namespace, name, id):
     ws = get_workspace_object(namespace, name)
     try:
@@ -513,11 +549,13 @@ def get_cost(namespace, name, id):
         return "No Such Submission", 404
     return adapter.cost()
 
+@controller
 def abort_submission(namespace, name, id):
     adapter = get_adapter(namespace, name, id)
     adapter.abort()
     return [wf.long_id for wf in adapter.workflows.values() if wf.long_id is not None], 200
 
+@controller
 def upload_submission(namespace, name, id):
     ws = get_workspace_object(namespace, name)
     try:
@@ -540,6 +578,7 @@ def upload_submission(namespace, name, id):
             'message': 'Failed'
         }, 200
 
+@controller
 def read_cromwell(namespace, name, id, offset=0):
     # _get_lines.cache_clear()
     lines = get_lines(namespace, name, id)
@@ -553,6 +592,7 @@ def read_cromwell(namespace, name, id, offset=0):
     # return lines
 
 @cached(10)
+@controller
 def get_workflows(namespace, name, id):
     adapter = get_adapter(namespace, name, id)
     adapter.update()
@@ -572,6 +612,7 @@ def get_workflows(namespace, name, id):
 
 # @cached(10)
 @cached(10)
+@controller
 def get_workflow(namespace, name, id, workflow_id):
     adapter = get_adapter(namespace, name, id)
     adapter.update(5)
@@ -625,6 +666,7 @@ def get_workflow(namespace, name, id, workflow_id):
         }, 200
 
 # @cached(30)
+@controller
 def read_logs(namespace, name, id, workflow_id, log, call):
     filename, suffix = {
         'stdout': ('stdout', '-stdout.log'),
@@ -669,6 +711,7 @@ def read_logs(namespace, name, id, workflow_id, log, call):
     return 'Error', 500
 
 @cached(10)
+@controller
 def operation_status(operation_id):
     from ..adapters import get_operation_status
     # print("Getting status:", operation_id)
@@ -676,6 +719,7 @@ def operation_status(operation_id):
     # print(text[:256])
     return text, 200
 
+@controller
 def cache_size():
     total = 0
     for path, _, files in os.walk(cache_init()):
@@ -684,11 +728,13 @@ def cache_size():
     return byteSize(total), 200
 
 @cached(120)
+@controller
 def quotas(namespace):
     return Gateway(namespace).quota_usage
 
 
 @cached(60)
+@controller
 def get_config(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
     try:
@@ -747,6 +793,7 @@ def get_config(namespace, name, config_namespace, config_name):
         }, 200
     return "FAILED", 500
 
+@controller
 def update_config(namespace, name, config):
     ws = get_workspace_object(namespace, name)
     ws.update_configuration(config)
@@ -754,6 +801,7 @@ def update_config(namespace, name, config):
     get_configs.cache_clear()
     return ("OK", 200)
 
+@controller
 def delete_config(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
     ws.delete_config(config_namespace, config_name)
@@ -761,6 +809,7 @@ def delete_config(namespace, name, config_namespace, config_name):
     get_configs.cache_clear()
     return ("OK", 200)
 
+@controller
 def upload_config(namespace, name, config_filepath, method_filepath=None):
     try:
         config = json.load(config_filepath)
@@ -794,3 +843,15 @@ def upload_config(namespace, name, config_filepath, method_filepath=None):
             'failed': True,
             'reason': "Unhandled exception. Check Lapdog terminal output for details"
         }, 200
+
+@controller
+def rerun_submission(namespace, name, id):
+    ws = get_workspace_object(namespace, name)
+    return {
+        **{
+            'name': None,
+            'type': None,
+            'expression': None
+        },
+        **ws.build_retry_set(id)
+    }

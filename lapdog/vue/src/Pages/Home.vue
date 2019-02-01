@@ -1,5 +1,13 @@
 <template>
   <div id="home">
+    <div v-if="latest_version && latest_version != lapdog_version" class="row" style="margin-top: 10px; border: 2px solid orange;">
+      <div class="col s10 offset s1 pushpin">
+        <div class="orange-text">
+          Your Lapdog version is out of date. Please upgrade to the latest version with
+        </div>
+        <code>pip install --upgrade lapdog=={{latest_version}}</code>
+      </div>
+    </div>
     <div class="row">
       <div class="col s6">
         <h3>
@@ -46,7 +54,8 @@
     data() {
       return {
         systems: null,
-        lapdog_version: null
+        lapdog_version: null,
+        latest_version: null
       }
     },
 
@@ -56,6 +65,20 @@
       axios.get(API_URL+'/api/v1/version')
         .then(response => {
           this.lapdog_version = response.data;
+
+          axios.get("https://pypi.org/pypi/lapdog/json")
+            .then(response => {
+              this.latest_version = _.last(_(response.data.releases).keys().map( version => {
+                let components = _.split(version, '.');
+                return {
+                  major: Number(components[0]),
+                  minor: Number(components[1]),
+                  patch: Number(components[2]),
+                  version: version
+                }
+              }).sortBy(['major', 'minor', 'patch']).value()).version;
+            })
+
         })
     },
 

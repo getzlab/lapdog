@@ -590,7 +590,8 @@ def cmd_service_account(args):
     print("    - Create Lapdog Service Accounts and IAM Roles")
     print("4) Grant Admin Access")
     print("    - Your account will have administrator access to the project")
-    print("    - You must grant access for other users to use this Engine")
+    print("    - You must grant access to any other users which need administrator access to the project")
+    print("    - End-Users will automatically be granted User access by demonstrating WRITER permissions to any workspace in the namespace")
     print()
     print("Press Enter to Start, or Ctrl+C to abort")
     try:

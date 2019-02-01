@@ -761,34 +761,18 @@ class WorkspaceManager(dog.WorkspaceManager):
         workflows get started and that failures are detected
         Otherwise: The cromwell VM will submit/query the given number of workflows at a time
         """
-        config = self.fetch_config(config_name)
-        if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
-            raise ValueError("expression and etype must BOTH be None or a string value")
-        if etype is None:
-            etype = config['rootEntityType']
-        entities = self.operator.get_entities_df(etype)
-        if entity not in entities.index:
-            raise TypeError("No such %s '%s' in this workspace. Check your entity and entity type" % (
-                etype,
-                entity
-            ))
 
-        workflow_entities = self.operator.evaluate_expression(
-            etype,
+        preflight_result = self.execute_preflight(
+            config_name,
             entity,
-            (expression if expression is not None else 'this')+'.%s_id' % config['rootEntityType']
+            expression,
+            etype
         )
 
-        template = self.operator.get_config_detail(
-            config['namespace'],
-            config['name']
-        )['inputs']
+        if not preflight_result[0]:
+            raise ValueError(preflight_result[1])
 
-        invalid_inputs = self.operator.validate_config(
-            config['namespace'],
-            config['name']
-        )
-        invalid_inputs = {**invalid_inputs['invalidInputs'], **{k:'N/A' for k in invalid_inputs['missingInputs']}}
+        result, config, entity, etype, workflow_entities, template, invalid_inputs = preflight_result
 
         if len(invalid_inputs):
             if not force:
@@ -980,7 +964,54 @@ class WorkspaceManager(dog.WorkspaceManager):
             return WorkspaceManager(ns, ws).get_submission_cost(sid)
         elif lapdog_id_pattern.match(submission_id):
             return self.get_adapter(submission_id).cost()
-        raise TypeError("complete_execution not available for firecloud submissions")
+        raise TypeError("get_submission_cost not available for firecloud submissions")
+
+    def build_retry_set(self, submission_id):
+        """
+        Constructs a new entity_set of failures from a completed execution.
+        """
+        if submission_id.startswith('lapdog/'):
+            ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+            return WorkspaceManager(ns, ws).submission_output_df(sid)
+        elif not lapdog_id_pattern.match(submission_id):
+            raise ValueError("Retry Failures is not yet available for FireCloud submissions")
+        submission = self.get_adapter(submission_id)
+        status = submission.status
+        done = 'done' in status and status['done']
+        if done:
+            submission.update()
+            retries = [
+                wf['workflowEntity']
+                for wf in submission.raw_workflows
+                if wf['workflowOutputKey'] in submission.workflow_mapping and (
+                    submission.workflows[submission.workflow_mapping[wf['workflowOutputKey']][:8]].status
+                    if submission.workflow_mapping[wf['workflowOutputKey']][:8] in submission.workflows
+                    else 'Starting'
+                ) in {'Error', 'Failed'}
+            ]
+            if len(retries) == 0:
+                return None
+            if len(retries) == 1:
+                return {
+                    'name': retries[0]
+                }
+            if submission.data['workflowEntityType'].endswith('_set'):
+                raise TypeError("build_retry_set does not yet support super-sets")
+            set_type = submission.data['workflowEntityType']+'_set'
+            table = self.operator.get_entities_df(set_type)
+            name = submission.data['methodConfigurationName']+'_retries'
+            if name in table.index:
+                i = 2
+                while '%s_%d' %(name, i) in table.index:
+                    i += 1
+                name = '%s_%d' %(name, i)
+            self.update_entity_set(submission.data['workflowEntityType'], name, retries)
+            return {
+                'name': name,
+                'type': set_type,
+                'expression': 'this.{}s'.format(submission.data['workflowEntityType'])
+            }
+
 
     def submission_output_df(self, submission_id):
         """
@@ -988,7 +1019,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         if submission_id.startswith('lapdog/'):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
-            return WorkspaceManager(ns, ws).complete_execution(sid)
+            return WorkspaceManager(ns, ws).submission_output_df(sid)
         elif lapdog_id_pattern.match(submission_id):
             submission = self.get_adapter(submission_id)
             status = submission.status

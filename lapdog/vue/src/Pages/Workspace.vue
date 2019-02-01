@@ -1,5 +1,13 @@
 <template lang="html">
   <div id="workspace">
+    <div class="modal" id="error-modal">
+      <div class="modal-content">
+        <h4>Failed to Submit</h4>
+        <blockquote>
+          {{submission_error}}
+        </blockquote>
+      </div>
+    </div>
     <div class="modal" id="submission-modal">
       <div class="modal-content">
         <div class="container form-container">
@@ -461,7 +469,8 @@
         query_size: 100,
         cached_submissions: true,
         gateway: null,
-        pending_ops: 0
+        pending_ops: 0,
+        submission_error: null
         // entities: null
       }
     },
@@ -578,6 +587,7 @@
           })
       }, 500),
       submit_workflow() {
+        this.submission_error = null;
         let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
         query += "config="+encodeURIComponent(this.submission_config);
         query += "&entity="+encodeURIComponent(this.entity_field);
@@ -618,7 +628,9 @@
               });
             }
             else {
-              alert("Execute failed: "+response.data.message);
+              this.submission_error = response.data.message; //_.replace(response.data.message, '\\n', '\n');
+              window.$("#error-modal").modal();
+              window.$("#error-modal").modal('open');
             }
           })
           .catch(response => {
@@ -669,8 +681,13 @@
         this.syncing = false;
         this.gateway = null;
         this.pending_ops = 0;
+        this.submission_error = null;
         window.$('.tooltipped').tooltip();
-        window.$('.execute-button').tooltip('destroy');
+        try {
+          window.$('.execute-button').tooltip('destroy');
+        } catch(error) {
+          console.log(error);
+        }
         // window.$('.execute-button').tooltip('close');
         this.$emit('on-namespace-update', namespace);
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
@@ -694,7 +711,11 @@
                   }, 100);
                 }
               );
-              else window.$('.execute-button').tooltip('destroy');
+              else try {
+                window.$('.execute-button').tooltip('destroy');
+              } catch(error) {
+                console.log(error);
+              }
             }, 100);
             axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
               .then(response => {
