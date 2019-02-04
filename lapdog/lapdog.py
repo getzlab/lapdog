@@ -19,10 +19,10 @@ import yaml
 from glob import glob
 from io import StringIO
 from . import adapters
-from .adapters import getblob, get_operation_status, mtypes, NoSuchSubmission
+from .adapters import get_operation_status, mtypes, NoSuchSubmission
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture
-from .cloud.utils import proxy_group_for_user
+from .cloud.utils import getblob, proxy_group_for_user
 from .gateway import Gateway
 from itertools import repeat
 import pandas as pd

@@ -166,37 +166,44 @@ def authenticate_bucket(bucket, namespace, workspace, session, core_session):
         'Workspace authentication token had an invalid signature'
     )
 
+def get_crypto_keys(name):
+    return sorted(
+        (key.name for key in kms.KeyManagementServiceClient().list_crypto_key_version(name) if key.state == 1),
+        key=lambda name:int(name.split('/')[-1]),
+        reverse=True
+    )
+
 def sign_object(data, blob, credentials):
     blob.upload_from_string(
         kms.KeyManagementServiceClient(
             credentials=credentials
         ).asymmetric_sign(
-            'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1'.format(
+            get_crypto_keys('projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(
                 ld_project=os.environ.get('GCP_PROJECT')
-            ),
+            ))[0],
             {'sha256': sha256(data).digest()}
         ).signature
     )
 
 def verify_signature(blob, data, _is_blob=True):
-    try:
-        serialization.load_pem_public_key(
-            kms.KeyManagementServiceClient().get_public_key(
-                'projects/%s/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign/cryptoKeyVersions/1' % os.environ.get('GCP_PROJECT')
-            ).pem.encode('ascii'),
-            default_backend()
-        ).verify(
-            blob.download_as_string() if _is_blob else blob,
-            sha256(data).digest(),
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=32
-            ),
-            utils.Prehashed(hashes.SHA256())
-        )
-        return True
-    except InvalidSignature:
-        return False
+    for key in get_crypto_keys('projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(ld_project=os.environ.get('GCP_PROJECT'))):
+        try:
+            serialization.load_pem_public_key(
+                kms.KeyManagementServiceClient().get_public_key(key).pem.encode('ascii'),
+                default_backend()
+            ).verify(
+                blob.download_as_string() if _is_blob else blob,
+                sha256(data).digest(),
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=32
+                ),
+                utils.Prehashed(hashes.SHA256())
+            )
+            return True
+        except InvalidSignature:
+            pass
+    return False
 
 def validate_permissions(session, bucket):
     try:

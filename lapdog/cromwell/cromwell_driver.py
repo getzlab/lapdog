@@ -92,6 +92,13 @@ class CromwellDriver(object):
 
         logging.info("Started Cromwell")
 
+    def check_cromwell(self):
+        status = self.cromwell_proc.poll()
+        if status == -9:
+            logging.error("Cromwell Proc was killed. Retry with additional memory")
+        elif status is not None:
+            logging.error("Cromwell Proc exit with status: %d" % status)
+
     def fetch(self, session, wf_id=None, post=False, files=None, method=None):
         url = 'http://localhost:8000/api/workflows/v1'
         if wf_id is not None:
@@ -146,6 +153,7 @@ class CromwellDriver(object):
             reader = csv.DictReader(inputReader, delimiter='\t', lineterminator='\n')
             with requests.Session() as session:
                 for batch in clump(reader, batch_limit):
+                    self.check_cromwell()
                     logging.info("Running a new batch of %d workflows" % batch_limit)
 
                     chunk = []
@@ -177,12 +185,13 @@ class CromwellDriver(object):
                                 break
                             except requests.exceptions.ConnectionError as e:
                                 traceback.print_exc()
-                                logging.info("State: "+str(self.cromwell_proc.poll()))
+                                self.check_cromwell()
                                 logging.info("Failed to connect to Cromwell (attempt %d): %s",
                                     attempt + 1, e)
                                 time.sleep(30)
 
                         if not response:
+                            self.check_cromwell()
                             sys_util.exit_with_error(
                                     "Failed to connect to Cromwell after {0} seconds".format(
                                             300))
@@ -200,6 +209,7 @@ class CromwellDriver(object):
                                 chunk.append(job)
 
                     self.batch_submission = True
+                    self.check_cromwell()
 
                     @atexit.register
                     def abort_all_jobs():
@@ -215,13 +225,18 @@ class CromwellDriver(object):
                     known_failures = set()
                     while True:
                         for i in range(3):
-                            time.sleep(5)
+                            time.sleep(10)
+
+                        self.check_cromwell()
 
                         # Cromwell occassionally fails to respond to the status request.
                         # Only give up after 3 consecutive failed requests.
                         try:
                             status_json = [
-                                self.fetch(session, wf_id=job['id'], method='status')
+                                [
+                                    self.fetch(session, wf_id=job['id'], method='status'),
+                                    time.sleep(0.1)
+                                ][0]
                                 for job in chunk
                             ]
                             attempt = 0
@@ -229,6 +244,7 @@ class CromwellDriver(object):
                             attempt += 1
                             logging.info("Error polling Cromwell job status (attempt %d): %s",
                                 attempt, e)
+                            self.check_cromwell()
 
                             if attempt >= max_failed_attempts:
                                 sys_util.exit_with_error(
@@ -266,6 +282,8 @@ class CromwellDriver(object):
                         }
                         for job in status_json
                     ]
+
+                    self.check_cromwell()
 
                     if 'Aborted' in statuses:
                         # Quit now. No reason to start a new batch to get aborted
