@@ -12,7 +12,7 @@ import contextlib
 import re
 import select
 from .cache import cache_fetch, cache_write, cached, cache_path
-from .cloud import getblob
+from .cloud.utils import getblob
 from .gateway import Gateway
 import traceback
 import sys

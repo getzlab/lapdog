@@ -8,8 +8,9 @@ This function may:
 * Update iam policy or bindings
 * Regenerate signing keys
 """
-from .cloud import ld_project_for_namespace, _deploy, __API_VERSION__
-from . import __version__
+from .utils import ld_project_for_namespace, __API_VERSION__
+from . import _deploy
+from .. import __version__
 
 def __project_admin_apply_patch(namespace):
     """
@@ -29,6 +30,6 @@ def __project_admin_apply_patch(namespace):
     print("Patching register from beta -> v1")
     _deploy('register', 'register', functions_account, project)
     print("Patching query from beta -> v1")
-    _deploy('query', 'query', functions_account, project)
+    _deploy('query_account', 'query', functions_account, project)
     print("Patching quotas from beta -> v1")
     _deploy('quotas', 'quotas', functions_account, project)

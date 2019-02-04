@@ -22,7 +22,7 @@ from . import adapters
 from .adapters import getblob, get_operation_status, mtypes, NoSuchSubmission
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture
-from .cloud import proxy_group_for_user
+from .cloud.utils import proxy_group_for_user
 from .gateway import Gateway
 from itertools import repeat
 import pandas as pd
@@ -810,7 +810,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 print("Aborted", file=sys.stderr)
                 return
 
-        if len(workflow_entities) > offline_threshold:
+        if len(workflow_entities) > offline_threshold and self.live:
             resync = True
             print("This submission contains a large amount of workflows")
             print("Please wait while the workspace loads data to prepare the submission in offline mode...")

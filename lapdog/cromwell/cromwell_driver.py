@@ -116,6 +116,8 @@ class CromwellDriver(object):
                     if attempt == 2:
                         raise
                     time.sleep(10)
+                    r.connection.close()
+        r.connection.close()
         return r.json()
 
     def abort(self, workflow_id):
