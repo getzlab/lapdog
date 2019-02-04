@@ -44,9 +44,11 @@ __API_VERSION__ = {
 
 __CROMWELL_TAG__ = 'gateway'
 
-def _deploy(function, endpoint, service_account=None, project=None):
+def _deploy(function, endpoint, service_account=None, project=None, overload_version=None):
     import tempfile
     import shutil
+    if overload_version is None:
+        overload_version = __API_VERSION__[endpoint]
     with tempfile.TemporaryDirectory() as tempdir:
         with open(os.path.join(tempdir, 'requirements.txt'), 'w') as w:
             w.write('google-auth\n')
@@ -59,7 +61,7 @@ def _deploy(function, endpoint, service_account=None, project=None):
         )
         cmd = 'gcloud {project} beta functions deploy {endpoint}-{version} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
             endpoint=endpoint,
-            version=__API_VERSION__[endpoint],
+            version=overload_version,
             function=function,
             path=tempdir,
             service_account='' if service_account is None else ('--service-account '+service_account),
@@ -1189,6 +1191,20 @@ def query_account(request):
 @cors('GET')
 def existence(request):
     return 'OK', 200
+
+@cors("GET", "PATCH", "PUT", "POST", "DELETE")
+def redacted(request):
+    """
+    This will get deployed to deleted endpoints to redact them.
+    This will allow older clients to get notified of updated API versions
+    """
+    return {
+        'error': "Endpoint Redacted",
+        'message': (
+            "This endpoint has been disabled for security reasons."
+            " Please upgrade to the latest version of Lapdog to access updated endpoints"
+        )
+    }, 400
 
 @cors('POST')
 def quotas(request):

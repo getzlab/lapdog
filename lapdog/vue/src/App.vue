@@ -302,7 +302,7 @@ export default {
       console.log("Updating Namespace");
       if (namespace != this.namespace) {
         this.quotas = null;
-        axios.get(API_URL+'/api/v1/quotas/'+namespace)
+        if (namespace) axios.get(API_URL+'/api/v1/quotas/'+namespace)
           .then(response => {
             console.log("Quotas");
             console.log(response.data);

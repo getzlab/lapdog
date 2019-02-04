@@ -107,7 +107,7 @@ class CromwellDriver(object):
                     assert r.status_code < 400
                     break
                 except requests.ConnectionError:
-                    logging.info("Request failed (%d) : %s" % (r.status_code, r.text))
+                    logging.info("Request failed: Connection Error")
                     if attempt == 2:
                         raise
                     time.sleep(10)

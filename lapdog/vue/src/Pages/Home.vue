@@ -60,6 +60,7 @@
     },
 
     created() {
+      this.$emit('on-namespace-update', null);
       window.materialize.toast({html:"Bark! Bark!"});
       this.getStatus();
       axios.get(API_URL+'/api/v1/version')
