@@ -358,16 +358,19 @@ class SubmissionAdapter(object):
         if self.data is None:
             try:
                 self.data = safe_getblob(gs_path).download_as_string().decode()
+                self._cached = False
                 _do_cache_write = True
             except FileNotFoundError as e:
                 raise NoSuchSubmission from e
+        else:
+            self._cached = True
         self.data = json.loads(self.data)
         if 'operation' not in self.data:
             print("<GATEWAY DEV> Delete submission", submission)
         self.workspace = self.data['workspace']
         self.namespace = self.data['namespace']
         self.identifier = self.data['identifier']
-        self.operation = self.data['operation']
+        self.operation = self.data['operation'] if 'operation' in self.data else 'NULL'
         self.raw_workflows = self.data['workflows']
         self.gateway = Gateway(self.namespace) if gateway is None else gateway
         self.workflow_mapping = {}
@@ -381,6 +384,7 @@ class SubmissionAdapter(object):
         self.update_lock = threading.Lock()
         if _do_cache_write and not self.live:
             cache_write(json.dumps(self.data), 'submission-json', bucket, submission)
+            self._cached = True
 
     def _init_workflow(self, short, key=None, long_id=None):
         if short not in self.workflows:
@@ -656,6 +660,25 @@ class SubmissionAdapter(object):
             pass
             # else:
             #     print("NO MATCH:", message)
+
+    def update_data(self):
+        """
+        Fetches latest submission data
+        """
+        if self._cached:
+            return
+        with self.update_lock:
+            gs_path = os.path.join(
+                self.path,
+                'submission.json'
+            )
+            self.data = json.loads(safe_getblob(gs_path).download_as_string().decode())
+            if 'operation' not in self.data:
+                print("<GATEWAY DEV> Delete submission", submission)
+            self.workspace = self.data['workspace']
+            self.namespace = self.data['namespace']
+            self.identifier = self.data['identifier']
+            self.operation = self.data['operation'] if 'operation' in self.data else 'NULL'
 
     def abort(self):
         """

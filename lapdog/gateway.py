@@ -573,7 +573,7 @@ class Gateway(object):
         """
         try:
             response = requests.get(self.get_endpoint('existence'))
-            return response.status_code == 200 and response.text == b'OK'
+            return response.status_code == 200 and response.text == 'OK'
         except ValueError:
             return False
 

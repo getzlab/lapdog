@@ -19,7 +19,7 @@ import yaml
 from glob import glob
 from io import StringIO
 from . import adapters
-from .adapters import get_operation_status, mtypes, NoSuchSubmission
+from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture
 from .cloud.utils import getblob, proxy_group_for_user
@@ -28,7 +28,7 @@ from itertools import repeat
 import pandas as pd
 from socket import gethostname
 from math import ceil
-from functools import wraps
+from functools import wraps, lru_cache
 import traceback
 import warnings
 import shutil
@@ -88,16 +88,30 @@ def build_input_key(template):
             data += str(template[k])
     return md5(data.encode()).hexdigest()
 
+@lru_cache(1)
+def _gsutil_available():
+    return subprocess.run('which gsutil', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
 def list_potential_submissions(bucket_id):
     """
     Lists submission.json files found in a given bucket
     """
-    for line in re.finditer(r'.+submission\.json', subprocess.run(
-                'gsutil ls gs://{}/lapdog-executions/*/submission.json'.format(bucket_id),
-                shell=True,
-                stdout=subprocess.PIPE
-                ).stdout.decode()):
-        yield line.group(0)
+    if _gsutil_available():
+        # Reading the gsutil output is slightly faster
+        for line in re.finditer(r'.+submission\.json', subprocess.run(
+                    'gsutil ls gs://{}/lapdog-executions/*/submission.json'.format(bucket_id),
+                    shell=True,
+                    stdout=subprocess.PIPE
+                    ).stdout.decode()):
+            yield line.group(0)
+    else:
+        # Using google-cloud-storage will always work, but is crazy slow
+        warnings.warn("gsutil is not available. Using slower google-cloud-storage backend")
+        for page in storage.Client().bucket(bucket_id).list_blobs(prefix="lapdog-executions").pages:
+            for blob in page:
+                if blob.exists() and lapdog_submission_pattern.match(blob.name):
+                    yield 'gs://{}/{}'.format(bucket_id, blob.name)
+
 
 @parallelize2(5)
 def upload(bucket, path, source, allow_composite=True):
