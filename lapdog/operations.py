@@ -35,6 +35,13 @@ def capture(display=True):
             stdout_buff.seek(0,0)
 
 class Operator(object):
+    """
+    A cache layer between Lapdog/Dalmatian and Firecloud.
+    Sits in between Lapdog and Dalmatian to serve/store data from/to an in-memory cache.
+    In offline mode, and data updates are queued until the Operator goes online.
+    The operator automatically switches offline if any errors are encountered with Firecloud
+    """
+    
     def __init__(self, workspace_manager):
         """
         Cache-enables a subset of firecloud operations

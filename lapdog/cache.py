@@ -8,6 +8,14 @@ from hashlib import md5
 CACHES = {}
 
 def cached(timeout, cache_size=4):
+    """
+    Wrapper to apply a time-based cache to the decorated function.
+    Specify a cache timeout in seconds. When an entry is recalled which is older than
+    the timeout, the cache is emptied. Currently single entries cannot be invalidated.
+    Set `cache_size` to specify the maximum size of the cache. If the cache exceeds
+    the size limit while still within the timeout, the least recently used (LRU)
+    cached value is removed to make room for the new entry
+    """
 
     def wrapper(func):
 
@@ -102,6 +110,16 @@ def cache_path(key):
 
 
 def cache_fetch(object_type, *args, dtype='data', ext='', decode=True, **kwargs):
+    """
+    Fetches a value from the offline disk cache.
+    `object_type` specifies which handler will be used to translate remaining arguments
+    into a filepath.
+    If no handler can be found for a given `object_type`, use a default handler.
+    The object type or arguments is generally not important, as long as you remain
+    consistent with the order and type of arguments for a given object_type.
+
+    Returns None if the cache entry could not be found
+    """
     if len(ext) and not ext.startswith('.'):
         ext = '.' + ext
     decode = 'r' if decode else 'rb'
@@ -116,6 +134,14 @@ def cache_fetch(object_type, *args, dtype='data', ext='', decode=True, **kwargs)
     return None
 
 def cache_write(data, object_type, *args, dtype='data', ext='', decode=True, **kwargs):
+    """
+    Writes a value to the offline disk cache.
+    `object_type` specifies which handler will be used to translate remaining arguments
+    into a filepath.
+    If no handler can be found for a given `object_type`, use a default handler.
+    The object type or arguments is generally not important, as long as you remain
+    consistent with the order and type of arguments for a given object_type.
+    """
     args = [str(arg).replace('/', '_') for arg in args]
     kwargs = {k:str(v).replace('/', '_' ) for k,v in kwargs.items()}
     if len(ext) and not ext.startswith('.'):

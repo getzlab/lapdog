@@ -39,6 +39,14 @@ __CROMWELL_TAG__ = 'gateway'
 
 
 def getblob(gs_path, credentials=None, user_project=None):
+    """
+    Return a GCP "blob" object for a given gs:// path.
+    Path must start with "gs://".
+    By default, uses the current application default credentials for authentication.
+    Alternatively, you may provide a `google.auth.Credentials` object.
+    When interacting with a requester pays bucket, you must set `user_project` to
+    be the name of the project to bill for the data transfer fees
+    """
     bucket_id = gs_path[5:].split('/')[0]
     bucket_path = '/'.join(gs_path[5:].split('/')[1:])
     return storage.Blob(
@@ -48,6 +56,8 @@ def getblob(gs_path, credentials=None, user_project=None):
 
 def cors(*methods):
     """
+    Wraps functions intended to handle inbound flask requests. The wrapped
+    function will have CORS policies applied as follows:
     1) OPTIONS requests are returned with the accepted list of methods and localhost only origins
     2) Issues 405 responses to requests with bad methods
     3) Issues 403 responses to requests with bad origins
@@ -78,6 +88,9 @@ def cors(*methods):
     return wrapper
 
 def get_token_info(token):
+    """
+    Gets metadata for a given GCP access token.
+    """
     try:
         data = requests.get('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token='+token).json()
         return data
@@ -85,25 +98,42 @@ def get_token_info(token):
         return None
 
 def ld_acct_in_project(account, ld_project=None):
+    """
+    Gets a user's Pet account within a given lapdog engine project.
+    Project must be specified unless function is executing within a cloud function
+    """
     if ld_project is None:
         ld_project = os.environ.get('GCP_PROJECT')
     return ('lapdog-'+ md5(account.encode()).hexdigest())[:30] + '@' + ld_project + '.iam.gserviceaccount.com'
 
 def ld_meta_bucket_for_project(ld_project=None):
+    """
+    Gets the metadata bucket id for a given lapdog engine project.
+    Project must be specified unless function is executing within a cloud function
+    """
     if ld_project is None:
         ld_project = os.environ.get('GCP_PROJECT')
     return 'ld-metadata-'+md5(ld_project.encode()).hexdigest()
 
 def ld_project_for_namespace(namespace):
+    """
+    Gets the lapdog engine project for a given namespace
+    """
     prefix = ('ld-'+namespace)[:23]
     suffix = md5(prefix.encode()).hexdigest().lower()
     return prefix + '-' + suffix[:6]
 
 def proxy_group_for_user(account):
+    """
+    Gets a firecloud proxy group name for a given account
+    """
     info = account.split('@')
     return info[0]+'-'+info[1].split('.')[0]+'-lapdog'
 
 def generate_user_session(token):
+    """
+    Generates a Google AuthorizedSession from a provided access token
+    """
     return AuthorizedSession(
         google.oauth2.credentials.Credentials(token)
     )
@@ -129,6 +159,9 @@ def generate_core_session():
     )
 
 def authenticate_bucket(bucket, namespace, workspace, session, core_session):
+    """
+    Used internally to authenticate a bucket for lapdog use
+    """
     if os.environ.get('GCP_PROJECT') != ld_project_for_namespace(namespace):
         return False, 'This project is not responsible for the provided namespace'
     workspace_blob = getblob(
@@ -270,6 +303,15 @@ def query_service_account(session, account):
     )
 
 def update_iam_policy(session, grants, project=None):
+    """
+    Updates the IAM policy for a given project.
+    `session` must be an AuthorizedSession for a user with sufficient permissions
+    to update the project IAM policy.
+    `grants` must be a dictionary of email:role, to grant in the project.
+    Prepend each email with the account type ("user:john@example.net", "serviceAccount:accountName@project.iam.googleapis.com", "group:group@groups.google.com")
+    `project` must be the lapdog engine project. Project is inferred automatically
+    when running in a cloud function
+    """
     if project is None:
         project = os.environ.get('GCP_PROJECT')
     policy = session.post(

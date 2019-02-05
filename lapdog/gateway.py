@@ -37,14 +37,23 @@ credentials_file = os.path.join(
 
 @cached(60, 1)
 def get_account():
+    """
+    Gets the currently logged in gcloud account.
+    60 second cache
+    """
     return subprocess.run(
         'gcloud config get-value account',
         shell=True,
         stdout=subprocess.PIPE
     ).stdout.decode().strip()
 
-@cached(10)
 def get_access_token(account=None):
+    """
+    Gets an access token to authenticate the Lapdog Gateway as the given account.
+    The `account` argument is deprecated and should be left as None.
+    The most recent access token for a given account is stored in the offline cache.
+    A new token is generated when the cached token expired (~1hr after generation).
+    """
     if account is None:
         account = get_account()
     token = cache_fetch('token', 'access-token', md5(account.encode()).hexdigest(), google='credentials')
@@ -75,6 +84,9 @@ def get_access_token(account=None):
     return token
 
 def get_token_expired(token):
+    """
+    Returns whether or not the current token has expired
+    """
     expiry = cache_fetch('token', 'expiry', token=md5(token.encode()).hexdigest())
     if expiry is None:
         try:
@@ -88,6 +100,18 @@ def get_token_expired(token):
     return int(expiry) < time.time()
 
 def generate_core_key(ld_project, session=None):
+    """
+    Issues a new core service account access key for a given lapdog engine project.
+    This cannot be used unless you are an administrator.
+    There is no reason to use this function unless:
+    1) The current access key has expired (~10yr after generation)
+    2) Someone has gained unauthorized access to the current key
+
+    In the second case, you should log into the cloud console and remove any current
+    keys for the core service account before calling this function. You should also
+    check the acl bindings to ensure that no unathorized users have access to the metadata bucket
+    either directly on object in the bucket or inheriting through project-level permissions
+    """
     if session is None:
         session = generate_user_session(get_access_token())
     warnings.warn("Generating new root authentication key for project")
@@ -111,8 +135,9 @@ def generate_core_key(ld_project, session=None):
 
 
 class Gateway(object):
-    """Acts as an interface between local lapdog and any resources behind the project's API"""
-
+    """
+    Acts as an interface between local lapdog and any resources behind the project's API
+    """
     def __init__(self, namespace):
         self.namespace = namespace
         self.project = ld_project_for_namespace(namespace)
@@ -405,7 +430,7 @@ class Gateway(object):
     @property
     def registered(self):
         """
-        Verifies that the current user is registered with this gateway
+        Property. Verifies that the current user is registered with this gateway
         """
         response = requests.post(
             self.get_endpoint('query'),
@@ -542,13 +567,21 @@ class Gateway(object):
 
     @property
     def exists(self):
+        """
+        Property. Checks that the current Gateway actually exists.
+        Checks that a specific internal endpoint exists and returns the expected response
+        """
         try:
-            return requests.get(self.get_endpoint('existence')).status_code == 200
+            response = requests.get(self.get_endpoint('existence'))
+            return response.status_code == 200 and response.text == b'OK'
         except ValueError:
             return False
 
     @property
     def quota_usage(self):
+        """
+        Property. Connects to the Gateway to fetch the current quota usage
+        """
         warnings.warn("[BETA] Gateway Quotas")
         response = requests.post(
             self.get_endpoint('quotas'),

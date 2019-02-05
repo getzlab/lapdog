@@ -36,6 +36,11 @@ class AttrArray(list):
             raise TypeError("One or more items in this array are not callable") from e
 
 class Evaluator(object):
+    """
+    Used to evaluate expressions on the Firecloud data model.
+    Use add_entities and add_attributes to add data into the Evaluator.
+    Then call the Evaluator to parse an expression.
+    """
     def __init__(self, entities):
         """
         Takes an entities dict (/api/workspaces/{}/{}/entities)
@@ -56,6 +61,12 @@ class Evaluator(object):
         self.attributes = attrs
 
     def __call__(self, etype, entity, expression):
+        """
+        Evaluates an expression.
+        Provide the entity type, entity name, and entity expression.
+        Expression must start with "this": expression operates on attributes of the entity
+        or "workspace": expression operates on workspace level attributes
+        """
         components = expression.split('.')
         if components[0] == 'workspace':
             if components[1] not in self.attributes:

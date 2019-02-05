@@ -35,6 +35,10 @@ def sleep_until(dt):
         time.sleep(sleep_time)
 
 def parse_time(timestamp):
+    """
+    Returns a datetime.datetime object from a given UTC timestamp.
+    Parses timestamps in multiple known GCP timestamp formats
+    """
     #2019-02-04T21:27Z
     # no seconds?
     err = None
@@ -88,6 +92,12 @@ mem_price = (0.004237, 0.000892)
 extended_price = (0.009550, 0.002014)
 
 def get_hourly_cost(mtype, preempt=False):
+    """
+    Returns the cost/hour of a given GCP machine type.
+    All machine types supported, including predefined n1, f1, and g1 instance families
+    As well as custom and custom extended memory instances.
+    If `preempt` is True, hourly cost will reflect preemptible price model
+    """
     try:
         if mtype in mtypes:
             return mtypes[mtype][int(preempt)]
@@ -116,6 +126,10 @@ class Recall(object):
         return value
 
 def safe_getblob(gs_path):
+    """
+    A wrapper to getblob which raises a FileNotFoundError if the gs:// path does not exist
+    Use when reading a file
+    """
     blob = getblob(gs_path)
     if not blob.exists():
         raise FileNotFoundError("No such blob: "+gs_path)
@@ -137,6 +151,9 @@ def do_select(reader, t):
 
 
 class Call(object):
+    """
+    Class represents a given Task in a workflow
+    """
     status = '-'
     last_message = ''
     def __init__(self, path, task, attempt, operation):
@@ -148,6 +165,10 @@ class Call(object):
     @property
     @cached(10)
     def return_code(self):
+        """
+        Property. The return code from the Task's script.
+        10 second cache
+        """
         try:
             blob = safe_getblob(os.path.join(self.path, 'rc'))
             return int(blob.download_as_string().decode())
@@ -159,6 +180,10 @@ class Call(object):
     @property
     @cached(10)
     def runtime(self):
+        """
+        Property. The time in hours that the Task was running.
+        10 second cache
+        """
         try:
             data = get_operation_status(self.operation)
             delta = (
@@ -173,6 +198,13 @@ class Call(object):
 
 @cached(10)
 def get_operation_status(opid, parse=True, fmt='json'):
+    """
+    Fetches the metadata for a given GCP operation ID.
+    If `parse` is True (default) the json string will be parsed into a python dict.
+    `fmt` sets the download format. Do not change unless you have reason to download
+    in a different data format.
+    10 second cache.
+    """
     text = cache_fetch('operation', opid)
     if text is None:
         text = subprocess.run(
@@ -242,6 +274,11 @@ def kill_machines(instance_name):
     )
 
 class CommandReader(object):
+    """
+    Reads buffered output from a subprocess command.
+    __init__ takes identical arguments to subprocess.Popen
+    Call readline() to get one line of text
+    """
     def __init__(self, cmd, *args, __insert_text=None, **kwargs):
         r,w = os.pipe()
         r2,w2 = os.pipe()
@@ -256,11 +293,19 @@ class CommandReader(object):
         self.buffer = b''
 
     def close(self, *args, **kwargs):
+        """
+        Closes the input stream and kills the underlying process
+        """
         self.reader.close(*args, **kwargs)
         if self.proc.returncode is None:
             self.proc.kill()
 
     def readline(self, length=256, *args, **kwargs):
+        """
+        Reads a single line of text from the underlying process.
+        `length` specifies the number of bytes that are read in each chunk while
+        waiting for a complete line of text
+        """
         while b'\n' not in self.buffer:
             self.buffer += os.read(self.reader.fileno(), length)
         self.buffer = self.buffer.split(b'\n')
@@ -285,7 +330,19 @@ class CommandReader(object):
 ## 2) Adapter:
 
 class SubmissionAdapter(object):
+    """
+    Represents a single Lapdog Submission.
+    Use to interact with the submission, including fetching status and workflows
+    or aborting a running submission
+    """
     def __init__(self, bucket, submission, gateway=None):
+        """
+        Constructs the adapter. Requires the bucket id for the workspace and the
+        submission id for the submission. To save time, you may also provide the
+        Gateway object for this namespace, otherwise a new Gateway will be constructed.
+        Downloads and parses the submission.json file for this submission.
+        submission.json files are cached if the submission is done.
+        """
         # print("Constructing adapter")
         self.path = os.path.join(
             'gs://'+bucket,
@@ -331,6 +388,17 @@ class SubmissionAdapter(object):
         return self.workflows[short]
 
     def cost(self):
+        """
+        Estimates the cost of a submission.
+        If the submission is not running, parse the workflow.json file to get the
+        exact start/stop times for every call of every workflow.
+        If the submission is running, workflow.json was not found, or any error was encountered during the above computation:
+        Update the adapter, and estimate cost by parsing the operation metadata for
+        each Call in the submission. This pathway stops if the computation takes more than 60 seconds.
+        Cost is cached if the submission is not running and the first cost estimation pathway finishes.
+        Returns a dictionary with the elapsed wall time, total cpu time, total cost,
+        and overhead cost of the cromwell server
+        """
         try:
             if not self.live:
                 stored_cost = cache_fetch('submission', self.namespace, self.workspace, self.submission, dtype='cost')
@@ -468,6 +536,15 @@ class SubmissionAdapter(object):
 
     @cached(90)
     def update(self, timeout=-1):
+        """
+        Fetch latest data from Cromwell Server to update the adapter.
+        Specify a positive number for `timeout` to set the maximum time to wait
+        to acquire the lock on the underlying data stream.
+        If acquiring the lock takes more than 10 seconds, do not update the adapter.
+        This is because another thread must have just finished an update operation,
+        so there is no need to immediately re-update.
+        90 second cache.
+        """
         ctime = time.monotonic()
         try:
             with context_lock(self.update_lock, timeout):
@@ -581,6 +658,17 @@ class SubmissionAdapter(object):
             #     print("NO MATCH:", message)
 
     def abort(self):
+        """
+        Abort a running workflow.
+        If the current status is "Running", send a soft abort, giving the Cromwell
+        server time to cancel running workflows and clean up. Set status to "Aborting".
+
+        If the abort procedure is taking too long, you may abort again:
+        If the current status is "Aborting", send a hard abort, immediately killing
+        the Cromwell server. This may leave running workflows in an orphan state
+        where they continue to run until completion with no way to halt them.
+        Forcefully set status to "Aborted".
+        """
         # self.update()
         # FIXME: Once everything else works, see if cromwell labels work
         # At that point, we can add an abort here to kill everything with the id
@@ -628,7 +716,8 @@ class SubmissionAdapter(object):
     @cached(5)
     def status(self):
         """
-        Get the operation status
+        Property. Get the operation status
+        5 second cache
         """
         # print("READING ADAPTER STATUS")
         return get_operation_status(self.operation)
@@ -637,14 +726,20 @@ class SubmissionAdapter(object):
     @cached(10)
     def live(self):
         """
-        Reports if the submission is active or not
+        Property. Reports if the submission is active or not
+        10 second cache
         """
         status = self.status
         return not ('done' in status and status['done'])
 
     def read_cromwell(self, _do_wait=True):
         """
-        Returns a file-object which reads stdout from the submission Cromwell VM
+        Attempts to open a data stream to the cromwell server.
+        Currently, the data stream is a BytesIO object of the most recent log
+        output.
+        In the future, submissions will use an Stackdriver event stream
+        and fallback to file logs.
+        If the submission has been recently started, this blocks for ~2 minutes
         """
         status = self.status # maybe this shouldn't be a property...it takes a while to load
         cromwell_text = cache_fetch('submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
@@ -721,6 +816,14 @@ class SubmissionAdapter(object):
 
 
 class WorkflowAdapter(object):
+    """
+    Represents a single workflow.
+    It is best not to manipulate this object directly as it is very closely connected
+    to its parent SubmissionAdapter.
+
+    Do not call the `handle` method or any of the `on_...` methods as this may result
+    in your WorkflowAdapter being stuck in an invalid state
+    """
     # this adapter needs to be initialized from an input key and a cromwell workflow id (short or long)
     # At first, dispatching events fills the replay buffer
     # when the workflow is started, the buffer is played and the workflow updates to current state DAWG
@@ -739,6 +842,9 @@ class WorkflowAdapter(object):
 
     @property
     def status(self):
+        """
+        Property. Get the status of the most recent Call to start
+        """
         if len(self.calls):
             status = self.calls[-1].status
             if status == '-':

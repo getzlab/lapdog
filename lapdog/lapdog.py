@@ -48,6 +48,9 @@ class ConfigNotUnique(KeyError):
 
 @contextlib.contextmanager
 def dalmatian_api():
+    """
+    Context manager to convert AssertionErrors from dalmatian code into APIExceptions
+    """
     try:
         yield
     except AssertionError as e:
@@ -86,6 +89,9 @@ def build_input_key(template):
     return md5(data.encode()).hexdigest()
 
 def list_potential_submissions(bucket_id):
+    """
+    Lists submission.json files found in a given bucket
+    """
     for line in re.finditer(r'.+submission\.json', subprocess.run(
                 'gsutil ls gs://{}/lapdog-executions/*/submission.json'.format(bucket_id),
                 shell=True,
@@ -93,43 +99,13 @@ def list_potential_submissions(bucket_id):
                 ).stdout.decode()):
         yield line.group(0)
 
-def _composite_upload(src, dest, size):
-
-    warnings.warn("lapdog._composite_upload is deprecated. Upload() now uses Google's built-in chunked uploads", warnings.DeprecationWarning)
-
-    @parallelize(5)
-    def upload_component(component_path, i, text):
-        blob = getblob(component_path+str(i))
-        blob.upload_from_string(text)
-        return blob
-
-    n_chunks = ceil(os.path.getsize(src) / size)
-    with open(src, 'rb') as reader:
-        blobs = list(
-            blob for blob in
-            upload_component(
-                repeat(dest+'.composite_upload/'),
-                range(n_chunks),
-                (reader.read(size) for i in range(n_chunks))
-            )
-        )
-    composite_blob = getblob(dest)
-    composite_blob.content_type = 'application/octet-stream'
-    composite_blob.compose(blobs)
-    for blob in blobs:
-        blob.delete()
-    return composite_blob
-
-
 @parallelize2(5)
 def upload(bucket, path, source, allow_composite=True):
     """
     Uploads {source} to google cloud.
     Result google cloud path is gs://{bucket}/{path}.
     If the file to upload is larger than 4Gib, the file will be uploaded via
-    a composite upload. A temporary folder will be created at {gs path}.composite_upload/
-    which will contain 1GB blobs from the file. The blobs will be concatenated into
-    a single large file afterwards and the temporary folder deleted.
+    a composite upload.
 
     WARNING: You MUST set allow_composite to False if you are uploading to a nearline
     or coldline bucket. The composite upload will incur large fees from deleting
@@ -138,7 +114,8 @@ def upload(bucket, path, source, allow_composite=True):
     This function starts the upload on a background thread and returns a callable
     object which can be used to wait for the upload to complete. Calling the object
     blocks until the upload finishes, and will raise any exceptions encountered
-    by the background thread
+    by the background thread. This function allows up to 5 concurrent uploads, beyond
+    which workers will be queued until there is an empty execution slot.
     """
     # 4294967296
     blob = bucket.blob(path)
@@ -149,10 +126,20 @@ def upload(bucket, path, source, allow_composite=True):
 
 
 def purge_cache():
+    """
+    Empties the Lapdog Offline Disk Cache.
+    This will force all cached data to be reloaded.
+    Use if the disk cache has become too large.
+    Lapdog will run slowly after calling this function until the cache is rebuilt
+    """
     shutil.rmtree(cache_init())
 
 
 def alias(func):
+    """
+    Use to define an alias for an existing function.
+    Replaces the decorated function with the provided object
+    """
     def wrapper(alias_func):
         return func
     return wrapper
@@ -238,6 +225,12 @@ def _load_submissions(path):
         return path[-37:-5], json.load(r)
 
 class WorkspaceManager(dog.WorkspaceManager):
+    """
+    Core Lapdog Class. Represents a single FireCloud workspace.
+    Inherits from dalmatian.WorkspaceManager.
+    Any features from dalmatian which are not explicitly upgraded by lapdog will
+    still be accessible via inheritance
+    """
     def __init__(self, reference, workspace=None, timezone='America/New_York'):
         """
         Various argument configurations:
@@ -280,10 +273,16 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     @property
     def pending_operations(self):
+        """
+        Property. Returns the count of operations queued while the WorkspaceManager is offline
+        """
         return len(self.operator.pending)
 
     @property
     def live(self):
+        """
+        Property. Returns True if the WorkspaceManager is currently in online mode
+        """
         return self.operator.live
 
     def sync(self):
@@ -298,6 +297,14 @@ class WorkspaceManager(dog.WorkspaceManager):
         return is_live, exceptions
 
     def populate_cache(self):
+        """
+        Preloads all data from the FireCloud workspace into the in-memory cache.
+        Use in advance of switching offline so that the WorkspaceManager can run in
+        offline mode without issue.
+
+        Call `WorkspaceManager.operator.go_offline()` after this function to switch
+        the workspace into offline mode
+        """
         if self.live:
             self.sync()
         self.get_attributes()
@@ -318,7 +325,8 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     def get_bucket_id(self):
         """
-        Returns the bucket ID of the workspace
+        Returns the bucket ID of the workspace.
+        Also available as a property: `WorkspaceManager.bucket_id`
         """
         return self.operator.bucket_id
 
@@ -368,6 +376,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     def get_samples(self):
         """
         Gets the dataframe of samples from the workspace
+        Also available as a property: `WorkspaceManager.samples`
         """
         return self.operator.get_entities_df('sample')
 
@@ -376,6 +385,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     def get_participants(self):
         """
         Gets the dataframe of participants from the workspace
+        Also available as a property: `WorkspaceManager.participants`
         """
         return self.operator.get_entities_df('participant')
 
@@ -384,6 +394,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     def get_pairs(self):
         """
         Gets the dataframe of pairs from the workspace
+        Also available as a property: `WorkspaceManager.pairs`
         """
         return self.operator.get_entities_df('pair')
 
@@ -392,6 +403,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     def get_sample_sets(self):
         """
         Gets the dataframe of sample sets from the workspace
+        Also available as a property: `WorkspaceManager.sample_sets`
         """
         return self.operator.get_entities_df('sample_set')
 
@@ -400,6 +412,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     def get_participant_sets(self):
         """
         Gets the dataframe of participant sets from the workspace
+        Also available as a property: `WorkspaceManager.participant_sets`
         """
         return self.operator.get_entities_df('participant_set')
 
@@ -408,6 +421,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     def get_pair_sets(self):
         """
         Gets the dataframe of pair sets from the workspace
+        Also available as a property: `WorkspaceManager.pair_sets`
         """
         return self.operator.get_entities_df('pair_set')
 
@@ -472,13 +486,17 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     def upload_entities(self, etype, df, index=True):
         """
-        Upload/Update entities in the workspace
+        Upload/Update entities in the workspace.
+        Use when adding new entities to the workspace
         """
         return self.operator.update_entities_df(etype, df, index)
 
     def update_entity_attributes(self, etype, df):
         """
-        Update attributes of existing entities
+        Update attributes of existing entities.
+        Use when modifying attributes of existing entities.
+        If the input data is not a pandas.DataFrame, this will not be passed through
+        the operator cache
         """
         if isinstance(df, pd.DataFrame):
             return self.operator.update_entities_df_attributes(etype, df)
@@ -563,7 +581,8 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     def get_attributes(self):
         """
-        Returns a dictionary of workspace attributes
+        Returns a dictionary of workspace attributes.
+        Also available as a property: `WorkspaceManager.attributes`
         """
         return self.operator.attributes
 
@@ -577,7 +596,11 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     def create_submission(self, config_name, entity, expression=None, etype=None, use_cache=True):
         """
-        Validates config parameters then creates a submission in Firecloud
+        Validates config parameters then creates a submission in Firecloud.
+        Returns the submission id.
+        This function does not use the Lapdog Engine, and instead submits a job
+        through the FireCloud Rawls API. Use `WorkspaceManager.execute` to run
+        jobs through the Lapdog Engine
         """
         if not self.live:
             print("The workspace is currently in offline mode. Please call WorkspaceManager.sync() to reconnect to firecloud", file=sys.stderr)
@@ -654,12 +677,13 @@ class WorkspaceManager(dog.WorkspaceManager):
     def list_configs(self):
         """
         Lists configurations in the workspace
+        Also available as properties: `WorkspaceManager.configs` and `WorkspaceManager.configurations`
         """
         return self.operator.configs
 
     def fetch_config(self, config_slug):
         """
-        Fetches a configuration by the provided slug.
+        Fetches a configuration by the provided slug (method_config_namespace/method_config_name).
         If the slug is just the config name, this returns a config
         with a matching name IFF the name is unique. If another config
         exists with the same name, this will fail.
@@ -706,7 +730,18 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     def execute_preflight(self, config_name, entity, expression=None, etype=None):
         """
-        Verifies execution configuration
+        Verifies execution configuration.
+        The first return value is always a boolean indicating if the input was valid or not.
+        If the configuration is invalid there will only be 2 return values, and the second
+        value will be the error message.
+        If the configuration is valid, there will be 7 return values:
+        * True
+        * The basic method configuration object
+        * The submission entity
+        * The submission entity type (inferred from the configuration, if not provided)
+        * The list of entities for each workflow (from evaluating the expression, if provided)
+        * The input template from the method configuration
+        * A dictonary of input-name : error, for any invalid inputs in the configuration
         """
         config = self.fetch_config(config_name)
         if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
@@ -742,7 +777,6 @@ class WorkspaceManager(dog.WorkspaceManager):
         invalid_inputs = {**invalid_inputs['invalidInputs'], **{k:'N/A' for k in invalid_inputs['missingInputs']}}
 
         return True, config, entity, etype, workflow_entities, template, invalid_inputs
-
 
     def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=1000):
         """
