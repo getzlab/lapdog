@@ -538,30 +538,32 @@ class Gateway(object):
         if response.status_code != 200:
             return response
 
-    def get_endpoint(self, endpoint):
+    def get_endpoint(self, endpoint, _version=None):
         """
         1) Generates the appropriate url for a given endpoint in this project
         2) Checks that the endpoint exists by submitting an OPTIONS request
         3) Returns the full endpoint url
         """
-        if endpoint not in __API_VERSION__:
-            raise KeyError("Endpoint not defined: "+endpoint)
+        if _version is None:
+            if endpoint not in __API_VERSION__:
+                raise KeyError("Endpoint not defined: "+endpoint)
+            _version = __API_VERSION__[endpoint]
         endpoint_url = 'https://us-central1-{project}.cloudfunctions.net/{endpoint}-{version}'.format(
             project=self.project,
             endpoint=quote(endpoint),
-            version=__API_VERSION__[endpoint]
+            version=_version
         )
         response = requests.options(endpoint_url)
         if response.status_code == 204:
             return endpoint_url
         if response.status_code == 200 or response.status_code == 404:
-            print("Lapdog Engine Project", self.project, "for namespace", self.namespace, "does not support api version", __API_VERSION__[endpoint], file=sys.stderr)
+            print("Lapdog Engine Project", self.project, "for namespace", self.namespace, "does not support api version", _version, file=sys.stderr)
             if endpoint =='existence':
                 raise ValueError("The existence endpoint could not be found. Project %s may not be initialized. Please contact the namespace admin" % self.project)
             raise ValueError("The project api for %s does not support %s version %s. Please contact the namespace admin" % (
                 self.project,
                 endpoint,
-                __API_VERSION__[endpoint]
+                _version
             ))
         raise ValueError("Unexpected status (%d) when checking for endpoint" % response.status_code)
 

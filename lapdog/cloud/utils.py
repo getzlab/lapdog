@@ -17,12 +17,12 @@ import time
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
-    'submit': 'beta',
-    'abort': 'beta',
-    'register': 'beta',
-    'signature': 'beta',
-    'query': 'beta',
-    'quotas': 'beta',
+    'submit': 'v1',
+    'abort': 'v1',
+    'register': 'v1',
+    'signature': 'v1',
+    'query': 'v1',
+    'quotas': 'v1',
     'existence': 'frozen'
 }
 # The api version will allow versioning of cloud functions
@@ -34,7 +34,7 @@ __API_VERSION__ = {
 # This function will deploy new cloud functions and run any other arbitrary code
 # Such as updating iam policy bindings or role permissions
 
-__CROMWELL_TAG__ = 'gateway'
+__CROMWELL_TAG__ = 'v0.12.0'
 
 
 

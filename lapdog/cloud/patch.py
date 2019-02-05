@@ -12,6 +12,15 @@ from .utils import ld_project_for_namespace, __API_VERSION__
 from . import _deploy
 from .. import __version__
 
+# Notes for creating future patches
+# 1) Import a Gateway and use get_endpoint to check for any redacted endpoints
+#       Redact any endpoints which can be found
+# 2) Always redeploy the current latest version of all endpoints/role definitions/api bindings
+# 3) Mark the separate phases (iam, deploy, redact)
+
+# Alternatively, write a function for each patch
+# When running patches, check that the previous patch has been applied
+
 def __project_admin_apply_patch(namespace):
     """
     PATCH SPEC: Beta -> V1

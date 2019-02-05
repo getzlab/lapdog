@@ -308,6 +308,17 @@ def main():
         description="One-time setup for the lapdog execution backend"
     )
     service_account_parser.set_defaults(func=cmd_service_account)
+
+    patch_parser = subparsers.add_parser(
+        'apply-patch',
+        help="Apply pre-packaged upgrades to the Lapdog Engine for a given namespace",
+        description="Apply pre-packaged upgrades to the Lapdog Engine for a given namespace"
+    )
+    patch_parser.set_defaults(func=cmd_patch)
+    patch_parser.add_argument(
+        'namespace',
+        help="The firecloud namespace to patch"
+    )
     # service_account_parser.add_argument(
     #     'email',
     #     help="Your firecloud account email"
@@ -600,6 +611,11 @@ def cmd_service_account(args):
         return
     from lapdog.gateway import Gateway
     Gateway.initialize_lapdog_for_project(billing, namespace)
+
+
+def cmd_patch(args):
+    from .cloud.patch import __project_admin_apply_patch
+    __project_admin_apply_patch(args.namespace)
 
 if __name__ == '__main__':
     main()
