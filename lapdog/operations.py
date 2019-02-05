@@ -1,7 +1,7 @@
 from firecloud import api
 from .schema import Evaluator
 from functools import partial
-from requests import Response
+from requests import Response, ReadTimeout
 import sys
 import crayons
 import dalmatian as dog
@@ -9,9 +9,36 @@ from io import StringIO
 import contextlib
 import traceback
 import pandas as pd
+import threading
 
 class APIException(ValueError):
     pass
+
+timeout_state = threading.local()
+
+DEFAULT_LONG_TIMEOUT = 30 # Seconds to wait if a value is not cached
+DEFAULT_SHORT_TIMEOUT = 5 # Seconds to wait if a value is already cached
+
+@contextlib.contextmanager
+def set_timeout(n):
+    try:
+        if not hasattr(timeout_state, 'timeout'):
+            timeout_state.timeout = None
+        old_timeout = timeout_state.timeout
+        timeout_state.timeout = n
+        yield
+    finally:
+        timeout_state.timeout = old_timeout
+
+api._fiss_agent_header()
+__CORE_SESSION_REQUEST__ = api.__SESSION.request
+
+def _firecloud_api_timeout_wrapper(*args, **kwargs):
+    if not hasattr(timeout_state, 'timeout'):
+        timeout_state.timeout = None
+    return __CORE_SESSION_REQUEST__(*args, timeout=timeout_state.timeout, **kwargs)
+
+api.__SESSION.request = _firecloud_api_timeout_wrapper
 
 @contextlib.contextmanager
 def capture(display=True):
@@ -41,7 +68,7 @@ class Operator(object):
     In offline mode, and data updates are queued until the Operator goes online.
     The operator automatically switches offline if any errors are encountered with Firecloud
     """
-    
+
     def __init__(self, workspace_manager):
         """
         Cache-enables a subset of firecloud operations
@@ -115,6 +142,31 @@ class Operator(object):
             self.go_offline()
             return None
 
+    def timeout_for_key(self, key):
+        if isinstance(key, str):
+            return DEFAULT_SHORT_TIMEOUT if key in self.cache and self.cache[key] is not None else DEFAULT_LONG_TIMEOUT
+        return key
+
+    @contextlib.contextmanager
+    def timeout(self, key):
+        try:
+            with set_timeout(self.timeout_for_key(key)):
+                yield
+        except ReadTimeout:
+            traceback.print_exc()
+            self.go_offline()
+
+    def call_with_timeout(self, key, func, *args, **kwargs):
+        try:
+            with set_timeout(self.timeout_for_key(key)):
+                return func(*args, **kwargs)
+        except ReadTimeout:
+            self.go_offline()
+            # Do not silence the exception
+            # call_with_timeout is used for background calls
+            # don't want to accidentally fill the cache with Nones
+            raise
+
     def fail(self):
         raise APIException(
             "Insufficient data in cache to complete operation. Last api result: (%d) %s" % (
@@ -133,12 +185,13 @@ class Operator(object):
     @property
     def firecloud_workspace(self):
         if self.live:
-            result = self.tentative_json(api.get_workspace(
-                self.workspace.namespace,
-                self.workspace.workspace
-            ))
-            if result is not None:
-                self.cache['workspace'] = result
+            with self.timeout('workspace'):
+                result = self.tentative_json(api.get_workspace(
+                    self.workspace.namespace,
+                    self.workspace.workspace
+                ))
+                if result is not None:
+                    self.cache['workspace'] = result
         if 'workspace' in self.cache and self.cache['workspace'] is not None:
             return self.cache['workspace']
         self.fail()
@@ -146,14 +199,15 @@ class Operator(object):
     @property
     def configs(self):
         if self.live:
-            result = self.tentative_json(
-                api.list_workspace_configs(
-                    self.workspace.namespace,
-                    self.workspace.workspace
+            with self.timeout('configs'):
+                result = self.tentative_json(
+                    api.list_workspace_configs(
+                        self.workspace.namespace,
+                        self.workspace.workspace
+                    )
                 )
-            )
-            if result is not None:
-                self.cache['configs'] = [item for item in result]
+                if result is not None:
+                    self.cache['configs'] = [item for item in result]
         if 'configs' in self.cache and self.cache['configs'] is not None:
             return self.cache['configs']
         self.fail()
@@ -161,14 +215,15 @@ class Operator(object):
     def get_config_detail(self, namespace, name):
         key = 'config:%s/%s' % (namespace, name)
         if self.live:
-            result = self.tentative_json(api.get_workspace_config(
-                self.workspace.namespace,
-                self.workspace.workspace,
-                namespace,
-                name
-            ))
-            if result is not None:
-                self.cache[key] = result
+            with self.timeout(key):
+                result = self.tentative_json(api.get_workspace_config(
+                    self.workspace.namespace,
+                    self.workspace.workspace,
+                    namespace,
+                    name
+                ))
+                if result is not None:
+                    self.cache[key] = result
         if key in self.cache and self.cache[key] is not None:
             return self.cache[key]
         self.fail()
@@ -236,14 +291,15 @@ class Operator(object):
             key += '.%d'%version
         if self.live:
             try:
-                if version is None:
-                    version = dog.get_method_version(namespace, name)
-                response = api.get_repository_method(namespace, name, version)
-                if response.status_code == 404:
-                    raise NameError("No such wdl {}/{}@{}".format(namespace, name, version))
-                response = self.tentative_json(response)
-                if response is not None:
-                    self.cache[key] = response['payload']
+                with self.timeout(key):
+                    if version is None:
+                        version = dog.get_method_version(namespace, name)
+                    response = api.get_repository_method(namespace, name, version)
+                    if response.status_code == 404:
+                        raise NameError("No such wdl {}/{}@{}".format(namespace, name, version))
+                    response = self.tentative_json(response)
+                    if response is not None:
+                        self.cache[key] = response['payload']
             except KeyError:
                 self.go_offline()
             except AssertionError:
@@ -264,7 +320,7 @@ class Operator(object):
                 self.pending.append((
                     key,
                     partial(dog.update_method, namespace, name, synopsis, path, delete_old=delete),
-                    partial(dog.get_wdl, namespace, name)
+                    partial(self.call_with_timeout, DEFAULT_LONG_TIMEOUT, dog.get_wdl, namespace, name)
                 ))
             except AssertionError:
                 self.go_offline()
@@ -277,21 +333,22 @@ class Operator(object):
             self.pending.append((
                 key,
                 partial(dog.update_method, namespace, name, synopsis, path, delete_old=delete),
-                partial(dog.get_wdl, namespace, name)
+                partial(self.call_with_timeout, DEFAULT_LONG_TIMEOUT, dog.get_wdl, namespace, name)
             ))
 
     def validate_config(self, namespace, name):
         cfgkey = 'config:%s/%s' % (namespace, name)
         key = 'valid:'+cfgkey
         if self.live:
-            result = self.tentative_json(api.validate_config(
-                self.workspace.namespace,
-                self.workspace.workspace,
-                namespace,
-                name
-            ))
-            if result is not None:
-                self.cache[key] = result
+            with self.timeout(key):
+                result = self.tentative_json(api.validate_config(
+                    self.workspace.namespace,
+                    self.workspace.workspace,
+                    namespace,
+                    name
+                ))
+                if result is not None:
+                    self.cache[key] = result
         if key in self.cache and self.cache[key] is not None and cfgkey not in self.dirty:
             return self.cache[key]
         print(
@@ -308,14 +365,15 @@ class Operator(object):
     @property
     def entity_types(self):
         if self.live:
-            result = self.tentative_json(
-                getattr(api, '__get')('/api/workspaces/{}/{}/entities'.format(
-                    self.workspace.namespace,
-                    self.workspace.workspace
-                ))
-            )
-            if result is not None:
-                self.cache['entity_types'] = result
+            with self.timeout('entity_types'):
+                result = self.tentative_json(
+                    getattr(api, '__get')('/api/workspaces/{}/{}/entities'.format(
+                        self.workspace.namespace,
+                        self.workspace.workspace
+                    ))
+                )
+                if result is not None:
+                    self.cache['entity_types'] = result
         if 'entity_types' in self.cache and self.cache['entity_types'] is not None:
             return self.cache['entity_types']
         self.fail()
@@ -341,8 +399,9 @@ class Operator(object):
         key = 'entities:'+etype
         if self.live:
             try:
-                df = getter()
-                self.cache[key] = df
+                with self.timeout(key):
+                    df = getter()
+                    self.cache[key] = df
             except AssertionError:
                 self.go_offline()
             except TypeError:
@@ -353,6 +412,8 @@ class Operator(object):
 
     def update_entities_df(self, etype, updates, index=True):
         getter = partial(
+            self.call_with_timeout,
+            DEFAULT_LONG_TIMEOUT,
             getattr(
                 dog.WorkspaceManager,
                 'get_'+etype+'s'
@@ -422,6 +483,8 @@ class Operator(object):
 
     def update_entities_df_attributes(self, etype, updates):
         getter = partial(
+            self.call_with_timeout,
+            DEFAULT_LONG_TIMEOUT,
             getattr(
                 dog.WorkspaceManager,
                 'get_'+etype+'s'
@@ -516,6 +579,8 @@ class Operator(object):
             member_ids
         )
         getter = partial(
+            self.call_with_timeout,
+            DEFAULT_LONG_TIMEOUT,
             getattr(
                 dog.WorkspaceManager,
                 'get_'+etype+'s'
@@ -579,13 +644,13 @@ class Operator(object):
                 self.pending.append((
                     'workspace',
                     partial(dog.WorkspaceManager.update_attributes, self.workspace, attrs),
-                    partial(api.get_workspace, self.workspace.namespace, self.workspace.workspace)
+                    partial(self.call_with_timeout, DEFAULT_LONG_TIMEOUT, api.get_workspace, self.workspace.namespace, self.workspace.workspace)
                 ))
         else:
             self.pending.append((
                 'workspace',
                 partial(dog.WorkspaceManager.update_attributes, self.workspace, attrs),
-                partial(api.get_workspace, self.workspace.namespace, self.workspace.workspace)
+                partial(self.call_with_timeout, DEFAULT_LONG_TIMEOUT, api.get_workspace, self.workspace.namespace, self.workspace.workspace)
             ))
         if self.live:
             try:
@@ -595,21 +660,22 @@ class Operator(object):
 
     def evaluate_expression(self, etype, entity, expression):
         if self.live:
-            result = self.tentative_json(
-                getattr(api, '__post')(
-                    'workspaces/%s/%s/entities/%s/%s/evaluate' % (
-                        self.workspace.namespace,
-                        self.workspace.workspace,
-                        etype,
-                        entity
+            with self.timeout(DEFAULT_LONG_TIMEOUT):
+                result = self.tentative_json(
+                    getattr(api, '__post')(
+                        'workspaces/%s/%s/entities/%s/%s/evaluate' % (
+                            self.workspace.namespace,
+                            self.workspace.workspace,
+                            etype,
+                            entity
+                        ),
+                        data=expression
                     ),
-                    data=expression
-                ),
-                400,
-                404
-            )
-            if result is not None:
-                return result
+                    400,
+                    404
+                )
+                if result is not None:
+                    return result
         evaluator = Evaluator(self.entity_types)
         for _etype, data in self.entity_types.items():
             evaluator.add_entities(
