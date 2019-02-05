@@ -32,6 +32,7 @@ from functools import wraps, lru_cache
 import traceback
 import warnings
 import shutil
+import numpy as np
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -607,6 +608,56 @@ class WorkspaceManager(dog.WorkspaceManager):
         Updates entity set membership
         """
         return self.operator.update_entity_set(etype, set_id, entity_ids)
+
+    def update_participant_entities(self, etype):
+        """
+        Attach entities (samples or pairs) to participants.
+        Parallelized update to run on 5 entities in parallel
+        """
+        if not self.live:
+            raise APIException("WorkspaceManager.update_participant_entities does not use the operations cache. Please sync the workspace")
+
+        if etype=='sample':
+            df = self.samples[['participant']]
+        elif etype=='pair':
+            df = self.pairs[['participant']]
+        else:
+            raise ValueError('Entity type {} not supported'.format(etype))
+
+        entitites_dict = {k:g.index.values for k,g in df.groupby('participant')}
+        participant_ids = np.unique(df['participant'])
+
+        @parallelize(5)
+        def update_participant(participant_id):
+            attr_dict = {
+                "{}s_".format(etype): {
+                    "itemsType": "EntityReference",
+                    "items": [{"entityType": etype, "entityName": i} for i in entitites_dict[participant_id]]
+                }
+            }
+            attrs = [fc._attr_set(i,j) for i,j in attr_dict.items()]
+            r = fc.update_entity(self.namespace, self.workspace, 'participant', participant_id, attrs)
+            return participant_id, r.status_code
+
+        n_participants = len(participant_ids)
+
+        for attempt in range(3):
+            retries = []
+
+            for n,(k, status) in enumerate(update_participant(participant_ids), 1):
+                print('\r    Updating {}s for participant {}/{}'.format(etype, n, len(participant_ids)), end='')
+                if status >= 400:
+                    retries.append(k)
+
+            if len(retries):
+                if attempt < 2:
+                    print("\nRetrying remaining", len(retries), "participants")
+                    participant_ids = [item for item in retries]
+                else:
+                    print("\nThe following", len(retries), "participants could not be updated:", ', '.join(retries), file=sys.stderr)
+                    raise APIException("{} participants could not be updated after 3 attempts".format(len(retries)))
+
+        print('\n    Finished attaching {}s to {} participants'.format(etype, n_participants))
 
     def create_submission(self, config_name, entity, expression=None, etype=None, use_cache=True):
         """
