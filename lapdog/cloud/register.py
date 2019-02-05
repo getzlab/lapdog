@@ -13,6 +13,7 @@ from urllib.parse import quote
 import base64
 import traceback
 import requests
+import time
 
 @utils.cors("POST")
 def register(request):

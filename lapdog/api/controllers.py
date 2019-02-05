@@ -186,7 +186,7 @@ def get_namespace_registered(namespace, name):
 def register(namespace, name):
     ws = get_workspace_object(namespace, name)
     if ws.gateway.exists and not ws.gateway.registered:
-        ws.gateway.register(ws.workspace, ws.bucket)
+        ws.gateway.register(ws.workspace, ws.bucket_id)
         get_namespace_registered.cache_clear()
     return get_namespace_registered(namespace, name)
 

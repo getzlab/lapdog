@@ -272,6 +272,8 @@ class Gateway(object):
                     "includedPermissions": [
                         "cloudkms.cryptoKeyVersions.useToSign",
                         "cloudkms.cryptoKeyVersions.viewPublicKey",
+                        "cloudkms.cryptoKeyVersions.get",
+                        "cloudkms.cryptoKeyVersions.list",
                         "resourcemanager.projects.get",
                         "genomics.datasets.create",
                         "genomics.datasets.delete",
@@ -302,6 +304,8 @@ class Gateway(object):
                     "title": "Functions_account",
                     "includedPermissions": [
                         "cloudkms.cryptoKeyVersions.viewPublicKey",
+                        "cloudkms.cryptoKeyVersions.get",
+                        "cloudkms.cryptoKeyVersions.list",
                         "iam.serviceAccountKeys.create",
                         "iam.serviceAccountKeys.delete",
                         "iam.serviceAccountKeys.get",

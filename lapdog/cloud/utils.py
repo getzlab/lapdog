@@ -199,9 +199,9 @@ def authenticate_bucket(bucket, namespace, workspace, session, core_session):
         'Workspace authentication token had an invalid signature'
     )
 
-def get_crypto_keys(name):
+def get_crypto_keys(name, credentials):
     return sorted(
-        (key.name for key in kms.KeyManagementServiceClient().list_crypto_key_version(name) if key.state == 1),
+        (key.name for key in kms.KeyManagementServiceClient(credentials=credentials).list_crypto_key_versions(name) if key.state == 1),
         key=lambda name:int(name.split('/')[-1]),
         reverse=True
     )
@@ -213,13 +213,13 @@ def sign_object(data, blob, credentials):
         ).asymmetric_sign(
             get_crypto_keys('projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(
                 ld_project=os.environ.get('GCP_PROJECT')
-            ))[0],
+            ), credentials)[0],
             {'sha256': sha256(data).digest()}
         ).signature
     )
 
 def verify_signature(blob, data, _is_blob=True):
-    for key in get_crypto_keys('projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(ld_project=os.environ.get('GCP_PROJECT'))):
+    for key in get_crypto_keys('projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(ld_project=os.environ.get('GCP_PROJECT')), generate_default_session().credentials):
         try:
             serialization.load_pem_public_key(
                 kms.KeyManagementServiceClient().get_public_key(key).pem.encode('ascii'),
