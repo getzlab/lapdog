@@ -264,6 +264,7 @@ Other: error_outline
       </div>
       <div class="col s3" v-if="cost">
         ${{cost.est_cost}}
+        <span v-if="cost.cromwell_overhead" class="tooltipped" data-tooltip="Cromwell Overhead + Compute Cost">(${{cost.cromwell_overhead}} + ${{Math.floor((cost.est_cost - cost.cromwell_overhead) * 100)/100}})</span>
       </div>
       <div class="col s3" v-else>
         Loading...
@@ -483,6 +484,9 @@ export default {
                 console.log("Got cost");
                 console.log(response.data);
                 this.cost = response.data;
+                setTimeout(() => {
+                  window.$('.tooltipped').tooltip();
+                }, 100);
               })
               .catch(error => {
                 console.error("Failed");

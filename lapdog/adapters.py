@@ -23,7 +23,10 @@ from agutil import ActiveTimeout, TimeoutExceeded, context_lock
 
 # Label filter format: labels.(label name)=(label value)
 
-timestamp_format = '%Y-%m-%dT%H:%M:%SZ'
+timestamp_formats = (
+    '%Y-%m-%dT%H:%M:%SZ',
+    '%Y-%m-%dT%H:%MZ'
+)
 utc_offset = datetime.datetime.fromtimestamp(time.time()) - datetime.datetime.utcfromtimestamp(time.time())
 
 def sleep_until(dt):
@@ -32,10 +35,18 @@ def sleep_until(dt):
         time.sleep(sleep_time)
 
 def parse_time(timestamp):
-    return datetime.datetime.strptime(
-        (timestamp.split('.')[0]+'Z').replace('ZZ', 'Z'),
-        timestamp_format
-    )
+    #2019-02-04T21:27Z
+    # no seconds?
+    err = None
+    for timestamp_format in timestamp_formats:
+        try:
+            return datetime.datetime.strptime(
+                (timestamp.split('.')[0]+'Z').replace('ZZ', 'Z'),
+                timestamp_format
+            )
+        except ValueError as e:
+            err = e
+    raise err
 
 # individual VMs can be tracked viua a combination of labels and workflow meta
 # Workflows are reported by the cromwell_driver output and then VMs can be tracked
@@ -378,7 +389,11 @@ class SubmissionAdapter(object):
                     result = {
                         'clock_h': maxTime,
                         'cpu_h': total,
-                        'est_cost': cost
+                        'est_cost': cost,
+                        'cromwell_overhead': int(maxTime * get_hourly_cost(
+                            get_cromwell_type(self.data['runtime']) if 'runtime' in self.data else 'n1-standard-1',
+                            False
+                        ) * 100) / 100
                     }
                     cache_write(json.dumps(result), 'submission', self.namespace, self.workspace, self.submission, dtype='cost')
                     return result
@@ -435,7 +450,11 @@ class SubmissionAdapter(object):
             return {
                 'clock_h': maxTime,
                 'cpu_h': total,
-                'est_cost': cost
+                'est_cost': cost,
+                'cromwell_overhead': int(maxTime * get_hourly_cost(
+                    get_cromwell_type(self.data['runtime']) if 'runtime' in self.data else 'n1-standard-1',
+                    False
+                ) * 100) / 100
             }
         except:
             traceback.print_exc()
@@ -443,7 +462,8 @@ class SubmissionAdapter(object):
             return {
                 'clock_h': 0,
                 'cpu_h': 0,
-                'est_cost': 0
+                'est_cost': 0,
+                'cromwell_overhead': 0
             }
 
     @cached(90)
