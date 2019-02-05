@@ -300,7 +300,7 @@ def register(request):
                     )
 
         # 8.b) Create Group
-        response = sesion.post(
+        response = session.post(
             'https://api.firecloud.org/api/groups/{group}'.format(
                 group=target_group
             ),
