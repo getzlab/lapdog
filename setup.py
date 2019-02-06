@@ -35,6 +35,7 @@ setup(
         ]
     },
     install_requires = [
+        'firecloud>=0.16.9',
         'firecloud-dalmatian>=0.0.4',
         'google-cloud-storage>=1.13.2',
         'PyYAML==4.2b1',

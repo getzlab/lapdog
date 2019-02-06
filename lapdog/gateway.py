@@ -197,7 +197,6 @@ class Gateway(object):
             raise ValueError("Unable to create project")
         cmd = 'gcloud --project {project} services enable cloudbilling.googleapis.com'.format(
             project=ld_project_for_namespace(project_id),
-            service=service
         )
         print(cmd)
         subprocess.check_call(cmd, shell=True)

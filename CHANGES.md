@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.5 (Beta)
+
+Bug Fixes:
+* Fixed a fatal issue in `lapdog initialize-project`
+* Pinned `firecloud>=0.16.9`
+
 ## 0.12.4 (Beta)
 
 Bug Fixes:
