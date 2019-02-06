@@ -36,7 +36,13 @@ __CORE_SESSION_REQUEST__ = api.__SESSION.request
 def _firecloud_api_timeout_wrapper(*args, **kwargs):
     if not hasattr(timeout_state, 'timeout'):
         timeout_state.timeout = None
-    return __CORE_SESSION_REQUEST__(*args, timeout=timeout_state.timeout, **kwargs)
+    return __CORE_SESSION_REQUEST__(
+        *args,
+        **{
+            **{'timeout': timeout_state.timeout},
+            **kwargs
+        }
+    )
 
 api.__SESSION.request = _firecloud_api_timeout_wrapper
 

@@ -120,3 +120,4 @@ def __project_admin_apply_patch(namespace):
     print("Patching quotas from beta -> v1")
     _deploy('quotas', 'quotas', functions_account, project)
     print(crayons.black("Phase 3/3:", bold=True), "Redact Insecure Cloud API Endpoints")
+    print(crayons.green("No Redactions"))

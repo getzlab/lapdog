@@ -160,6 +160,31 @@ class Gateway(object):
         of the service and the only user capable of using it.
         Call authorize_user to allow another user to use the service
         """
+        print("Testing permissions")
+        test_url = "https://cloudbilling.googleapis.com/v1/billingAccounts/{billing_account}:testIamPermissions".format(
+            billing_account=billing_id
+        )
+        print("POST", test_url)
+        user_session = generate_user_session(get_access_token())
+        response = user_session.post(
+            test_url,
+            headers={"Content-Type": "application/json"},
+            json={
+                "permissions": [
+                    "billing.accounts.get",
+                    "billing.accounts.getIamPolicy",
+                    "billing.resourceAssociations.create"
+                ]
+            }
+        )
+        if response.status_code != 200:
+            raise ValueError("Unexpected response from Google API: %d" % response.status_code)
+        permissions = response.json()
+        if 'permissions' not in permissions:
+            raise ValueError("Unexpected response from Google API: %s" % response.text)
+        permissions = permissions['permissions']
+        if "billing.accounts.get" not in permissions or "billing.accounts.getIamPolicy" not in permissions or "billing.resourceAssociations.create" not in permissions:
+            raise ValueError("Insufficient permissions to use this billing account")
         cmd = (
             'gcloud projects create {project_id}'.format(
                 project_id=ld_project_for_namespace(project_id)
@@ -170,9 +195,24 @@ class Gateway(object):
         result = run_cmd(cmd)
         if result.returncode != 0 and b'already in use' not in result.buffer:
             raise ValueError("Unable to create project")
+        cmd = 'gcloud --project {project} services enable cloudbilling.googleapis.com'.format(
+            project=ld_project_for_namespace(project_id),
+            service=service
+        )
+        print(cmd)
+        subprocess.check_call(cmd, shell=True)
+        cmd = (
+            'gcloud beta billing projects link {project_id} --billing-account '
+            '{billing_id}'.format(
+                project_id=ld_project_for_namespace(project_id),
+                billing_id=billing_id
+            )
+        )
+        print("Enabling billing")
+        print(cmd)
+        subprocess.check_call(cmd, shell=True)
         print("Enabling servies...")
         services = [
-            'cloudbilling.googleapis.com',
             'cloudapis.googleapis.com',
             'clouddebugger.googleapis.com',
             'cloudfunctions.googleapis.com',
@@ -196,16 +236,6 @@ class Gateway(object):
             )
             print(cmd)
             subprocess.check_call(cmd, shell=True)
-        cmd = (
-            'gcloud beta billing projects link {project_id} --billing-account '
-            '{billing_id}'.format(
-                project_id=ld_project_for_namespace(project_id),
-                billing_id=billing_id
-            )
-        )
-        print("Enabling billing")
-        print(cmd)
-        subprocess.check_call(cmd, shell=True)
         print("Creating Signing Key")
         cmd = (
             'gcloud --project {project} kms keyrings create lapdog --location us'.format(
@@ -232,7 +262,6 @@ class Gateway(object):
         roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
             project=ld_project_for_namespace(project_id)
         )
-        user_session = generate_user_session(get_access_token())
         print("POST", roles_url)
         response = user_session.post(
             roles_url,
@@ -429,6 +458,8 @@ class Gateway(object):
         _deploy('register', 'register', functions_account, ld_project_for_namespace(project_id))
         _deploy('query_account', 'query', functions_account, ld_project_for_namespace(project_id))
         _deploy('quotas', 'quotas', functions_account, ld_project_for_namespace(project_id))
+        # Important that existence is deployed last
+        # Once deployed, lapdog gateways will start reporting that the Engine is active
         _deploy('existence', 'existence', functions_account, ld_project_for_namespace(project_id))
 
     @property
