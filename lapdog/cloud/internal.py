@@ -32,4 +32,4 @@ def redacted(request):
             "This endpoint has been disabled for security reasons."
             " Please upgrade to the latest version of Lapdog to access updated endpoints"
         )
-    }, 400
+    }, 410

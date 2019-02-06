@@ -17,9 +17,9 @@ import time
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
-    'submit': 'v1',
+    'submit': 'v2',
     'abort': 'v1',
-    'register': 'v1',
+    'register': 'v2',
     'signature': 'v1',
     'query': 'v1',
     'quotas': 'v1',
@@ -162,8 +162,6 @@ def authenticate_bucket(bucket, namespace, workspace, session, core_session):
     """
     Used internally to authenticate a bucket for lapdog use
     """
-    if os.environ.get('GCP_PROJECT') != ld_project_for_namespace(namespace):
-        return False, 'This project is not responsible for the provided namespace'
     workspace_blob = getblob(
         'gs://{bucket}/DO_NOT_DELETE_LAPDOG_WORKSPACE_SIGNATURE'.format(
             bucket=bucket
@@ -172,6 +170,15 @@ def authenticate_bucket(bucket, namespace, workspace, session, core_session):
     )
     if not workspace_blob.exists():
         # Must generate signature
+        resolution_blob = getblob(
+            'gs://{bucket}/resolution'.format(
+                bucket=ld_meta_bucket_for_project(os.environ.get('GCP_PROJECT'))
+            )
+        )
+        if not resolution_blob.exists():
+            return False, "No resolution found"
+        if namespace != resolution_blob.download_as_string().decode():
+            return False, 'This project is not responsible for the provided namespace'
         print("Generating new workspace signature for", workspace)
         try:
             response = session.get(

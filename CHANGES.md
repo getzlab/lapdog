@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0 (Beta)
+
+Bug Fixes:
+* Fixed a bug that could allow malicious users to impersonate a Lapdog Engine
+
+### Patch Contents
+* Updated `submit` and `register` to v2 to reflect the bug fix above
+* Redacted `alpha`, `beta` of all endpoints, as well as `v1` of `submit` and `register`
+
 ## 0.12.5 (Beta)
 
 Bug Fixes:

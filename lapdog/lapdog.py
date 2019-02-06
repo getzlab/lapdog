@@ -23,7 +23,7 @@ from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandRea
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture
 from .cloud.utils import getblob, proxy_group_for_user
-from .gateway import Gateway
+from .gateway import Gateway, creation_success_pattern
 from itertools import repeat
 import pandas as pd
 from socket import gethostname
@@ -37,7 +37,6 @@ import numpy as np
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
 lapdog_submission_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/submission.json')
-creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
 
 timestamp_format = '%Y-%m-%dT%H:%M:%S.000%Z'
 
@@ -361,7 +360,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         if bool(creation_success_pattern.search(text)):
 
             def update_acl():
-                time.sleep(20)
+                time.sleep(30)
                 try:
                     from .gateway import get_access_token, get_token_info
                     response = fc.update_workspace_acl(

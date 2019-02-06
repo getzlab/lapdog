@@ -6,6 +6,7 @@
 # If the log is not found, then you're SOL
 
 from functools import lru_cache
+from firecloud import api as fc
 import requests
 import subprocess
 from hashlib import md5
@@ -16,11 +17,17 @@ import crayons
 import os
 import json
 from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob, proxy_group_for_user, generate_user_session, update_iam_policy, __API_VERSION__
+from .operations import capture
 from urllib.parse import quote
 import sys
 import tempfile
 import base64
 from agutil import cmd as run_cmd
+from dalmatian import WorkspaceManager
+import traceback
+import re
+
+creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
 
 id_rsa = os.path.join(
     os.path.expanduser('~'),
@@ -133,6 +140,16 @@ def generate_core_key(ld_project, session=None):
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Could not generate core key")
 
+def resolve_project_for_namespace(namespace):
+    resolution = cache_fetch('namespace', 'resolution', namespace=namespace)
+    if resolution is None:
+        ws = WorkspaceManager(namespace+'/do-not-delete-lapdog-resolution')
+        try:
+            resolution = ws.get_attributes()['ld_project_id']
+        except:
+            raise NameError("The resolution for {} does not exist or is improperly configured".format(namespace))
+        cache_write(resolution, 'namespace', 'resolution', namespace=namespace)
+    return resolution
 
 class Gateway(object):
     """
@@ -140,7 +157,7 @@ class Gateway(object):
     """
     def __init__(self, namespace):
         self.namespace = namespace
-        self.project = ld_project_for_namespace(namespace)
+        self.project = resolve_project_for_namespace(namespace)
         if not self.exists:
             warnings.warn("Gateway does not exist")
         elif not self.registered:
@@ -151,15 +168,17 @@ class Gateway(object):
             )
 
     @classmethod
-    def initialize_lapdog_for_project(cls, billing_id, project_id):
+    def initialize_lapdog_for_project(cls, billing_id, project_id, custom_lapdog_project=None):
         """
         Initializes the lapdog execution API on the given firecloud project.
         Charges for operating the Lapdog API and for executing jobs will be billed
         to the provided billing id.
         The current gcloud account (when this function is executed) will be the Owner
         of the service and the only user capable of using it.
-        Call authorize_user to allow another user to use the service
+        Specify custom_lapdog_project to override default namespace->project association
         """
+        if custom_lapdog_project is None:
+            custom_lapdog_project = ld_project_for_namespace(project_id)
         print("Testing permissions")
         test_url = "https://cloudbilling.googleapis.com/v1/billingAccounts/{billing_account}:testIamPermissions".format(
             billing_account=billing_id
@@ -187,23 +206,78 @@ class Gateway(object):
             raise ValueError("Insufficient permissions to use this billing account")
         cmd = (
             'gcloud projects create {project_id}'.format(
-                project_id=ld_project_for_namespace(project_id)
+                project_id=custom_lapdog_project
             )
         )
         print("Creating project")
         print(cmd)
         result = run_cmd(cmd)
-        if result.returncode != 0 and b'already in use' not in result.buffer:
-            raise ValueError("Unable to create project")
+        if result.returncode != 0:
+            if b'already in use' not in result.buffer:
+                raise ValueError("Unable to create project")
+            else:
+                print("This project is already in use")
+                print("Do you wish to continue initialization with the given project?")
+                choice = input("Y/N : ")
+                if not choice.strip().lower().startswith('y'):
+                    print("Aborted")
+                    return
+        ws = WorkspaceManager(project_id+'/do-not-delete-lapdog-resolution')
+        with capture() as (stdout, stderr):
+            try:
+                ws.create_workspace()
+            except AssertionError:
+                traceback.print_exc()
+            stdout.seek(0,0)
+            stderr.seek(0,0)
+            text = stdout.read() + stderr.read()
+        if not (bool(creation_success_pattern.search(text)) or 'already exists' in text):
+            print("Please visit https://github.com/broadinstitute/lapdog/wiki/Manual-Resolution", file=sys.stderr)
+            raise ValueError("Failed to create resolution workspace "+project_id+'/do-not-delete-lapdog-resolution')
+        print("Saving project resolution...")
+        while True:
+            try:
+                ws.update_attributes({
+                    'ld_project_id': custom_lapdog_project
+                })
+                break
+            except AssertionError:
+                print("Update failed. Retrying...")
+                time.sleep(10)
+        print("Updating project acl...")
+        while True:
+            response = fc.update_workspace_acl(
+                project_id,
+                'do-not-delete-lapdog-resolution',
+                [{
+                    'email': 'all_broad_users@firecloud.org',
+                    'accessLevel': 'READER',
+                }]
+            )
+            if response.status_code != 200:
+                print(response.status_code, response.text, file=sys.stderr)
+                print("Update failed. Retrying...")
+                time.sleep(10)
+            else:
+                break
+        print("Locking workspace...")
+        while True:
+            response = getattr(fc, '__put')('/api/workspaces/{}/do-not-delete-lapdog-resolution/lock'.format(project_id))
+            if response.status_code != 200 and response.status_code != 204:
+                print(response.status_code, response.text, file=sys.stderr)
+                print("Update failed. Retrying...")
+                time.sleep(10)
+            else:
+                break
         cmd = 'gcloud --project {project} services enable cloudbilling.googleapis.com'.format(
-            project=ld_project_for_namespace(project_id),
+            project=custom_lapdog_project,
         )
         print(cmd)
         subprocess.check_call(cmd, shell=True)
         cmd = (
             'gcloud beta billing projects link {project_id} --billing-account '
             '{billing_id}'.format(
-                project_id=ld_project_for_namespace(project_id),
+                project_id=custom_lapdog_project,
                 billing_id=billing_id
             )
         )
@@ -230,7 +304,7 @@ class Gateway(object):
         ]
         for service in services:
             cmd = 'gcloud --project {project} services enable {service}'.format(
-                project=ld_project_for_namespace(project_id),
+                project=custom_lapdog_project,
                 service=service
             )
             print(cmd)
@@ -238,7 +312,7 @@ class Gateway(object):
         print("Creating Signing Key")
         cmd = (
             'gcloud --project {project} kms keyrings create lapdog --location us'.format(
-                project=ld_project_for_namespace(project_id)
+                project=custom_lapdog_project
             )
         )
         print(cmd)
@@ -249,7 +323,7 @@ class Gateway(object):
             'gcloud --project {project} alpha kms keys create lapdog-sign --location us --keyring'
             ' lapdog --purpose asymmetric-signing --default-algorithm '
             'rsa-sign-pss-3072-sha256 --protection-level software'.format(
-                project=ld_project_for_namespace(project_id)
+                project=custom_lapdog_project
             )
         )
         print(cmd)
@@ -259,7 +333,7 @@ class Gateway(object):
 
         print("Creating Lapdog Roles")
         roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
-            project=ld_project_for_namespace(project_id)
+            project=custom_lapdog_project
         )
         print("POST", roles_url)
         response = user_session.post(
@@ -385,30 +459,30 @@ class Gateway(object):
         print("Creating Core Service Account")
         cmd = (
             'gcloud --project {project} iam service-accounts create lapdog-worker --display-name lapdog-worker'.format(
-                project=ld_project_for_namespace(project_id)
+                project=custom_lapdog_project
             )
         )
         print(cmd)
         result = run_cmd(cmd)
         if result.returncode != 0 and b'already exists' not in result.buffer:
             raise ValueError("Unable to create service account")
-        core_account = 'lapdog-worker@{}.iam.gserviceaccount.com'.format(ld_project_for_namespace(project_id))
+        core_account = 'lapdog-worker@{}.iam.gserviceaccount.com'.format(custom_lapdog_project)
         print("Creating Cloud Functions Service Account")
         cmd = (
             'gcloud --project {project} iam service-accounts create lapdog-functions --display-name lapdog-functions'.format(
-                project=ld_project_for_namespace(project_id)
+                project=custom_lapdog_project
             )
         )
         print(cmd)
         result = run_cmd(cmd)
         if result.returncode != 0 and b'already exists' not in result.buffer:
             raise ValueError("Unable to create service account")
-        functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(ld_project_for_namespace(project_id))
+        functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(custom_lapdog_project)
         print("Creating Metadata bucket while service accounts are created")
         cmd = (
             'gsutil mb -c Standard -l us-central1 -p {project} gs://{bucket}'.format(
-                project=ld_project_for_namespace(project_id),
-                bucket=ld_meta_bucket_for_project(ld_project_for_namespace(project_id))
+                project=custom_lapdog_project,
+                bucket=ld_meta_bucket_for_project(custom_lapdog_project)
             )
         )
         print(cmd)
@@ -424,7 +498,7 @@ class Gateway(object):
         status, response = update_iam_policy(
             user_session,
             policy,
-            ld_project_for_namespace(project_id)
+            custom_lapdog_project
         )
         if not status:
             print('(%d) : %s' % (response.status_code, response.text), file=sys.stderr)
@@ -432,11 +506,11 @@ class Gateway(object):
         print("Waiting for service account creation...")
         time.sleep(30)
         print("Issuing Core Service Account Key")
-        generate_core_key(ld_project_for_namespace(project_id), user_session)
+        generate_core_key(custom_lapdog_project, user_session)
         print("Updating Key Metadata ACL")
         blob = getblob(
             'gs://{bucket}/auth_key.json'.format(
-                bucket=ld_meta_bucket_for_project(ld_project_for_namespace(project_id))
+                bucket=ld_meta_bucket_for_project(custom_lapdog_project)
             )
         )
         acl = blob.acl
@@ -448,18 +522,28 @@ class Gateway(object):
                     entity.revoke_read()
         acl.user(functions_account).grant_read()
         acl.save()
+        print("Saving Project Resolution to Engine")
+        blob = getblob(
+            'gs://{bucket}/resolution'.format(
+                bucket=ld_meta_bucket_for_project(custom_lapdog_project)
+            )
+        )
+        blob.upload_from_string(project_id.encode())
+        acl = blob.acl
+        acl.all().grant_read()
+        acl.save()
 
         print("Deploying Cloud Functions")
         from .cloud import _deploy
-        _deploy('create_submission', 'submit', functions_account, ld_project_for_namespace(project_id))
-        _deploy('abort_submission', 'abort', functions_account, ld_project_for_namespace(project_id))
-        _deploy('check_abort', 'signature', functions_account, ld_project_for_namespace(project_id))
-        _deploy('register', 'register', functions_account, ld_project_for_namespace(project_id))
-        _deploy('query_account', 'query', functions_account, ld_project_for_namespace(project_id))
-        _deploy('quotas', 'quotas', functions_account, ld_project_for_namespace(project_id))
+        _deploy('create_submission', 'submit', functions_account, custom_lapdog_project)
+        _deploy('abort_submission', 'abort', functions_account, custom_lapdog_project)
+        _deploy('check_abort', 'signature', functions_account, custom_lapdog_project)
+        _deploy('register', 'register', functions_account, custom_lapdog_project)
+        _deploy('query_account', 'query', functions_account, custom_lapdog_project)
+        _deploy('quotas', 'quotas', functions_account, custom_lapdog_project)
         # Important that existence is deployed last
         # Once deployed, lapdog gateways will start reporting that the Engine is active
-        _deploy('existence', 'existence', functions_account, ld_project_for_namespace(project_id))
+        _deploy('existence', 'existence', functions_account, custom_lapdog_project)
 
     @property
     def registered(self):
