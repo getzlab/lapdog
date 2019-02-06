@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.4 (Beta)
+
+Bug Fixes:
+* Fixed an issue preventing `lapdog.operations` from patching `firecloud.api.__SESSION` in some installations
+
 ## 0.12.3 (Beta)
 
 Bug Fixes:

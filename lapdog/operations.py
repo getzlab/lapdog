@@ -30,8 +30,8 @@ def set_timeout(n):
     finally:
         timeout_state.timeout = old_timeout
 
-api._fiss_agent_header()
-__CORE_SESSION_REQUEST__ = api.__SESSION.request
+getattr(api, "_fiss_agent_header")()
+__CORE_SESSION_REQUEST__ = getattr(api, "__SESSION").request
 
 def _firecloud_api_timeout_wrapper(*args, **kwargs):
     if not hasattr(timeout_state, 'timeout'):
@@ -44,7 +44,7 @@ def _firecloud_api_timeout_wrapper(*args, **kwargs):
         }
     )
 
-api.__SESSION.request = _firecloud_api_timeout_wrapper
+getattr(api, "__SESSION").request = _firecloud_api_timeout_wrapper
 
 @contextlib.contextmanager
 def capture(display=True):
