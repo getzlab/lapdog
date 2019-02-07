@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.2 (Beta)
+
+Bug Fixes:
+* Fixed a `NameError` when loading a Gateway that does not exist
+
 ## 0.13.1 (Beta)
 
 Other Changes:

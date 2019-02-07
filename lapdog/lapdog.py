@@ -264,7 +264,11 @@ class WorkspaceManager(dog.WorkspaceManager):
             timezone
         )
         self.operator = Operator(self)
-        self.gateway = Gateway(self.namespace)
+        try:
+            self.gateway = Gateway(self.namespace)
+        except NameError:
+            traceback.print_exc()
+            warnings.warn("No namespace resolution found")
         self._submission_cache = {}
         try:
             target_prefix = 'submission-json.{}'.format(self.bucket_id)

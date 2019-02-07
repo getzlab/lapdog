@@ -176,6 +176,11 @@ def workspace(namespace, name):
 @controller
 def get_namespace_registered(namespace, name):
     ws = get_workspace_object(namespace, name)
+    if ws.gateway is None:
+        return {
+            'exists': False,
+            'registered': False
+        }
     exists = ws.gateway.exists
     return {
         'exists': exists,
@@ -185,7 +190,7 @@ def get_namespace_registered(namespace, name):
 @controller
 def register(namespace, name):
     ws = get_workspace_object(namespace, name)
-    if ws.gateway.exists and not ws.gateway.registered:
+    if ws.gateway is not None and ws.gateway.exists and not ws.gateway.registered:
         ws.gateway.register(ws.workspace, ws.bucket_id)
         get_namespace_registered.cache_clear()
     return get_namespace_registered(namespace, name)
@@ -730,7 +735,15 @@ def cache_size():
 @cached(120)
 @controller
 def quotas(namespace):
-    return Gateway(namespace).quota_usage
+    try:
+        return Gateway(namespace).quota_usage
+    except NameError:
+        traceback.print_exc()
+        print("No resolution found")
+        return {
+            'raw': [],
+            'alerts': []
+        }
 
 
 @cached(60)
