@@ -267,6 +267,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         try:
             self.gateway = Gateway(self.namespace)
         except NameError:
+            self.gateway = None
             traceback.print_exc()
             warnings.warn("No namespace resolution found")
         self._submission_cache = {}
