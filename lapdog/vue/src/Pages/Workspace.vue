@@ -135,6 +135,11 @@
         <h5>Lapdog Status</h5>
       </div>
     </div>
+    <div v-if="workspace == 'do-not-delete-lapdog-resolution'" class="row">
+      <div class="col s12 red-text">
+        <h5>Resolution Workspace</h5>
+      </div>
+    </div>
     <div class="row">
       <div class="col s12" v-if="!ws">
         <div class="progress">

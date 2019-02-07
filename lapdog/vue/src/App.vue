@@ -250,7 +250,10 @@ export default {
     getWorkspaces() {
       axios.get(API_URL+'/api/v1/workspaces')
         .then(response => {
-          this.workspaces = response.data;
+          this.workspaces = _.filter(
+            response.data,
+            (workspace) => {return workspace.name != "do-not-delete-lapdog-resolution"}
+          );
           // window.$('select').formSelect();
           console.log(this.workspaces[0])
         })

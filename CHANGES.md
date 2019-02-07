@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.1 (Beta)
+
+Other Changes:
+* Removed the 1 month lifetime limit on offline cache entries
+* Hid Lapdog resolution projects from UI workspace list
+
 ## 0.13.0 (Beta)
 
 Bug Fixes:
