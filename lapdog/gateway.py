@@ -9,13 +9,14 @@ from functools import lru_cache
 from firecloud import api as fc
 import requests
 import subprocess
-from hashlib import md5
+from hashlib import md5, sha512
 from .cache import cached, cache_fetch, cache_write
 import time
 import warnings
 import crayons
 import os
 import json
+from .cloud import RESOLUTION_URL
 from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob, proxy_group_for_user, generate_user_session, update_iam_policy, __API_VERSION__
 from .operations import capture
 from urllib.parse import quote
@@ -143,12 +144,12 @@ def generate_core_key(ld_project, session=None):
 def resolve_project_for_namespace(namespace):
     resolution = cache_fetch('namespace', 'resolution', namespace=namespace)
     if resolution is None:
-        ws = WorkspaceManager(namespace+'/do-not-delete-lapdog-resolution')
-        try:
-            resolution = ws.get_attributes()['ld_project_id']
-        except:
-            raise NameError("The resolution for {} does not exist or is improperly configured".format(namespace))
-        cache_write(resolution, 'namespace', 'resolution', namespace=namespace)
+        blob = getblob(
+            'gs://lapdog-resolutions/' + sha512(namespace.encode()).hexdigest()
+        )
+        if not blob.exists():
+            raise NameError("No resolution for "+namespace)
+        resolution = blob.download_as_string().decode()
     return resolution
 
 class Gateway(object):
@@ -222,53 +223,6 @@ class Gateway(object):
                 if not choice.strip().lower().startswith('y'):
                     print("Aborted")
                     return
-        ws = WorkspaceManager(project_id+'/do-not-delete-lapdog-resolution')
-        with capture() as (stdout, stderr):
-            try:
-                ws.create_workspace()
-            except AssertionError:
-                traceback.print_exc()
-            stdout.seek(0,0)
-            stderr.seek(0,0)
-            text = stdout.read() + stderr.read()
-        if not (bool(creation_success_pattern.search(text)) or 'already exists' in text):
-            print("Please visit https://github.com/broadinstitute/lapdog/wiki/Manual-Resolution", file=sys.stderr)
-            raise ValueError("Failed to create resolution workspace "+project_id+'/do-not-delete-lapdog-resolution')
-        print("Saving project resolution...")
-        while True:
-            try:
-                ws.update_attributes({
-                    'ld_project_id': custom_lapdog_project
-                })
-                break
-            except AssertionError:
-                print("Update failed. Retrying...")
-                time.sleep(10)
-        print("Updating project acl...")
-        while True:
-            response = fc.update_workspace_acl(
-                project_id,
-                'do-not-delete-lapdog-resolution',
-                [{
-                    'email': 'all_broad_users@firecloud.org',
-                    'accessLevel': 'READER',
-                }]
-            )
-            if response.status_code != 200:
-                print(response.status_code, response.text, file=sys.stderr)
-                print("Update failed. Retrying...")
-                time.sleep(10)
-            else:
-                break
-        print("Locking workspace...")
-        while True:
-            response = getattr(fc, '__put')('/api/workspaces/{}/do-not-delete-lapdog-resolution/lock'.format(project_id))
-            if response.status_code != 200 and response.status_code != 204:
-                print(response.status_code, response.text, file=sys.stderr)
-                print("Update failed. Retrying...")
-                time.sleep(10)
-            else:
-                break
         cmd = 'gcloud --project {project} services enable cloudbilling.googleapis.com'.format(
             project=custom_lapdog_project,
         )
@@ -284,6 +238,23 @@ class Gateway(object):
         print("Enabling billing")
         print(cmd)
         subprocess.check_call(cmd, shell=True)
+        print("Saving Namespace Resolution")
+        response = requests.post(
+            RESOLUTION_URL,
+            headers={"Content-Type": "application/json"},
+            json={
+                'token': get_access_token(),
+                'namespace': project_id,
+                'project': custom_lapdog_project
+            }
+        )
+        if response.status_code == 409:
+            proj = resolve_project_for_namespace(project_id)
+            if proj != custom_lapdog_project:
+                raise NameError("A resolution is already in place for this namespace. Please contact GitHub @agraubert")
+        elif response.status_code != 200:
+            print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Error when generating resolution")
         print("Enabling servies...")
         services = [
             'cloudapis.googleapis.com',

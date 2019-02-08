@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.3 (Beta)
+
+Other Changes:
+* Switched Lapdog Namespace Resolution system so as not to take advantage of FireCloud
+* Lapdog API CORS policy now only allows the UI
+
 ## 0.13.2 (Beta)
 
 Bug Fixes:

@@ -27,7 +27,7 @@ def run(args):
         ).returncode
     app = connexion.App('lapdog-api', specification_dir=swagger_dir)
     app.add_api('lapdog.yaml')
-    CORS(app.app, origins=r'.*')
+    CORS(app.app, origins='http://localhost:%d'%args.ui_port)
     app.app.config['storage'] = {}
     if args.vue:
         with open(vue_dir+'/.env', 'w') as w:

@@ -8,8 +8,8 @@ This function may:
 * Update iam policy or bindings
 * Regenerate signing keys
 """
-from .utils import ld_project_for_namespace, __API_VERSION__, generate_user_session, ld_meta_bucket_for_project
-from . import _deploy
+from .utils import ld_project_for_namespace, __API_VERSION__, generate_user_session, ld_meta_bucket_for_project, getblob
+from . import _deploy, RESOLUTION_URL
 from .. import __version__
 from ..gateway import get_access_token, resolve_project_for_namespace
 from ..lapdog import WorkspaceManager
@@ -17,6 +17,8 @@ import sys
 import crayons
 import traceback
 from firecloud import api as fc
+from hashlib import sha512
+import requests
 
 # Notes for creating future patches
 # 1) Import a Gateway and use get_endpoint to check for any redacted endpoints
@@ -50,65 +52,38 @@ def __project_admin_apply_patch(namespace):
     """
     print("Patch version", __version__)
     print("Patching Namespace:", namespace)
+    user_session = generate_user_session(get_access_token())
     print(crayons.black("Phase 1/4:", bold=True), "Checking resolution status")
-    try:
-        project = resolve_project_for_namespace(namespace)
-    except:
+    blob = getblob(
+        'gs://lapdog-resolutions/' + sha512(namespace.encode()).hexdigest()
+    )
+    if not blob.exists():
         print("Patching resolution")
-        ws = WorkspaceManager(namespace, 'do-not-delete-lapdog-resolution')
-        ws.create_workspace()
-        print("Saving project resolution...")
-        while True:
-            try:
-                ws.update_attributes(ld_project_id=ld_project_for_namespace(namespace))
-                break
-            except:
-                traceback.print_exc()
-                print("Update failed. Retrying...")
-                time.sleep(10)
-        print("Updating project acl...")
-        while True:
-            response = fc.update_workspace_acl(
-                namespace,
-                'do-not-delete-lapdog-resolution',
-                [{
-                    'email': 'all_broad_users@firecloud.org',
-                    'accessLevel': 'READER',
-                }]
-            )
-            if response.status_code == 200:
-                print(response.status_code, response.text, file=sys.stderr)
-                print("Update failed. Retrying...")
-                time.sleep(10)
-            else:
-                break
-        print("Locking workspace...")
-        while True:
-            response = getattr(fc, '__put')('/api/workspaces/{}/do-not-delete-lapdog-resolution/lock'.format(namespace))
-            if response.status_code != 200 and response.status_code != 204:
-                print(response.status_code, response.text, file=sys.stderr)
-                print("Update failed. Retrying...")
-                time.sleep(10)
-            else:
-                break
-        project = ld_project_for_namespace(namespace)
-        print("Saving Project Resolution to Engine")
-        blob = getblob(
-            'gs://{bucket}/resolution'.format(
-                bucket=ld_meta_bucket_for_project(project)
-            )
+        response = requests.post(
+            RESOLUTION_URL,
+            headers={"Content-Type": "application/json"},
+            json={
+                'token': get_access_token(),
+                'namespace': namespace,
+                'project': ld_project_for_namespace(namespace)
+            }
         )
-        blob.upload_from_string(namespace.encode())
-        acl = blob.acl
-        acl.all().grant_read()
-        acl.save()
+        if response.status_code == 409:
+            proj = resolve_project_for_namespace(project_id)
+            if proj != custom_lapdog_project:
+                raise NameError("A resolution is already in place for this namespace. Please contact GitHub @agraubert")
+        elif response.status_code != 200:
+            print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Error when generating resolution")
+        project = ld_project_for_namespace(namespace)
+    else:
+        project = blob.download_as_string().decode()
     print("Lapdog Project:", project)
     functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(project)
     roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
         project=project
     )
     print(crayons.black("Phase 2/4:", bold=True), "Update IAM Policies")
-    user_session = generate_user_session(get_access_token())
     print("PATCH", roles_url+"/Core_account")
     response = user_session.patch(
         roles_url+"/Core_account",

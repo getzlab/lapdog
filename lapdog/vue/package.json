@@ -14,7 +14,7 @@
     "dotenv": "^6.0.0",
     "fs": "0.0.1-security",
     "jquery": "^3.3.1",
-    "lodash": "^4.17.10",
+    "lodash": "^4.17.11",
     "materialize-css": "^1.0.0-rc.2",
     "timeago.js": "^3.0.2",
     "vue": "^2.5.11",

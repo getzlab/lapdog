@@ -15,8 +15,11 @@ __FUNCTION_MAPPING__ = {
     'check_abort': 'internal.py',
     'quotas': 'quotas.py',
     'register': 'register.py',
-    'query_account': 'query.py'
+    'query_account': 'query.py',
+    'insert_resolution': 'resolution.py'
 }
+
+RESOLUTION_URL = "https://us-central1-a-graubert.cloudfunctions.net/resolve-" + __API_VERSION__['resolve']
 
 def _deploy(function, endpoint, service_account=None, project=None, overload_version=None):
     if overload_version is None:
