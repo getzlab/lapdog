@@ -721,27 +721,28 @@ class WorkspaceManager(dog.WorkspaceManager):
         through the FireCloud Rawls API. Use `WorkspaceManager.execute` to run
         jobs through the Lapdog Engine
         """
+
+        """
+        Verifies execution configuration.
+        The first return value is always a boolean indicating if the input was valid or not.
+        If the configuration is invalid there will only be 2 return values, and the second
+        value will be the error message.
+        If the configuration is valid, there will be 7 return values:
+        * True
+        * The basic method configuration object
+        * The submission entity
+        * The submission entity type (inferred from the configuration, if not provided)
+        * The list of entities for each workflow (from evaluating the expression, if provided)
+        * The input template from the method configuration
+        * A dictonary of input-name : error, for any invalid inputs in the configuration
+        """
         if not self.live:
             print("The workspace is currently in offline mode. Please call WorkspaceManager.sync() to reconnect to firecloud", file=sys.stderr)
             return
-        config = self.fetch_config(config_name)
-        if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
-            raise ValueError("expression and etype must BOTH be None or a string value")
-        if etype is None:
-            etype = config['rootEntityType']
-        response = dog.firecloud.api.get_entity(
-            self.namespace,
-            self.workspace,
-            etype,
-            entity
-        )
-        if response.status_code >= 400 and response.status_code < 500:
-            raise TypeError("No such %s '%s' in this workspace. Check your entity and entity type" % (
-                etype,
-                entity
-            ))
-        elif response.status_code >= 500:
-            raise APIException("The Firecloud API has returned status %d : %s" % (response.status_code, response.text))
+        result = self.execute_preflight(config_name, entity, expression, etype)
+        if not result[0]:
+            raise ValueError(result[1])
+        result, config, entity, etype, workflow_entities, template, invalidInputs = result
         with capture() as (stdout, stderr):
             with dalmatian_api():
                 super().create_submission(
