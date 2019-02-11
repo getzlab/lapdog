@@ -19,7 +19,7 @@ import yaml
 from glob import glob
 from io import StringIO
 from . import adapters
-from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader
+from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader, safe_getblob
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture, set_timeout
 from .cloud.utils import getblob, proxy_group_for_user
@@ -38,6 +38,7 @@ import requests
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
 lapdog_submission_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/submission.json')
+lapdog_submission_member_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/')
 
 timestamp_format = '%Y-%m-%dT%H:%M:%S.000%Z'
 
@@ -1245,3 +1246,122 @@ class WorkspaceManager(dog.WorkspaceManager):
                 print("This submission has not finished")
                 return False
         raise TypeError("complete_execution not available for firecloud submissions")
+
+    def mop(self, force=False):
+        """
+        Cleans files from the workspace bucket which are not referenced by the data model.
+        This is a VERY long operation.
+        All files will be removed unless they meet any of the following conditions:
+        1) The filepath is currently referenced by any entity or workspace attribute
+        2) The filepath belongs to a lapdog submission and is a protected submission file
+        3) The filepath belongs to a lapdog submission and the file has been modified since
+        the last time any file was modified in the entity table for the entity type
+        of this submission
+
+        #1 protects from accidentally erasing live data
+        #2 protects from accidentally removing key submission metadata
+        #3 protects from accidentally removing files which *may* have been added to the data model
+        since the WorkspaceManager was updated, and which may be waiting to be uploaded
+        to FireCloud
+
+        * If force is True, this will not prompt for confirmation and will run in
+        the background, returning a callback object
+        """
+        if not force:
+            print("Warning: This operation may take a very long time to complete")
+            print("Do you want to run this in the foreground?")
+            print("Yes: Block until completion")
+            print("No: Run in background (returns a calback object to wait for completion)")
+            print("Ctrl+C: Abort")
+            try:
+                choice = input("Run in foreground? (y/N): ")
+            except KeyboardInterrupt:
+                print("Aborted")
+                return
+            force = len(choice) == 0 or not choice.lower().startswith('y')
+        cb = self._mop(not force)
+        if not force:
+            return cb()
+        return cb
+
+    @parallelize2()
+    def _mop(self, fg=False):
+        """
+        Background worker to mop a bucket
+        """
+        dest = sys.stdout if fg else open(os.devnull, 'w')
+        cells = {}
+        callbacks = []
+
+        @parallelize2()
+        def _get_cell_data(table, path):
+            try:
+                blob = safe_getblob(path)
+                blob.reload()
+                return (path, table, blob.time_created)
+            except:
+                pass
+
+        def install_cell(table, path):
+            if isinstance(path, str) and path.startswith('gs://'):
+                callbacks.append(_get_cell_data(table, path))
+            return path
+
+        print("Loading Attributes", file=dest)
+        for value in self.attributes.values():
+            install_cell('attributes', value)
+        modtime = {}
+        for etype in self.operator.entity_types:
+            print("Loading", etype+'s', file=dest)
+            self.operator.get_entities_df(etype).applymap(lambda cell:install_cell(etype, cell))
+        for cb in status_bar.iter(callbacks, prepend="Scanning Data Model ", file=dest):
+            try:
+                entry = cb()
+                if entry is not None:
+                    cells[entry[0]] = (entry[1], entry[2])
+            except:
+                pass
+        times = [cell[1] for cell in cells.values() if cell[0] == 'attributes']
+        if len(times):
+            modtime['attributes'] = sorted(times)[-1]
+        for etype in self.operator.entity_types:
+            times = [cell[1] for cell in cells.values() if cell[0] == etype]
+            if len(times):
+                modtime[etype] = sorted(times)[-1]
+        n = 0
+        size = 0
+        time.sleep(10)
+        for page in storage.Client().bucket(self.bucket_id).list_blobs().pages:
+            for blob in page:
+                if blob.exists():
+                    try:
+                        if blob.name in cells:
+                            # Referenced by data model
+                            continue
+                        protected = (
+                            blob.name.endswith('submission.json') or
+                            blob.name.endswith('results/workflows.json') or
+                            blob.name.endswith('signature') or
+                            blob.name.endswith('abort-key') or
+                            blob.name.endswith('.log') or
+                            blob.name.endswith('stdout') or
+                            blob.name.endswith('stderr') or
+                            blob.name.endswith('DO_NOT_DELETE_LAPDOG_WORKSPACE_SIGNATURE') or
+                            blob.name.endswith('config.tsv')
+                        )
+                        if protected:
+                            continue
+                        blob.reload()
+                        result = lapdog_submission_member_pattern.match(blob.name)
+                        if result:
+                            adapter = self.get_adapter(result.group(1))
+                            if blob.time_created is None or ('workflowEntityType' in adapter.data and adapter.data['workflowEntityType'] in modtime and modtime[adapter.data['workflowEntityType']] < blob.time_created):
+                                # This blob is newer than the most recent cell in the entity table for the submission this blob belongs to
+                                continue
+                        print(blob.name, file=dest)
+                        blob.delete()
+                        size += blob.size
+                        n += 1
+                    except:
+                        traceback.print_exc()
+        return n, byteSize(size)

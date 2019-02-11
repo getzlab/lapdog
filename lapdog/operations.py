@@ -93,6 +93,13 @@ class Operator(object):
         self._thread = None
         self.lock = threading.RLock()
 
+    def __del__(self):
+        try:
+            self.go_live()
+        except:
+            traceback.print_exc()
+        self.live = True # To halt background thread
+
     def synchronized(func):
         def wrapper(self, *args, **kwargs):
             with self.lock:

@@ -14,6 +14,7 @@ import os
 import json
 from urllib.parse import quote
 import time
+from functools import lru_cache
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
@@ -37,7 +38,9 @@ __API_VERSION__ = {
 
 __CROMWELL_TAG__ = 'v0.12.0'
 
-
+@lru_cache()
+def _getblob_client(credentials):
+    return storage.Client(credentials=credentials)
 
 def getblob(gs_path, credentials=None, user_project=None):
     """
@@ -52,7 +55,7 @@ def getblob(gs_path, credentials=None, user_project=None):
     bucket_path = '/'.join(gs_path[5:].split('/')[1:])
     return storage.Blob(
         bucket_path,
-        storage.Client(credentials=credentials).bucket(bucket_id, user_project)
+        _getblob_client(credentials).bucket(bucket_id, user_project)
     )
 
 def cors(*methods):
