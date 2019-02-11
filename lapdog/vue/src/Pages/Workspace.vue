@@ -345,7 +345,13 @@
 
       <div class="data-viewer" v-if="ws && ws.entities && ws.entities.length">
         <hr>
-        <h5>Data</h5>
+        <div class="row">
+          <div class="col s12">
+            <h4>
+              <a rel="noopener" target="_blank" v-bind:href="'https://portal.firecloud.org/#workspaces/'+namespace+'/'+workspace+'/data'">Data</a>
+            </h4>
+          </div>
+        </div>
         <div class="row">
           <div class="col s12">
 
