@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.4 (Beta)
+
+New Features:
+* Added `lapdog.WorkspaceManager.mop()` method to remove unreferenced data from workspace bucket
+* Added `lapdog.WorkspaceManager.acl` and `lapdog.WorkspaceManager.update_acl()` to get and set workspace ACL
+* Added `lapdog.adapters.Call.read_log()` to read stderr, stdout, and cromwell logs
+
+Other Changes:
+* `lapdog.WorkspaceManager.create_submission` now runs a preflight to better handle input parameters
+* "Data" header on the Workspace homepage in the UI now links to FireCloud
+* Offline `lapdog.operations.Operator`s will now synchronize to FireCloud every minute,
+but remain offline regardless of the result
+
 ## 0.13.3 (Beta)
 
 Other Changes:

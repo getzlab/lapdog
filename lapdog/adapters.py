@@ -204,7 +204,8 @@ class Call(object):
         filename, suffix = {
             'stdout': ('stdout', '-stdout.log'),
             'stderr': ('stderr', '-stderr.log'),
-            'google': (None, '.log')
+            'google': (None, '.log'),
+            'cromwell': (None, '.log')
         }[log_type]
         idx = self.parent.calls.index(self)
         log_text = cache_fetch('workflow', self.parent.parent.submission, self.parent.long_id, dtype=str(idx)+'.', ext=log_type+'.log')
