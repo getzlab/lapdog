@@ -19,6 +19,7 @@ from agutil.parallel import parallelize
 from itertools import repeat
 from glob import glob
 import yaml
+from .. import firecloud_status
 from ..cache import cached, cache_fetch, cache_write, cache_init
 from ..adapters import NoSuchSubmission, Gateway
 from ..gateway import get_account, proxy_group_for_user
@@ -108,20 +109,18 @@ def get_lines(namespace, workspace, submission):
 @cached(30)
 @controller
 def status():
-    obj = {
-        'health': requests.get('https://api.firecloud.org/health').text,
-        'systems': {}
-    }
     try:
-        for key, val in requests.get('https://api.firecloud.org/status').json()['systems'].items():
-            obj['systems'][key] = 'ok' in val and val['ok']
-        for key, val in requests.get('https://rawls.dsde-prod.broadinstitute.org/status').json()['systems'].items():
-            obj['systems'][key] = 'ok' in val and val['ok']
-        obj['failed'] = False
+        return (
+            {
+                **{'failed': False},
+                **firecloud_status()
+            },
+            200
+        )
     except:
         obj['failed'] = True
         print(traceback.format_exc())
-    return obj, 200
+    return {'failed': True, 'systems': {}}, 200
 
 @cached(120)
 @controller
@@ -206,20 +205,39 @@ def service_account():
 @controller
 def get_acl(namespace, name):
     failure = 'NONE'
-    result = fc.get_workspace_acl(namespace, name)
-    if result.status_code == 403:
-        return {
-            'failed': True,
-            'reason': 'permissions'
-        }, 200
-    if result.status_code != 200:
-        print(result.text)
-        return {
-            'failed': True,
-            'reason': 'firecloud',
-            'error': result.text
-        },result.status_code
-    return {
+    ws = get_workspace_object(namespace, name)
+    try:
+        acl = ws.acl
+    except ValueError:
+        traceback.print_exc()
+        return (
+            {
+                'failed': True,
+                'reason': 'permissions'
+            },
+            200
+        )
+    except NameError as e:
+        traceback.print_exc()
+        return (
+            {
+                'failed': True,
+                'reason': 'firecloud',
+                'error': e._request_text if hasattr(e, '_request_text') else "UNKNOWN"
+            },
+            200
+        )
+    except ValueError as e:
+        traceback.print_exc()
+        return (
+            {
+                'failed': True,
+                'reason': 'firecloud',
+                'error': e._request_text if hasattr(e, '_request_text') else "UNKNOWN"
+            },
+            200
+        )
+    return ({
         'accounts': [
             {
                 'email': k,
@@ -227,11 +245,11 @@ def get_acl(namespace, name):
                 'share': v['canShare'],
                 'compute': v['canCompute']
             }
-            for k,v in result.json()['acl'].items()
+            for k,v in acl.items()
         ],
         'failed': False,
         'reason': 'success'
-    }, 200
+    }, 200)
 
 @cached(60)
 @controller
@@ -281,6 +299,7 @@ def service_acl(namespace, name):
 
 @controller
 def set_acl(namespace, name):
+    ws = get_workspace_object(namespace, name)
     account, code = service_account()
     if code != 200:
         print(account)
@@ -313,22 +332,17 @@ def set_acl(namespace, name):
                 'failed': True,
                 'reason': 'permissions'
             }, 200
-        response = fc.update_workspace_acl(
-            namespace,
-            name,
-            [{
-                'email': account,
-                'accessLevel': 'WRITER',
-            }]
-        )
         try:
-            data = response.json()
-        except:
+            data = ws.update_acl({
+                account: 'WRITER'
+            })
+        except Exception as e:
             traceback.print_exc()
             return {
                 'failed': True,
-                'reason': 'firecloud'
-            }, 200
+                'reason': 'firecloud',
+                'error': e._request_text if hasattr(e, '_request_text') else 'UNKNOWN'
+            }
         if 'usersUpdated' in data or 'invitesSent' in data or 'usersNotFound' in data:
             if 'usersNotFound' in data and account in {acct['email'] for acct in data['usersNotFound']}:
                 return {
@@ -673,47 +687,21 @@ def get_workflow(namespace, name, id, workflow_id):
 # @cached(30)
 @controller
 def read_logs(namespace, name, id, workflow_id, log, call):
-    filename, suffix = {
-        'stdout': ('stdout', '-stdout.log'),
-        'stderr': ('stderr', '-stderr.log'),
-        'google': (None, '.log')
-    }[log]
     log_text = cache_fetch('workflow', id, workflow_id, dtype=str(call)+'.', ext=log+'.log')
-    adapter = get_adapter(namespace, name, id)
     if log_text is not None:
         return log_text, 200
+    adapter = get_adapter(namespace, name, id)
     adapter.update()
-    from ..adapters import safe_getblob
     if workflow_id[:8] in adapter.workflows:
         workflow = adapter.workflows[workflow_id[:8]]
         if call < len(workflow.calls):
             call = workflow.calls[call]
-            blob = None
-            if filename is not None:
-                path = os.path.join(
-                    call.path,
-                    filename
-                )
-                print("Trying", path)
-                try:
-                    blob = safe_getblob(path)
-                except FileNotFoundError:
-                    pass
-            if blob is None:
-                path = os.path.join(
-                    call.path,
-                    call.task + suffix
-                )
-                print("Trying", path)
-                try:
-                    blob = safe_getblob(path)
-                except FileNotFoundError:
-                    return "Not found", 404
-            text = blob.download_as_string().decode()
-            if not adapter.live:
-                cache_write(text, 'workflow', id, workflow_id, dtype=str(call.attempt)+'.', ext=log+'.log')
-            return text, 200
-    return 'Error', 500
+            try:
+                text = call.read_log(log)
+                return text, 200
+            except FileNotFoundError:
+                return "Not Found", 404
+    return "Error", 500
 
 @cached(10)
 @controller

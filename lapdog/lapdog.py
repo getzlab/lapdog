@@ -21,7 +21,7 @@ from io import StringIO
 from . import adapters
 from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader
 from .cache import cache_init, cache_path
-from .operations import APIException, Operator, capture
+from .operations import APIException, Operator, capture, set_timeout
 from .cloud.utils import getblob, proxy_group_for_user
 from .gateway import Gateway, creation_success_pattern
 from itertools import repeat
@@ -33,6 +33,7 @@ import traceback
 import warnings
 import shutil
 import numpy as np
+import requests
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -233,6 +234,26 @@ def get_submission(submission_id):
         return WorkspaceManager(ns, ws).get_submission(sid)
     raise TypeError("Global get_submission can only operate on lapdog global ids")
 
+def get_adapter(submission_id):
+    """
+    Gets adapter for a lapdog submission
+    """
+    if submission_id.startswith('lapdog/'):
+        ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
+        return WorkspaceManager(ns, ws).get_adapter(sid)
+    raise TypeError("Global get_adapter can only operate on lapdog global ids")
+
+def firecloud_status():
+    obj = {
+        'health': requests.get('https://api.firecloud.org/health').text,
+        'systems': {}
+    }
+    for key, val in requests.get('https://api.firecloud.org/status').json()['systems'].items():
+        obj['systems'][key] = 'ok' in val and val['ok']
+    for key, val in requests.get('https://rawls.dsde-prod.broadinstitute.org/status').json()['systems'].items():
+        obj['systems'][key] = 'ok' in val and val['ok']
+    return obj
+
 @parallelize(5)
 def _load_submissions(path):
     with open(path, 'r') as r:
@@ -351,6 +372,47 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     bucket_id = property(get_bucket_id)
 
+    @property
+    def acl(self):
+        """
+        Returns the current FireCloud ACL settings for the workspace
+        """
+        with set_timeout(30):
+            result = fc.get_workspace_acl(self.namespace, self.workspace)
+        if result.status_code == 403:
+            raise ValueError("User lacks sufficient permissions to get workspace ACL")
+        elif result.status_code == 404:
+            exc = NameError("The requested workspace does not exist")
+            exc._request_text = result.text
+            raise exc
+        elif result.status_code >= 400:
+            exc = APIException("The FireCloud API returned an unhandled status: %d" % result.status_code)
+            exc._request_text = result.text
+            raise exc
+        return result.json()['acl']
+
+    def update_acl(self, acl):
+        """
+        Sets the ACL. Provide a dictionary of email -> access level
+        """
+        with set_timeout(30):
+            response = fc.update_workspace_acl(
+                self.namespace,
+                self.workspace,
+                [
+                    {
+                        'email': email,
+                        'accessLevel': level
+                    }
+                    for email, level in acl.items()
+                ]
+            )
+        if response.status_code >= 400:
+            exc = APIException("The FireCloud API returned an unhandled status: %d" % result.status_code)
+            exc._request_text = result.text
+            raise exc
+        return response.json()
+
     def create_workspace(self, parent=None):
         """
         Creates the workspace.
@@ -368,24 +430,12 @@ class WorkspaceManager(dog.WorkspaceManager):
                 time.sleep(30)
                 try:
                     from .gateway import get_access_token, get_token_info
-                    response = fc.update_workspace_acl(
-                        self.namespace,
-                        self.workspace,
-                        [{
-                            'email': proxy_group_for_user(get_token_info(get_access_token())['email']),
-                            'accessLevel': 'WRITER',
-                        }]
-                    )
-                    if response.status_code != 200 and response.status_code != 204:
-                        warnings.warn("Unable to update new workspace ACL: (%d) : %s" % (
-                            response.status_code,
-                            response.text
-                        ))
+                    response = self.update_acl({
+                        proxy_group_for_user(get_token_info(get_access_token())['email']): 'WRITER'
+                    })
                 except:
-                    warnings.warn("Unable to update new workspace ACL: %s" % (
-                        traceback.format_exc()
-                    ))
-
+                    traceback.print_exc()
+                    warnings.warn("Unable to update new workspace ACL")
             print("Updating ACL in a background thread")
             Thread(target=update_acl, daemon=True).start()
             self.sync()

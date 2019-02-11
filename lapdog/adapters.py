@@ -156,7 +156,8 @@ class Call(object):
     """
     status = '-'
     last_message = ''
-    def __init__(self, path, task, attempt, operation):
+    def __init__(self, parent, path, task, attempt, operation):
+        self.parent = parent
         self.path = path
         self.task = task
         self.attempt = attempt
@@ -195,6 +196,41 @@ class Call(object):
         except:
             traceback.print_exc()
             return 0
+
+    @cached(30)
+    def read_log(self, log_type):
+        if log_type not in {'stdout', 'stderr', 'google', 'cromwell'}:
+            raise ValueError("log_type must be one of {'stdout', 'stderr', 'google', 'cromwell'}")
+        filename, suffix = {
+            'stdout': ('stdout', '-stdout.log'),
+            'stderr': ('stderr', '-stderr.log'),
+            'google': (None, '.log')
+        }[log_type]
+        idx = self.parent.calls.index(self)
+        log_text = cache_fetch('workflow', self.parent.parent.submission, self.parent.long_id, dtype=str(idx)+'.', ext=log_type+'.log')
+        if log_text is not None:
+            return log_text
+        blob = None
+        if filename is not None:
+            path = os.path.join(
+                self.path,
+                filename
+            )
+            print("Trying", path)
+            blob = getblob(path)
+            if not blob.exists():
+                blob = None
+        if blob is None:
+            path = os.path.join(
+                self.path,
+                self.task + suffix
+            )
+            print("Trying", path)
+            blob = safe_getblob(path)
+        text = blob.download_as_string().decode()
+        if not self.parent.parent.live:
+            cache_write(text, 'workflow', self.parent.parent.submission, self.parent.long_id, dtype=str(idx)+'.', ext=log_type+'.log')
+        return text
 
 @cached(10)
 def get_operation_status(opid, parse=True, fmt='json'):
@@ -388,7 +424,7 @@ class SubmissionAdapter(object):
 
     def _init_workflow(self, short, key=None, long_id=None):
         if short not in self.workflows:
-            self.workflows[short] = WorkflowAdapter(short, self.path, key, long_id)
+            self.workflows[short] = WorkflowAdapter(self, short, self.path, key, long_id)
         return self.workflows[short]
 
     def cost(self):
@@ -851,7 +887,8 @@ class WorkflowAdapter(object):
     # At first, dispatching events fills the replay buffer
     # when the workflow is started, the buffer is played and the workflow updates to current state DAWG
 
-    def __init__(self, short_id, parent_path, input_key=None, long_id=None):
+    def __init__(self, parent, short_id, parent_path, input_key=None, long_id=None):
+        self.parent = parent
         self.id = short_id
         self.key = input_key
         self.long_id = long_id
@@ -904,6 +941,7 @@ class WorkflowAdapter(object):
         if call > 1:
             path = os.path.join(path, 'attempt-'+str(call))
         self.calls.append(Call(
+            self,
             path,
             task,
             call,
