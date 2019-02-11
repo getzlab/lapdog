@@ -10,6 +10,7 @@ import contextlib
 import traceback
 import pandas as pd
 import threading
+import time
 
 class APIException(ValueError):
     pass
@@ -89,12 +90,20 @@ class Operator(object):
         self.live = True
         self.last_result = None
         self._webcache_ = False
+        self._thread = None
+        self.lock = threading.RLock()
+
+    def synchronized(func):
+        def wrapper(self, *args, **kwargs):
+            with self.lock:
+                return func(self, *args, **kwargs)
+        return wrapper
 
     def go_offline(self):
         self.live = False
         a, b, c = sys.exc_info()
-        if a is None and b is None:
-            print(traceback.format_exc())
+        if a is not None and b is not None:
+            traceback.print_exc()
         print(
             crayons.red("WARNING:", bold=False),
             "The operation cache is now offline for {}/{}".format(
@@ -102,7 +111,34 @@ class Operator(object):
                 self.workspace.workspace
             )
         )
+        with self.lock:
+            if self._thread is None:
+                self._thread = threading.Thread(
+                    target=Operator.__resync_worker,
+                    args=(self,),
+                    name="Background synchronizer for {}/{}".format(
+                        self.workspace.namespace,
+                        self.workspace.workspace
+                    ),
+                    daemon=True
+                )
+                self._thread.start()
 
+    def __resync_worker(self):
+        time.sleep(60)
+        while not self.live:
+            try:
+                with self.lock:
+                    print("Attempting to synchronize")
+                    self.go_live()
+                    self.live = False
+            except:
+                traceback.print_exc()
+            time.sleep(60)
+        with self.lock:
+            self._thread = None # Delete it's own reference
+
+    @synchronized
     def go_live(self):
         failures = []
         exceptions = []
@@ -137,6 +173,7 @@ class Operator(object):
         self.live = not len(self.pending)
         return self.live, exceptions
 
+    @synchronized
     def tentative_json(self, result, *expected_failures):
         self.last_result = result
         if result.status_code >= 400 and result.status_code not in expected_failures:
@@ -189,6 +226,7 @@ class Operator(object):
         self.fail()
 
     @property
+    @synchronized
     def firecloud_workspace(self):
         if self.live:
             with self.timeout('workspace'):
@@ -203,6 +241,7 @@ class Operator(object):
         self.fail()
 
     @property
+    @synchronized
     def configs(self):
         if self.live:
             with self.timeout('configs'):
@@ -218,6 +257,7 @@ class Operator(object):
             return self.cache['configs']
         self.fail()
 
+    @synchronized
     def get_config_detail(self, namespace, name):
         key = 'config:%s/%s' % (namespace, name)
         if self.live:
@@ -234,6 +274,7 @@ class Operator(object):
             return self.cache[key]
         self.fail()
 
+    @synchronized
     def _upload_config(self, config):
         configs = self.configs
         if (config['namespace']+'/'+config['name']) not in ['%s/%s'%(m['namespace'], m['name']) for m in configs]:
@@ -254,6 +295,7 @@ class Operator(object):
                 print(r.text)
         return False
 
+    @synchronized
     def add_config(self, config):
         key = 'config:%s/%s' % (config['namespace'], config['name'])
         if 'configs' in self.cache and self.cache['configs'] is not None:
@@ -291,6 +333,7 @@ class Operator(object):
         ))
         return False
 
+    @synchronized
     def get_wdl(self, namespace, name, version=None):
         key = 'wdl:%s/%s' % (namespace, name)
         if version is not None:
@@ -314,6 +357,7 @@ class Operator(object):
             return self.cache[key]
         self.fail()
 
+    @synchronized
     def upload_wdl(self, namespace, name, synopsis, path, delete=True):
         key = 'wdl:%s/%s' % (namespace, name)
         with open(path) as r:
@@ -342,6 +386,7 @@ class Operator(object):
                 partial(self.call_with_timeout, DEFAULT_LONG_TIMEOUT, dog.get_wdl, namespace, name)
             ))
 
+    @synchronized
     def validate_config(self, namespace, name):
         cfgkey = 'config:%s/%s' % (namespace, name)
         key = 'valid:'+cfgkey
@@ -369,6 +414,7 @@ class Operator(object):
         }
 
     @property
+    @synchronized
     def entity_types(self):
         if self.live:
             with self.timeout('entity_types'):
@@ -385,6 +431,7 @@ class Operator(object):
         self.fail()
 
     @property
+    @synchronized
     def _entities_live_update(self):
         state = self.live
         self.live = True
@@ -393,7 +440,7 @@ class Operator(object):
         finally:
             self.live = state
 
-
+    @synchronized
     def get_entities_df(self, etype):
         getter = partial(
             getattr(
@@ -416,6 +463,7 @@ class Operator(object):
             return self.cache[key]
         self.fail()
 
+    @synchronized
     def update_entities_df(self, etype, updates, index=True):
         getter = partial(
             self.call_with_timeout,
@@ -487,6 +535,7 @@ class Operator(object):
             except APIException:
                 pass
 
+    @synchronized
     def update_entities_df_attributes(self, etype, updates):
         getter = partial(
             self.call_with_timeout,
@@ -557,6 +606,7 @@ class Operator(object):
             except APIException:
                 pass
 
+    @synchronized
     def update_entity_set(self, etype, set_id, member_ids):
         key = 'entities:%s_set' % etype
         updates = pd.DataFrame(index=[set_id], data={etype+'s':[[*member_ids]]})
@@ -631,6 +681,7 @@ class Operator(object):
             return ws['workspace']['attributes']
         self.fail()
 
+    @synchronized
     def update_attributes(self, attrs):
         if 'workspace' in self.cache:
             if self.cache['workspace'] is None:
@@ -664,6 +715,7 @@ class Operator(object):
             except AssertionError:
                 pass
 
+    @synchronized
     def evaluate_expression(self, etype, entity, expression):
         if self.live:
             with self.timeout(DEFAULT_LONG_TIMEOUT):
