@@ -699,8 +699,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         for attempt in range(3):
             retries = []
 
-            for n,(k, status) in enumerate(update_participant(participant_ids), 1):
-                print('\r    Updating {}s for participant {}/{}'.format(etype, n, len(participant_ids)), end='')
+            for k, status in status_bar.iter(update_participant(participant_ids), len(participant_ids), prepend="Updating {}s for participants ".format(etype)):
                 if status >= 400:
                     retries.append(k)
 
@@ -1247,7 +1246,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 return False
         raise TypeError("complete_execution not available for firecloud submissions")
 
-    def mop(self, force=False):
+    def mop(self, *predicates, force=False, dry_run=False):
         """
         Cleans files from the workspace bucket which are not referenced by the data model.
         This is a VERY long operation.
@@ -1264,8 +1263,21 @@ class WorkspaceManager(dog.WorkspaceManager):
         since the WorkspaceManager was updated, and which may be waiting to be uploaded
         to FireCloud
 
+        * You may specify arbitrary predicates which will be used to keep files.
+        Each predicate is passed the blob object for a file being considered.
+        If ANY user provided predicates return True, the file is KEPT.
+        User predicates are run after the 3 built-in conditions. Files are only
+        deleted if the file fails all 3 built-in conditions and all user provided
+        conditions.
         * If force is True, this will not prompt for confirmation and will run in
         the background, returning a callback object
+        * If dry_run is True, this will query and return the list of files that
+        would be deleted, without actually deleting them
+
+        If run in the foreground, this will return a tuple of the total size of
+        freed in the bucket (as a string) and the list of files removed.
+        If run in the background, this will return a callback object which returns
+        the above tuple when the background function has finished
         """
         if not force:
             print("Warning: This operation may take a very long time to complete")
@@ -1279,13 +1291,13 @@ class WorkspaceManager(dog.WorkspaceManager):
                 print("Aborted")
                 return
             force = len(choice) == 0 or not choice.lower().startswith('y')
-        cb = self._mop(not force)
+        cb = self._mop(predicates, not force, dry_run)
         if not force:
             return cb()
         return cb
 
     @parallelize2()
-    def _mop(self, fg=False):
+    def _mop(self, predicates, fg=False, dry=False):
         """
         Background worker to mop a bucket
         """
@@ -1293,7 +1305,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         cells = {}
         callbacks = []
 
-        @parallelize2()
+        @parallelize2(10)
         def _get_cell_data(table, path):
             try:
                 blob = safe_getblob(path)
@@ -1306,6 +1318,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             if isinstance(path, str) and path.startswith('gs://'):
                 callbacks.append(_get_cell_data(table, path))
             return path
+
+        @lru_cache(256)
+        def __get_adapter(sid):
+            return self.get_adapter(sid)
 
         print("Loading Attributes", file=dest)
         for value in self.attributes.values():
@@ -1328,9 +1344,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             times = [cell[1] for cell in cells.values() if cell[0] == etype]
             if len(times):
                 modtime[etype] = sorted(times)[-1]
-        n = 0
+        deleted = []
         size = 0
         time.sleep(10)
+        bucket_id = 'gs://'+self.bucket_id+'/'
         for page in storage.Client().bucket(self.bucket_id).list_blobs().pages:
             for blob in page:
                 if blob.exists():
@@ -1342,7 +1359,6 @@ class WorkspaceManager(dog.WorkspaceManager):
                             blob.name.endswith('submission.json') or
                             blob.name.endswith('results/workflows.json') or
                             blob.name.endswith('signature') or
-                            blob.name.endswith('abort-key') or
                             blob.name.endswith('.log') or
                             blob.name.endswith('stdout') or
                             blob.name.endswith('stderr') or
@@ -1354,14 +1370,22 @@ class WorkspaceManager(dog.WorkspaceManager):
                         blob.reload()
                         result = lapdog_submission_member_pattern.match(blob.name)
                         if result:
-                            adapter = self.get_adapter(result.group(1))
-                            if blob.time_created is None or ('workflowEntityType' in adapter.data and adapter.data['workflowEntityType'] in modtime and modtime[adapter.data['workflowEntityType']] < blob.time_created):
+                            adapter = __get_adapter(result.group(1))
+                            if adapter.live or blob.time_created is None or ('workflowEntityType' in adapter.data and adapter.data['workflowEntityType'] in modtime and modtime[adapter.data['workflowEntityType']] < blob.time_created):
                                 # This blob is newer than the most recent cell in the entity table for the submission this blob belongs to
                                 continue
-                        print(blob.name, file=dest)
-                        blob.delete()
+                        keep = False
+                        for condition in predicates:
+                            if conditon(blob):
+                                keep = True
+                                break
+                        if keep:
+                            continue
+                        print(bucket_id+blob.name, file=dest)
+                        if not dry:
+                            blob.delete()
                         size += blob.size
-                        n += 1
+                        deleted.append(bucket_id+blob.name)
                     except:
                         traceback.print_exc()
-        return n, byteSize(size)
+        return deleted, byteSize(size)

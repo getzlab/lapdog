@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.5 (Beta)
+
+Other changes:
+* Improved performance of `lapdog.WorkspaceManager.mop()`
+* Added a status bar for `lapdog.WorkspaceManager.update_participant_entities()`
+
 ## 0.13.4 (Beta)
 
 New Features:
