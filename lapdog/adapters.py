@@ -20,6 +20,7 @@ import threading
 from hashlib import md5
 import warnings
 from agutil import ActiveTimeout, TimeoutExceeded, context_lock
+import pandas as pd
 
 # Label filter format: labels.(label name)=(label value)
 
@@ -51,6 +52,13 @@ def parse_time(timestamp):
         except ValueError as e:
             err = e
     raise err
+
+def build_input_key(template):
+    data = ''
+    for k in sorted(template):
+        if template[k] is not None:
+            data += str(template[k])
+    return md5(data.encode()).hexdigest()
 
 # individual VMs can be tracked viua a combination of labels and workflow meta
 # Workflows are reported by the cromwell_driver output and then VMs can be tracked
@@ -717,6 +725,23 @@ class SubmissionAdapter(object):
             self.identifier = self.data['identifier']
             self.operation = self.data['operation'] if 'operation' in self.data else 'NULL'
 
+    @property
+    def input_mapping(self):
+        return {
+            build_input_key(row.to_dict()):row.to_dict()
+            for i, row in self.config.iterrows()
+        }
+
+    @property
+    @cached(60)
+    def config(self):
+        config = cache_fetch('submission-config', self.bucket, self.submission)
+        if config is None:
+            config = safe_getblob(self.path+'/config.tsv').download_as_string().decode()
+            cache_write(config, 'submission-config', self.bucket, self.submission)
+        return pd.read_csv(StringIO(config), sep='\t')
+
+
     def abort(self):
         """
         Abort a running workflow.
@@ -900,6 +925,13 @@ class WorkflowAdapter(object):
         self.path = None
         self.parent_path = parent_path
         self.failure = None
+
+    @property
+    def inputs(self):
+        return self.parent.input_mapping[
+            {v:k for k,v in self.parent.workflow_mapping.items()}[self.long_id]
+        ]
+
 
     @property
     def status(self):

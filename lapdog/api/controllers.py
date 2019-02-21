@@ -641,6 +641,11 @@ def get_workflow(namespace, name, id, workflow_id):
         wf = adapter.workflows[workflow_id[:8]]
         entity_map = {w['workflowOutputKey']:w['workflowEntity'] for w in adapter.raw_workflows}
         reverse_map = {v:entity_map[k] for k,v in adapter.workflow_mapping.items()}
+        workflow_inputs = None
+        try:
+            workflow_inputs = wf.inputs
+        except:
+            traceback.print_exc()
         return {
             'id': wf.long_id,
             'short_id': wf.id,
@@ -668,7 +673,8 @@ def get_workflow(namespace, name, id, workflow_id):
                 reverse_map[workflow_id]
                 if workflow_id in reverse_map
                 else None
-            )
+            ),
+            'inputs': workflow_inputs
         }, 200
     else:
         return {
@@ -681,7 +687,8 @@ def get_workflow(namespace, name, id, workflow_id):
             'gs_path': None,
             'status': 'Pending',
             'failure': None,
-            'entity': None
+            'entity': None,
+            'inputs': None
         }, 200
 
 # @cached(30)

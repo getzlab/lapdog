@@ -103,6 +103,13 @@ def _json_type(bucket_id, submission_id, dtype, ext):
         bucket_id, submission_id, dtype, ext
     )
 
+@cache_type('submission-config')
+@path_eval
+def _config_type(bucket_id, submission_id, dtype, ext):
+    return 'config-tsv.%s.%s.%s%s' % (
+        bucket_id, submission_id, dtype, ext
+    )
+
 def cache_path(key):
     if key in CACHES:
         return CACHES[key]

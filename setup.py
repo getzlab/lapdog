@@ -44,11 +44,12 @@ setup(
         'crayons==0.1.2',
         'connexion==1.5.3',
         'oauth2client',
-        'requests>=2.18.0',
-        'googleapis-common-protos>=1.5.0',
-        'google-auth>=1.4.0',
+        'requests>=2.21.0',
+        'googleapis-common-protos>=1.5.3',
+        'google-auth>=1.4.2',
         'google-cloud-kms==0.2.1',
-        'cryptography>=2.1.0'
+        'cryptography>=2.3.0',
+        'pyOpenSSL'
     ],
     classifiers = [
         "Programming Language :: Python :: 3",

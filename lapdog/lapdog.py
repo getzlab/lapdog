@@ -16,10 +16,10 @@ import subprocess
 from hashlib import md5
 import base64
 import yaml
-from glob import glob
+from glob import glob, iglob
 from io import StringIO
 from . import adapters
-from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader, safe_getblob
+from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader, safe_getblob, build_input_key
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture, set_timeout
 from .cloud.utils import getblob, proxy_group_for_user
@@ -83,13 +83,6 @@ def check_api(result):
         raise APIException("The Firecloud API has returned status %d : %s" % (result.status_code, result.text))
     return result
 
-def build_input_key(template):
-    data = ''
-    for k in sorted(template):
-        if template[k] is not None:
-            data += str(template[k])
-    return md5(data.encode()).hexdigest()
-
 @lru_cache(1)
 def _gsutil_available():
     return subprocess.run('which gsutil', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
@@ -149,6 +142,27 @@ def purge_cache():
     Lapdog will run slowly after calling this function until the cache is rebuilt
     """
     shutil.rmtree(cache_init())
+
+def prune_cache():
+    """
+    Cleans the Lapdog Offline Disk Cache.
+    This will remove cached files which have not been used in at least 30 days.
+    The removed cache data will need to be reloaded next time it is requested by Lapdog.
+    Use if the disk cache has become too large.
+    This should not have a large impact on Lapdog runtime, as the pruned files are not commonly used.
+    Returns the size of data cleaned
+    """
+    deleted = 0
+    t0 = time.time()
+    for filepath in iglob(os.path.join(cache_init(), '*', '*', '*')):
+        if (t0 - os.stat(filepath).st_atime) > 2628001:
+            try:
+                size = os.path.getsize(filepath)
+                os.remove(filepath)
+                deleted += size
+            except:
+                pass
+    return byteSize(deleted)
 
 
 def alias(func):
@@ -934,6 +948,11 @@ class WorkspaceManager(dog.WorkspaceManager):
             else:
                 print("The following inputs are invalid on this configuation: %s" % repr(list(invalid_inputs)), file=sys.stderr)
 
+        if not self.gateway.exists:
+            raise ValueError("The Gateway for this Namespace has not been initialized")
+        if not self.gateway.registered:
+            raise ValueError("You are not registered with this Gateway. Please run WorkspaceManager.gateway.register()")
+
         submission_id = md5((gethostname() + str(time.time()) + config['namespace'] + config['name'] + entity).encode()).hexdigest()
 
         submission_data_path = os.path.join(
@@ -1350,8 +1369,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         bucket_id = 'gs://'+self.bucket_id+'/'
         for page in storage.Client().bucket(self.bucket_id).list_blobs().pages:
             for blob in page:
-                if blob.exists():
-                    try:
+                try:
+                    if blob.exists():
                         if blob.name in cells:
                             # Referenced by data model
                             continue
@@ -1386,6 +1405,6 @@ class WorkspaceManager(dog.WorkspaceManager):
                             blob.delete()
                         size += blob.size
                         deleted.append(bucket_id+blob.name)
-                    except:
-                        traceback.print_exc()
+                except:
+                    traceback.print_exc()
         return deleted, byteSize(size)

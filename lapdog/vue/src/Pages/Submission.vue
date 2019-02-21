@@ -76,6 +76,40 @@ Other: error_outline
                 {{active_workflow.status}}
               </div>
             </div>
+            <div style="overflow-x: scroll;">
+              <ul class="collapsible" v-if="active_workflow.inputs">
+                <li>
+                  <div class="collapsible-header">
+                    <i class="material-icons">input</i>
+                    Workflow Inputs
+                  </div>
+                  <div class="collapsible-body">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Input</th>
+                          <th>Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="attribute in lodash.keys(active_workflow.inputs)">
+                          <td v-bind:title="attribute">{{attribute}}</td>
+                          <td v-bind:title="active_workflow.inputs[attribute]">
+                            <a v-if="lodash.startsWith(lodash.toString(active_workflow.inputs[attribute]), 'gs://')"
+                              v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+active_workflow.inputs[attribute].substr(5)"
+                              target="_blank" rel="noopener"
+                            >
+                              {{active_workflow.inputs[attribute]}}
+                            </a>
+                            <span v-else>{{active_workflow.inputs[attribute]}}</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </li>
+              </ul>
+            </div>
             <div class="row">
               <!-- <div class="col s12">
                 Calls
