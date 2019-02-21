@@ -46,6 +46,15 @@ __REDACTIONS=[
     'signature-beta'
 ]
 
+__ENDPOINTS__ = {
+    'submit': 'create_submission',
+    'abort': 'abort_submission',
+    'signature': 'check_abort',
+    'register': 'register',
+    'query': 'query_account',
+    'quotas': 'quotas'
+}
+
 def __project_admin_apply_patch(namespace):
     """
     PATCH SPEC: Beta -> V1
@@ -79,6 +88,17 @@ def __project_admin_apply_patch(namespace):
     else:
         project = blob.download_as_string().decode()
     print("Lapdog Project:", project)
+    blob = getblob(
+        'gs://{bucket}/resolution'.format(
+            bucket = ld_meta_bucket_for_project(project)
+        )
+    )
+    if not blob.exists():
+        print("Patching resolution")
+        blob.upload_from_string(namespace.encode())
+        acl = blob.acl
+        acl.all_authenticated().grant_read()
+        acl.save()
     functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(project)
     roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
         project=project
@@ -153,18 +173,36 @@ def __project_admin_apply_patch(namespace):
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Invalid response from Google API")
     print(crayons.black("Phase 3/4:", bold=True), "Deploy Cloud API Updates")
-    print("Patching submit from v1 -> v2")
-    _deploy('create_submission', 'submit', functions_account, project)
-    print("Patching abort from beta -> v1")
-    _deploy('abort_submission', 'abort', functions_account, project)
-    print("Patching signature from beta -> v1")
-    _deploy('check_abort', 'signature', functions_account, project)
-    print("Patching register from v1 -> v2")
-    _deploy('register', 'register', functions_account, project)
-    print("Patching query from beta -> v1")
-    _deploy('query_account', 'query', functions_account, project)
-    print("Patching quotas from beta -> v1")
-    _deploy('quotas', 'quotas', functions_account, project)
+    response = user_session.get(
+        'https://cloudfunctions.googleapis.com/v1/projects/{project}/locations/us-central1/functions'.format(
+            project=project
+        )
+    )
+    if response.status_code != 200:
+        print("Unable to query existing functions. Redeploying all functions")
+        deployments = {
+            k:v
+            for f,v in __API_VERSION__.items()
+            if f != 'resolve'
+        }
+    else:
+        functions = {
+            function['name'].split('/')[-1]
+            for function in response.json()['functions']
+            if function['entryPoint'] != 'redacted'
+        }
+        deployments = {
+            f:v
+            for f,v in __API_VERSION__.items()
+            if (f+'-'+v) not in functions and f != 'resolve'
+        }
+    if len(deployments):
+        print("Deploying", len(deployments), "functions")
+        for func, ver in deployments.items():
+            print("Deploying endpoint", func, ver)
+            _deploy(__ENDPOINTS__[func], func, functions_account, project)
+    else:
+        print(crayons.green("No updates"))
     print(crayons.black("Phase 4/4:", bold=True), "Redact Insecure Cloud API Endpoints")
     response = user_session.get(
         'https://cloudfunctions.googleapis.com/v1/projects/{project}/locations/us-central1/functions'.format(

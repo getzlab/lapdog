@@ -1,8 +1,28 @@
 # Changelog
 
+## 0.13.6 (Beta)
+
+New Features:
+* Added `lapdog.prune_cache()` to reduce offline cache size by removing entries which have not been accessed in the last 30 days
+* Added input configuration data to adapters:
+    * `lapdog.adapters.SubmissionAdapter.config` : (Property) A pandas DataFrame representing the submission's input configuration
+    * `lapdog.adapters.SubmissionAdapter.input_mapping`: (Property) A dictionary mapping workflow output keys to workflow inputs from the submission configuration
+        * This attribute may raise a `FileNotFoundError`. If so, the submission configuration could not be found
+    * `lapdog.adapters.WorkflowAdapter.inputs`: (Property) A dictionary of input names to values representing the inputs to this workflow
+        * This attribute may raise a `KeyError`. If so, try updating the parent `lapdog.adapters.SubmissionAdapter`
+* Lapdog UI now displays workflow inputs when viewing a workflow, if the input mapping was available
+
+Other Changes:
+* Updated Python and NodeJS dependencies for Python3.7
+* Improved submission caching so that submissions started locally can be immediately cached
+* Prevented anonymous access of resolution objects
+
+### Patch Contents
+* Added an additional component to resolution patching. This fixes an issue preventing buckets from authenticating in old namespaces
+
 ## 0.13.5 (Beta)
 
-Other changes:
+Other Changes:
 * Improved performance of `lapdog.WorkspaceManager.mop()`
 * Added a status bar for `lapdog.WorkspaceManager.update_participant_entities()`
 

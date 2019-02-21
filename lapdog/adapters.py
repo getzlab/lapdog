@@ -388,48 +388,54 @@ class SubmissionAdapter(object):
         Downloads and parses the submission.json file for this submission.
         submission.json files are cached if the submission is done.
         """
-        # print("Constructing adapter")
-        self.path = os.path.join(
-            'gs://'+bucket,
-            'lapdog-executions',
-            submission
-        )
-        gs_path = os.path.join(
-            self.path,
-            'submission.json'
-        )
-        self.data = cache_fetch('submission-json', bucket, submission)
-        _do_cache_write = False
-        if self.data is None:
-            try:
-                self.data = safe_getblob(gs_path).download_as_string().decode()
-                self._cached = False
-                _do_cache_write = True
-            except FileNotFoundError as e:
-                raise NoSuchSubmission from e
-        else:
-            self._cached = True
-        self.data = json.loads(self.data)
-        if 'operation' not in self.data:
-            print("<GATEWAY DEV> Delete submission", submission)
-        self.workspace = self.data['workspace']
-        self.namespace = self.data['namespace']
-        self.identifier = self.data['identifier']
-        self.operation = self.data['operation'] if 'operation' in self.data else 'NULL'
-        self.raw_workflows = self.data['workflows']
-        self.gateway = Gateway(self.namespace) if gateway is None else gateway
-        self.workflow_mapping = {}
-        self.thread = None
-        self.bucket = bucket
-        self.submission = submission
-        self.workflows = {}
-        self._internal_reader = None
-        self.bucket = bucket
-        self._update_mask = set()
-        self.update_lock = threading.Lock()
-        if _do_cache_write and not self.live:
-            cache_write(json.dumps(self.data), 'submission-json', bucket, submission)
-            self._cached = True
+        try:
+            # print("Constructing adapter")
+            self.path = os.path.join(
+                'gs://'+bucket,
+                'lapdog-executions',
+                submission
+            )
+            gs_path = os.path.join(
+                self.path,
+                'submission.json'
+            )
+            self.data = cache_fetch('submission-json', bucket, submission)
+            _do_cache_write = False
+            if self.data is None:
+                try:
+                    self.data = safe_getblob(gs_path).download_as_string().decode()
+                    self._cached = False
+                    _do_cache_write = True
+                except FileNotFoundError as e:
+                    raise NoSuchSubmission from e
+            else:
+                self._cached = True
+                self._remove_pointer()
+            self.data = json.loads(self.data)
+            if 'operation' not in self.data:
+                print("<GATEWAY DEV> Delete submission", submission)
+            self.workspace = self.data['workspace']
+            self.namespace = self.data['namespace']
+            self.identifier = self.data['identifier']
+            self.operation = self.data['operation'] if 'operation' in self.data else 'NULL'
+            self.raw_workflows = self.data['workflows']
+            self.gateway = Gateway(self.namespace) if gateway is None else gateway
+            self.workflow_mapping = {}
+            self.thread = None
+            self.bucket = bucket
+            self.submission = submission
+            self.workflows = {}
+            self._internal_reader = None
+            self.bucket = bucket
+            self._update_mask = set()
+            self.update_lock = threading.Lock()
+            if _do_cache_write and not self.live:
+                cache_write(json.dumps(self.data), 'submission-json', bucket, submission)
+                self._cached = True
+                self._remove_pointer()
+        except:
+            self._remove_pointer()
+            raise
 
     def _init_workflow(self, short, key=None, long_id=None):
         if short not in self.workflows:
@@ -582,6 +588,14 @@ class SubmissionAdapter(object):
                 'est_cost': 0,
                 'cromwell_overhead': 0
             }
+
+    def _remove_pointer(self):
+        if cache_fetch('submission-pointer', self.bucket, self.submission) is not None:
+            try:
+                os.remove(cache_path('submission-pointer')(self.bucket, self.submission))
+            except:
+                print("Could not remove expired pointer entry")
+                traceback.print_exc()
 
     @cached(90)
     def update(self, timeout=-1):

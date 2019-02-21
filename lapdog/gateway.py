@@ -501,7 +501,7 @@ class Gateway(object):
         )
         blob.upload_from_string(project_id.encode())
         acl = blob.acl
-        acl.all().grant_read()
+        acl.all_authenticated().grant_read()
         acl.save()
 
         print("Deploying Cloud Functions")
@@ -597,6 +597,16 @@ class Gateway(object):
                         **{'operation': operation}
                     }
                 ).encode()
+            )
+            cache_write(
+                "{}/{}/{}".format(
+                    self.namespace,
+                    workspace,
+                    submission_id
+                ),
+                'submission-pointer',
+                bucket,
+                submission_id
             )
             return True, operation
         return False, response

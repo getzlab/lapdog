@@ -270,9 +270,19 @@ def firecloud_status():
     return obj
 
 @parallelize(5)
-def _load_submissions(path):
-    with open(path, 'r') as r:
-        return path[-37:-5], json.load(r)
+def _load_submissions(wm, path):
+    if '-json' in path:
+        with open(path, 'r') as r:
+            return path[-37:-5], json.load(r)
+    elif '-ptr' in path:
+        try:
+            with open(path, 'r') as r:
+                ns,ws,sid = r.read().split('/')
+            if ns == wm.namespace and ws == wm.workspace:
+                return sid, wm.get_adapter(sid).data
+        except:
+            traceback.print_exc()
+    return path, None
 
 class WorkspaceManager(dog.WorkspaceManager):
     """
@@ -308,19 +318,23 @@ class WorkspaceManager(dog.WorkspaceManager):
             warnings.warn("No namespace resolution found")
         self._submission_cache = {}
         try:
-            target_prefix = 'submission-json.{}'.format(self.bucket_id)
+            bucket_id = self.bucket_id
+            target_prefix = 'submission-json.{}'.format(bucket_id)
+            pointer_prefix = 'submission-ptr.{}'.format(bucket_id)
             self._submission_cache = {
                 k:v
                 for k,v in _load_submissions(
-                    os.path.join(path, f)
+                    repeat(self),
+                    (os.path.join(path, f)
                     for path, _, files in os.walk(cache_init())
                     for f in files
-                    if f.startswith(target_prefix)
+                    if f.startswith(target_prefix) or f.startswith(pointer_prefix))
                 )
+                if v is not None
             }
 
         except:
-            print("Warning: Unable to prepopulate workspace submission cache")
+            print("Warning: Unable to prepopulate workspace submission cache. Workspace may not exist", file=sys.stderr)
             self.sync()
 
     def __repr__(self):
