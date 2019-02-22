@@ -1131,6 +1131,10 @@ class WorkspaceManager(dog.WorkspaceManager):
                 raise ValueError("Gateway failed to launch submission")
 
             print("Created submission", global_id)
+            self._submission_cache[submission_id] = {
+                **submission_data,
+                **{'operation': result}
+            }
 
             if resync:
                 print("Bringing the workspace back online")

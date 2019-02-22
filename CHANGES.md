@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* Fixed an issue with new submissions not caching properly
+
+Other Changes:
+* Reduced the number of gcloud queries when pactching a namespace
+
 ## 0.13.6 (Beta)
 
 New Features:

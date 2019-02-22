@@ -204,11 +204,6 @@ def __project_admin_apply_patch(namespace):
     else:
         print(crayons.green("No updates"))
     print(crayons.black("Phase 4/4:", bold=True), "Redact Insecure Cloud API Endpoints")
-    response = user_session.get(
-        'https://cloudfunctions.googleapis.com/v1/projects/{project}/locations/us-central1/functions'.format(
-            project=project
-        )
-    )
     if response.status_code != 200:
         print("Unable to query existing functions. Applying all redactions")
         redactions = __REDACTIONS

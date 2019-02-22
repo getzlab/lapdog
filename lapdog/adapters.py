@@ -388,6 +388,8 @@ class SubmissionAdapter(object):
         Downloads and parses the submission.json file for this submission.
         submission.json files are cached if the submission is done.
         """
+        self.bucket = bucket
+        self.submission = submission
         try:
             # print("Constructing adapter")
             self.path = os.path.join(
@@ -422,8 +424,6 @@ class SubmissionAdapter(object):
             self.gateway = Gateway(self.namespace) if gateway is None else gateway
             self.workflow_mapping = {}
             self.thread = None
-            self.bucket = bucket
-            self.submission = submission
             self.workflows = {}
             self._internal_reader = None
             self.bucket = bucket
