@@ -926,7 +926,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         return True, config, entity, etype, workflow_entities, template, invalid_inputs
 
-    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=1000):
+    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=1000, private=False):
         """
         Validates config parameters then executes a job directly on GCP
         Config name may either be a full slug (config namespace/config name)
@@ -942,6 +942,10 @@ class WorkspaceManager(dog.WorkspaceManager):
         This has no bearing on the number of running workflows, but does slow the rate at which
         workflows get started and that failures are detected
         Otherwise: The cromwell VM will submit/query the given number of workflows at a time
+
+        If private is False (default): The Cromwell VM and workers will have full access to the internet,
+        but will count towards IP-address quotas. If set to True, Cromwell and workers can only access
+        Google services, but do not count towards IP-address quotas
         """
 
         preflight_result = self.execute_preflight(
@@ -1029,7 +1033,8 @@ class WorkspaceManager(dog.WorkspaceManager):
             'runtime': {
                 'memory': memory,
                 'batch_limit': (int(250*memory/3) if batch_limit is None else batch_limit),
-                'query_limit': 100 if query_limit is None else query_limit
+                'query_limit': 100 if query_limit is None else query_limit,
+                'private_access': private
             }
         }
 
@@ -1123,7 +1128,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                     'write_to_cache': True,
                     'read_from_cache': True,
                 },
-                memory=submission_data['runtime']['memory']
+                memory=submission_data['runtime']['memory'],
+                private=private
             )
 
             if not status:

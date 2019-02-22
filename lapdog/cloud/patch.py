@@ -11,7 +11,7 @@ This function may:
 from .utils import ld_project_for_namespace, __API_VERSION__, generate_user_session, ld_meta_bucket_for_project, getblob
 from . import _deploy, RESOLUTION_URL
 from .. import __version__
-from ..gateway import get_access_token, resolve_project_for_namespace
+from ..gateway import get_access_token, resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS
 from ..lapdog import WorkspaceManager
 import sys
 import crayons
@@ -19,6 +19,7 @@ import traceback
 from firecloud import api as fc
 from hashlib import sha512
 import requests
+from uuid import uuid4
 
 # Notes for creating future patches
 # 1) Import a Gateway and use get_endpoint to check for any redacted endpoints
@@ -62,7 +63,7 @@ def __project_admin_apply_patch(namespace):
     print("Patch version", __version__)
     print("Patching Namespace:", namespace)
     user_session = generate_user_session(get_access_token())
-    print(crayons.black("Phase 1/4:", bold=True), "Checking resolution status")
+    print(crayons.black("Phase 1/5:", bold=True), "Checking resolution status")
     blob = getblob(
         'gs://lapdog-resolutions/' + sha512(namespace.encode()).hexdigest()
     )
@@ -103,76 +104,111 @@ def __project_admin_apply_patch(namespace):
     roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
         project=project
     )
-    print(crayons.black("Phase 2/4:", bold=True), "Update IAM Policies")
-    print("PATCH", roles_url+"/Core_account")
-    response = user_session.patch(
-        roles_url+"/Core_account",
-        headers={
-            'Content-Type': 'application/json'
-        },
-        json={
-            "title": "Core_account",
-            "includedPermissions": [
-                "cloudkms.cryptoKeyVersions.useToSign",
-                "cloudkms.cryptoKeyVersions.viewPublicKey",
-                "cloudkms.cryptoKeyVersions.get",
-                "cloudkms.cryptoKeyVersions.list",
-                "resourcemanager.projects.get",
-                "genomics.datasets.create",
-                "genomics.datasets.delete",
-                "genomics.datasets.get",
-                "genomics.datasets.list",
-                "genomics.datasets.update",
-                "genomics.operations.cancel",
-                "genomics.operations.create",
-                "genomics.operations.get",
-                "genomics.operations.list"
-            ],
-            "stage": "GA"
-        }
+    print(crayons.black("Phase 2/5:", bold=True), "Update IAM Policies")
+    response = user_session.get(
+        roles_url+"/Core_account"
     )
-    if response.status_code != 200:
+    if response.status_code == 404:
+        response = user_session.post(
+            roles_url,
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                "roleId": "Core_account",
+                "role": {
+                    "title": "Core_account",
+                    "includedPermissions": CORE_PERMISSIONS,
+                    "stage": "GA"
+                }
+            }
+        )
+    elif response.status_code == 200:
+        perms = {*response.json()['includedPermissions']}
+        if len(perms ^ set(CORE_PERMISSIONS)):
+            print("PATCH", roles_url+"/Core_account")
+            response = user_session.patch(
+                roles_url+"/Core_account",
+                headers={
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    "title": "Core_account",
+                    "includedPermissions": CORE_PERMISSIONS,
+                    "stage": "GA"
+                }
+            )
+            if response.status_code != 200:
+                print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+                raise ValueError("Invalid response from Google API")
+    else:
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Invalid response from Google API")
-    print("PATCH", roles_url+"/Functions_account")
-    response = user_session.patch(
-        roles_url+"/Functions_account",
-        headers={
-            'Content-Type': 'application/json'
-        },
-        json={
-            "title": "Functions_account",
-            "includedPermissions": [
-                "cloudkms.cryptoKeyVersions.viewPublicKey",
-                "cloudkms.cryptoKeyVersions.get",
-                "cloudkms.cryptoKeyVersions.list",
-                "iam.serviceAccountKeys.create",
-                "iam.serviceAccountKeys.delete",
-                "iam.serviceAccountKeys.get",
-                "iam.serviceAccountKeys.list",
-                "iam.serviceAccounts.create",
-                "iam.serviceAccounts.delete",
-                "iam.serviceAccounts.get",
-                "iam.serviceAccounts.getIamPolicy",
-                "iam.serviceAccounts.list",
-                "iam.serviceAccounts.setIamPolicy",
-                "iam.serviceAccounts.update",
-                "resourcemanager.projects.get",
-                "genomics.operations.create",
-                "genomics.operations.get",
-                "genomics.operations.list",
-                "resourcemanager.projects.getIamPolicy",
-                "resourcemanager.projects.setIamPolicy",
-                "compute.projects.get",
-                "compute.regions.get"
-            ],
-            "stage": "GA"
-        }
+    response = user_session.get(
+        roles_url+"/Functions_account"
     )
-    if response.status_code != 200:
+    if response.status_code == 404:
+        response = user_session.post(
+            roles_url,
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                "roleId": "Functions_account",
+                "role": {
+                    "title": "Functions_account",
+                    "includedPermissions": FUNCTIONS_PERMISSIONS,
+                    "stage": "GA"
+                }
+            }
+        )
+    elif response.status_code == 200:
+        perms = {*response.json()['includedPermissions']}
+        if len(perms ^ set(FUNCTIONS_PERMISSIONS)):
+            print("PATCH", roles_url+"/Functions_account")
+            response = user_session.patch(
+                roles_url+"/Functions_account",
+                headers={
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    "title": "Functions_account",
+                    "includedPermissions": FUNCTIONS_PERMISSIONS,
+                    "stage": "GA"
+                }
+            )
+            if response.status_code != 200:
+                print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+                raise ValueError("Invalid response from Google API")
+    else:
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Invalid response from Google API")
-    print(crayons.black("Phase 3/4:", bold=True), "Deploy Cloud API Updates")
+    print(crayons.black("Phase 3/5:", bold=True), "Checking VPC Configuration")
+    subnet_url = "https://www.googleapis.com/compute/v1/projects/{project}/regions/us-central1/subnetworks/default".format(
+        project=project
+    )
+    response = user_session.get(subnet_url)
+    if response.status_code != 200:
+        raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+    subnet = response.json()
+    if not ('privateIpGoogleAccess' in subnet and subnet['privateIpGoogleAccess']):
+        print("Patching VPC Configuration")
+        print("POST", subnet_url+'/setPrivateIpGoogleAccess')
+        response = user_session.post(
+            subnet_url+'/setPrivateIpGoogleAccess',
+            headers={
+                'Content-Type': "application/json"
+            },
+            params={
+                'requestId': str(uuid4())
+            },
+            json={
+                "privateIpGoogleAccess": True
+            }
+        )
+        if response.status_code >= 400:
+            raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+    print(crayons.black("Phase 4/5:", bold=True), "Deploy Cloud API Updates")
     response = user_session.get(
         'https://cloudfunctions.googleapis.com/v1/projects/{project}/locations/us-central1/functions'.format(
             project=project
@@ -203,7 +239,7 @@ def __project_admin_apply_patch(namespace):
             _deploy(__ENDPOINTS__[func], func, functions_account, project)
     else:
         print(crayons.green("No updates"))
-    print(crayons.black("Phase 4/4:", bold=True), "Redact Insecure Cloud API Endpoints")
+    print(crayons.black("Phase 5/5:", bold=True), "Redact Insecure Cloud API Endpoints")
     if response.status_code != 200:
         print("Unable to query existing functions. Applying all redactions")
         redactions = __REDACTIONS

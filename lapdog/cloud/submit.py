@@ -186,6 +186,7 @@ def create_submission(request):
                                 bucket=data['bucket'],
                                 submission_id=data['submission_id']
                             ),
+                            'PRIVATE_ACCESS': 'true' if ('no_ip' in data and data['no_ip']) else 'false'
                         }
                     }
                 ],
@@ -208,7 +209,11 @@ def create_submission(request):
                                 "https://www.googleapis.com/auth/genomics"
                             ]
                         },
-                        'bootDiskSizeGb': 20
+                        'bootDiskSizeGb': 20,
+                        'network': {
+                            'name': 'default',
+                            'usePrivateAddress': ('no_ip' in data and data['no_ip'])
+                        }
                     }
                 },
             }

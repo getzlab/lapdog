@@ -938,6 +938,13 @@ paths:
           type: integer
           description: Number of jobs to query at once (optional)
           default: 100
+        -
+          in: query
+          name: private
+          required: false
+          type: boolean
+          description: Restrict workflow internet access to google only (Optional)
+          default: false
       summary: Checks if the provided inputs are valid to execute
       operationId: lapdog.api.controllers.execute
       responses:

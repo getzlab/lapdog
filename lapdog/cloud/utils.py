@@ -18,7 +18,7 @@ from functools import lru_cache
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
-    'submit': 'v2',
+    'submit': 'v3a',
     'abort': 'v1',
     'register': 'v2',
     'signature': 'v1',
@@ -36,7 +36,7 @@ __API_VERSION__ = {
 # This function will deploy new cloud functions and run any other arbitrary code
 # Such as updating iam policy bindings or role permissions
 
-__CROMWELL_TAG__ = 'v0.12.0'
+__CROMWELL_TAG__ = 'vpc-dev'
 
 @lru_cache()
 def _getblob_client(credentials):

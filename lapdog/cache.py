@@ -112,7 +112,7 @@ def _config_type(bucket_id, submission_id, dtype, ext):
 
 @cache_type('submission-pointer')
 @path_eval
-def _pointer_type(bucket_id, submission_id, dtype, ext):
+def _pointer_type(bucket_id, submission_id, dtype='data', ext=''):
     return 'submission-ptr.%s.%s.%s%s' % (
         bucket_id, submission_id, dtype, ext
     )

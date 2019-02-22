@@ -79,10 +79,25 @@
           <div v-if="show_advanced">
             <div class="row">
               <div class="col s3">
+                Internet Access
+              </div>
+              <div class="col s9">
+                <div class="switch">
+                  <label>
+                    Unrestricted
+                    <input checked type="checkbox" v-model="private_access">
+                    <span class="lever"></span>
+                    Google Services Only (Recommended)
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col s3">
                 Cromwell Memory
               </div>
               <div class="col s7">
-                <input v-model="cromwell_mem" class="blue-text" type="range" name="cromwell-mem" min="3" max="624" step="1" value="3">
+                <input v-model="cromwell_mem" class="blue-text" type="range" name="cromwell-mem" min="3" max="624" step="1" value="3" v-on:change="batch_size = cromwell_mem == 3 ? 250 : Math.floor(0.75 * cromwell_mem * 250/3)">
               </div>
               <div class="col s2">
                 {{cromwell_mem}} GB ${{
@@ -481,7 +496,8 @@
         cached_submissions: true,
         gateway: null,
         pending_ops: 0,
-        submission_error: null
+        submission_error: null,
+        private_access: true
         // entities: null
       }
     },
@@ -608,6 +624,7 @@
         query += "&memory="+encodeURIComponent(_.toString(this.cromwell_mem));
         query += "&batch="+encodeURIComponent(_.toString(this.batch_size));
         query += "&query="+encodeURIComponent(_.toString(this.query_size));
+        query += "&private="+encodeURIComponent(_.toString(this.private_access));
 
         if (this.preflight_entities > 500) window.materialize.toast({
           html: "Preparing job. This may take a while...",
@@ -693,6 +710,7 @@
         this.gateway = null;
         this.pending_ops = 0;
         this.submission_error = null;
+        this.private_access = true;
         window.$('.tooltipped').tooltip();
         try {
           window.$('.execute-button').tooltip('destroy');
@@ -920,6 +938,10 @@
 
   .switch label input[type=checkbox]:checked+.lever:after {
     background-color: #1e88e5;
+  }
+
+  input[type='range']::-webkit-slider-thumb {
+      background-color: #1e88e5;
   }
 
 </style>

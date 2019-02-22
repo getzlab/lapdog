@@ -27,6 +27,50 @@ from agutil import cmd as run_cmd
 from dalmatian import WorkspaceManager
 import traceback
 import re
+from uuid import uuid4
+
+CORE_PERMISSIONS = [
+    "cloudkms.cryptoKeyVersions.useToSign",
+    "cloudkms.cryptoKeyVersions.viewPublicKey",
+    "cloudkms.cryptoKeyVersions.get",
+    "cloudkms.cryptoKeyVersions.list",
+    "resourcemanager.projects.get",
+    "genomics.datasets.create",
+    "genomics.datasets.delete",
+    "genomics.datasets.get",
+    "genomics.datasets.list",
+    "genomics.datasets.update",
+    "genomics.operations.cancel",
+    "genomics.operations.create",
+    "genomics.operations.get",
+    "genomics.operations.list"
+]
+
+FUNCTIONS_PERMISSIONS = [
+    "cloudkms.cryptoKeyVersions.viewPublicKey",
+    "cloudkms.cryptoKeyVersions.get",
+    "cloudkms.cryptoKeyVersions.list",
+    "iam.serviceAccountKeys.create",
+    "iam.serviceAccountKeys.delete",
+    "iam.serviceAccountKeys.get",
+    "iam.serviceAccountKeys.list",
+    "iam.serviceAccounts.create",
+    "iam.serviceAccounts.delete",
+    "iam.serviceAccounts.get",
+    "iam.serviceAccounts.getIamPolicy",
+    "iam.serviceAccounts.list",
+    "iam.serviceAccounts.setIamPolicy",
+    "iam.serviceAccounts.update",
+    "resourcemanager.projects.get",
+    "genomics.operations.create",
+    "genomics.operations.get",
+    "genomics.operations.list",
+    "resourcemanager.projects.getIamPolicy",
+    "resourcemanager.projects.setIamPolicy",
+    "compute.projects.get",
+    "compute.regions.get",
+    "compute.subnetworks.setPrivateIpGoogleAccess"
+]
 
 creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
 
@@ -342,22 +386,7 @@ class Gateway(object):
                 "roleId": "Core_account",
                 "role": {
                     "title": "Core_account",
-                    "includedPermissions": [
-                        "cloudkms.cryptoKeyVersions.useToSign",
-                        "cloudkms.cryptoKeyVersions.viewPublicKey",
-                        "cloudkms.cryptoKeyVersions.get",
-                        "cloudkms.cryptoKeyVersions.list",
-                        "resourcemanager.projects.get",
-                        "genomics.datasets.create",
-                        "genomics.datasets.delete",
-                        "genomics.datasets.get",
-                        "genomics.datasets.list",
-                        "genomics.datasets.update",
-                        "genomics.operations.cancel",
-                        "genomics.operations.create",
-                        "genomics.operations.get",
-                        "genomics.operations.list"
-                    ],
+                    "includedPermissions": CORE_PERMISSIONS,
                     "stage": "GA"
                 }
             }
@@ -375,30 +404,7 @@ class Gateway(object):
                 "roleId": "Functions_account",
                 "role": {
                     "title": "Functions_account",
-                    "includedPermissions": [
-                        "cloudkms.cryptoKeyVersions.viewPublicKey",
-                        "cloudkms.cryptoKeyVersions.get",
-                        "cloudkms.cryptoKeyVersions.list",
-                        "iam.serviceAccountKeys.create",
-                        "iam.serviceAccountKeys.delete",
-                        "iam.serviceAccountKeys.get",
-                        "iam.serviceAccountKeys.list",
-                        "iam.serviceAccounts.create",
-                        "iam.serviceAccounts.delete",
-                        "iam.serviceAccounts.get",
-                        "iam.serviceAccounts.getIamPolicy",
-                        "iam.serviceAccounts.list",
-                        "iam.serviceAccounts.setIamPolicy",
-                        "iam.serviceAccounts.update",
-                        "resourcemanager.projects.get",
-                        "genomics.operations.create",
-                        "genomics.operations.get",
-                        "genomics.operations.list",
-                        "resourcemanager.projects.getIamPolicy",
-                        "resourcemanager.projects.setIamPolicy",
-                        "compute.projects.get",
-                        "compute.regions.get"
-                    ],
+                    "includedPermissions": FUNCTIONS_PERMISSIONS,
                     "stage": "GA"
                 }
             }
@@ -503,7 +509,25 @@ class Gateway(object):
         acl = blob.acl
         acl.all_authenticated().grant_read()
         acl.save()
-
+        print("Configuring VPC Subnet")
+        subnet_url = "https://www.googleapis.com/compute/v1/projects/{project}/regions/us-central1/subnetworks/default/setPrivateIpGoogleAccess".format(
+            project=custom_lapdog_project
+        )
+        print("POST", subnet_url)
+        response = user_session.post(
+            subnet_url,
+            headers={
+                'Content-Type': "application/json"
+            },
+            params={
+                'requestId': str(uuid4())
+            },
+            json={
+                "privateIpGoogleAccess": True
+            }
+        )
+        if response.status_code >= 400:
+            raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
         print("Deploying Cloud Functions")
         from .cloud import _deploy
         _deploy('create_submission', 'submit', functions_account, custom_lapdog_project)
@@ -552,7 +576,7 @@ class Gateway(object):
             raise ValueError("Gateway failed to register user")
         return response.text # your account email
 
-    def create_submission(self, workspace, bucket, submission_id, workflow_options=None, memory=3):
+    def create_submission(self, workspace, bucket, submission_id, workflow_options=None, memory=3, private=False):
         """
         Sends a request through the lapdog execution API to start a new submission.
         Takes the local submission ID.
@@ -579,7 +603,8 @@ class Gateway(object):
                 'namespace': self.namespace,
                 'workspace': workspace,
                 'workflow_options': workflow_options if workflow_options is not None else {},
-                'memory': memory*1024
+                'memory': memory*1024,
+                'no_ip': private
             }
         )
         if response.status_code == 200:

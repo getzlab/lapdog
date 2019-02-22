@@ -500,7 +500,7 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
         }, 200
 
 @controller
-def execute(namespace, name, config, entity, expression="", etype="", memory=3, batch=250, query=100):
+def execute(namespace, name, config, entity, expression="", etype="", memory=3, batch=250, query=100, private=False):
     ws = get_workspace_object(namespace, name)
     try:
         global_id, local_id, operation_id = ws.execute(
@@ -511,7 +511,8 @@ def execute(namespace, name, config, entity, expression="", etype="", memory=3, 
             force=True,
             memory=memory,
             batch_limit=batch,
-            query_limit=query
+            query_limit=query,
+            private=private
         )
         return {
             'failed': False,
