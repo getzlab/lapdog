@@ -37,6 +37,7 @@ __REDACTIONS=[
     'submit-alpha',
     'submit-beta',
     'submit-v1',
+    'submit-v3a',
     'abort-alpha',
     'abort-beta',
     'query-alpha',
@@ -88,7 +89,8 @@ def __project_admin_apply_patch(namespace):
         project = ld_project_for_namespace(namespace)
     else:
         project = blob.download_as_string().decode()
-    print("Lapdog Project:", project)
+        print(crayons.green("Remote Resolution intact"))
+    print("Lapdog Project:", crayons.black(project, bold=True))
     blob = getblob(
         'gs://{bucket}/resolution'.format(
             bucket = ld_meta_bucket_for_project(project)
@@ -100,6 +102,8 @@ def __project_admin_apply_patch(namespace):
         acl = blob.acl
         acl.all_authenticated().grant_read()
         acl.save()
+    else:
+        print(crayons.green("Local Resolution intact"))
     functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(project)
     roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
         project=project
@@ -109,6 +113,8 @@ def __project_admin_apply_patch(namespace):
         roles_url+"/Core_account"
     )
     if response.status_code == 404:
+        print("Redeploying Policy")
+        print("POST", roles_url)
         response = user_session.post(
             roles_url,
             headers={
@@ -126,6 +132,7 @@ def __project_admin_apply_patch(namespace):
     elif response.status_code == 200:
         perms = {*response.json()['includedPermissions']}
         if len(perms ^ set(CORE_PERMISSIONS)):
+            print("Updating Policy")
             print("PATCH", roles_url+"/Core_account")
             response = user_session.patch(
                 roles_url+"/Core_account",
@@ -141,6 +148,8 @@ def __project_admin_apply_patch(namespace):
             if response.status_code != 200:
                 print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
                 raise ValueError("Invalid response from Google API")
+        else:
+            print(crayons.green("Policy OK"))
     else:
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Invalid response from Google API")
@@ -148,6 +157,8 @@ def __project_admin_apply_patch(namespace):
         roles_url+"/Functions_account"
     )
     if response.status_code == 404:
+        print("Redeploying Policy")
+        print("POST", roles_url)
         response = user_session.post(
             roles_url,
             headers={
@@ -165,6 +176,7 @@ def __project_admin_apply_patch(namespace):
     elif response.status_code == 200:
         perms = {*response.json()['includedPermissions']}
         if len(perms ^ set(FUNCTIONS_PERMISSIONS)):
+            print("Updating Policy")
             print("PATCH", roles_url+"/Functions_account")
             response = user_session.patch(
                 roles_url+"/Functions_account",
@@ -180,6 +192,8 @@ def __project_admin_apply_patch(namespace):
             if response.status_code != 200:
                 print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
                 raise ValueError("Invalid response from Google API")
+        else:
+            print(crayons.green("Policy OK"))
     else:
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Invalid response from Google API")
@@ -208,6 +222,8 @@ def __project_admin_apply_patch(namespace):
         )
         if response.status_code >= 400:
             raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+    else:
+        print(crayons.green("VPC Configuration Valid"))
     print(crayons.black("Phase 4/5:", bold=True), "Deploy Cloud API Updates")
     response = user_session.get(
         'https://cloudfunctions.googleapis.com/v1/projects/{project}/locations/us-central1/functions'.format(

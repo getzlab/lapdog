@@ -18,6 +18,7 @@ import os
 import subprocess
 import time
 import json
+from simplejson import JSONDecodeError
 import csv
 
 import requests
@@ -27,6 +28,7 @@ import sys
 import atexit
 import traceback
 import itertools
+import shlex
 
 def clump(seq, length):
     getter = iter(seq)
@@ -180,7 +182,8 @@ class CromwellDriver(object):
                                 response = session.post(
                                     'http://localhost:8000/api/workflows/v1/batch',
                                     files=data
-                                ).json()
+                                )
+                                response = response.json()
                                 logging.info("Submitted jobs. Begin polling")
                                 break
                             except requests.exceptions.ConnectionError as e:
@@ -189,6 +192,11 @@ class CromwellDriver(object):
                                 logging.info("Failed to connect to Cromwell (attempt %d): %s",
                                     attempt + 1, e)
                                 time.sleep(30)
+                            except JSONDecodeError:
+                                traceback.print_exc()
+                                self.check_cromwell()
+                                logging.error("Unexpected response from Cromwell: (%d) : %s" % (response.status_code, response.text))
+                                raise
 
                         if not response:
                             self.check_cromwell()

@@ -1,12 +1,22 @@
 # Changelog
 
-## Unreleased Changes
+## 0.14.0 (Beta)
+
+New Features:
+
+* User can now configure if submissions run with or without an externally routable IP address.
+    * Without an IP (default for UI only) the instance cannot reach the internet (except for Google)
 
 Bug Fixes:
 * Fixed an issue with new submissions not caching properly
 
 Other Changes:
-* Reduced the number of gcloud queries when pactching a namespace
+* Reduced the number of gcloud queries when patching a namespace
+
+### Patch Contents
+* Updated `submit` to v3 to reflect the private IP change
+* Updated cromwell tag to `v0.14.0`
+* Update VPC configuration to meet requirements for running jobs without externally routable IP address
 
 ## 0.13.6 (Beta)
 
