@@ -310,12 +310,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             timezone
         )
         self.operator = Operator(self)
-        try:
-            self.gateway = Gateway(self.namespace)
-        except NameError:
-            self.gateway = None
-            traceback.print_exc()
-            warnings.warn("No namespace resolution found")
+        self.gateway = Gateway(self.namespace)
         self._submission_cache = {}
         try:
             bucket_id = self.bucket_id

@@ -57,4 +57,5 @@ setup(
         "Topic :: Scientific/Engineering :: Bio-Informatics",
         "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
     ],
+    license="MIT"
 )

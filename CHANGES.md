@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.1 (Beta)
+
+Bug Fixes:
+* Fixed the cost estimate in the UI displaying the wrong cost for the default VM size
+
+Other Changes:
+* `lapdog.WorkspaceManager.gateway` is no longer set to `None` if the namespace has no resolution.
+    * The attribute will be a full `lapdog.Gateway` which behaves as expected
+
 ## 0.14.0 (Beta)
 
 New Features:

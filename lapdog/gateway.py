@@ -202,7 +202,11 @@ class Gateway(object):
     """
     def __init__(self, namespace):
         self.namespace = namespace
-        self.project = resolve_project_for_namespace(namespace)
+        try:
+            self.project = resolve_project_for_namespace(namespace)
+        except:
+            self.project = None
+            traceback.print_exc()
         if not self.exists:
             warnings.warn("Gateway does not exist")
         elif not self.registered:
@@ -668,6 +672,8 @@ class Gateway(object):
         2) Checks that the endpoint exists by submitting an OPTIONS request
         3) Returns the full endpoint url
         """
+        if self.project is None:
+            raise ValueError("No resolution for namespace %s. Project may not be initialized. Please contact the namespace admin" % self.namespace)
         if _version is None:
             if endpoint not in __API_VERSION__:
                 raise KeyError("Endpoint not defined: "+endpoint)

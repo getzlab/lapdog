@@ -102,7 +102,7 @@
               <div class="col s2">
                 {{cromwell_mem}} GB ${{
                   //Math.floor((cromwell_mem == 3 ? 0.05 : 0.063222 + (0.004237 * lodash.min([13, cromwell_mem]) ) + (cromwell_mem > 13 ? 0.009550 * (cromwell_mem - 13): 0))*100)/100
-                  cromwell_mem == 3 ? 0.5 : Math.floor((
+                  cromwell_mem == 3 ? 0.05 : Math.floor((
                     (Math.ceil(cromwell_mem/13) * 0.066348) + //core cost
                     (0.004446 * cromwell_mem) //mem cost
                   )*100)/100

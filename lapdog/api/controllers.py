@@ -175,11 +175,6 @@ def workspace(namespace, name):
 @controller
 def get_namespace_registered(namespace, name):
     ws = get_workspace_object(namespace, name)
-    if ws.gateway is None:
-        return {
-            'exists': False,
-            'registered': False
-        }
     exists = ws.gateway.exists
     return {
         'exists': exists,
