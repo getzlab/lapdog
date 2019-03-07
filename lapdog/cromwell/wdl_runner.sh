@@ -31,7 +31,10 @@ fi
 
 # Update jes template
 sed s/SERVICEACCOUNT/$(gcloud config get-value account)/ < /cromwell/jes_template.tmp.conf | \
- sed s/PRIVATE_ACCESS/${PRIVATE_ACCESS}/ > /cromwell/jes_template.conf
+ sed s/PRIVATE_ACCESS/${PRIVATE_ACCESS}/ | \
+ sed s/SUBMISSION_ZONES/"${SUBMISSION_ZONES}"/ > /cromwell/jes_template.conf
+
+cat /cromwell/jes_template.conf
 
 # Execute the wdl_runner
 python -u wdl_runner.py \

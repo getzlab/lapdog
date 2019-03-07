@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.15.0 (Beta)
+
+New Features:
+* Users can now choose a custom compute region when submitting jobs
+  * Administrators can change the list of allowed regions. [Read more](https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins#compute-regions)
+  * Added dropdown menu to UI to select the compute region for a job
+
+Other Changes:
+* Removed the `zones` argument to `lapdog.WorkspaceManager.execute` in favor of `regions` argument to set compute region for job
+
+### Patch Contents
+* Updated `submit` endpoint to v4 to support customizable compute regions
+
 ## 0.14.2 (Beta)
 
 New Features:

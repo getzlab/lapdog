@@ -198,32 +198,36 @@ def __project_admin_apply_patch(namespace):
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Invalid response from Google API")
     print(crayons.black("Phase 3/5:", bold=True), "Checking VPC Configuration")
-    subnet_url = "https://www.googleapis.com/compute/v1/projects/{project}/regions/us-central1/subnetworks/default".format(
-        project=project
-    )
-    response = user_session.get(subnet_url)
-    if response.status_code != 200:
-        raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
-    subnet = response.json()
-    if not ('privateIpGoogleAccess' in subnet and subnet['privateIpGoogleAccess']):
-        print("Patching VPC Configuration")
-        print("POST", subnet_url+'/setPrivateIpGoogleAccess')
-        response = user_session.post(
-            subnet_url+'/setPrivateIpGoogleAccess',
-            headers={
-                'Content-Type': "application/json"
-            },
-            params={
-                'requestId': str(uuid4())
-            },
-            json={
-                "privateIpGoogleAccess": True
-            }
+    blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
+    regions = blob.download_as_string().decode().split() if blob.exists() else ['us-central1']
+    for region in regions:
+        subnet_url = "https://www.googleapis.com/compute/v1/projects/{project}/regions/{region}/subnetworks/default".format(
+            project=project,
+            region=region
         )
-        if response.status_code >= 400:
+        response = user_session.get(subnet_url)
+        if response.status_code != 200:
             raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
-    else:
-        print(crayons.green("VPC Configuration Valid"))
+        subnet = response.json()
+        if not ('privateIpGoogleAccess' in subnet and subnet['privateIpGoogleAccess']):
+            print("Patching VPC Configuration in region", region)
+            print("POST", subnet_url+'/setPrivateIpGoogleAccess')
+            response = user_session.post(
+                subnet_url+'/setPrivateIpGoogleAccess',
+                headers={
+                    'Content-Type': "application/json"
+                },
+                params={
+                    'requestId': str(uuid4())
+                },
+                json={
+                    "privateIpGoogleAccess": True
+                }
+            )
+            if response.status_code >= 400:
+                raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+        else:
+            print(crayons.green("VPC Configuration Valid for region "+region))
     print(crayons.black("Phase 4/5:", bold=True), "Deploy Cloud API Updates")
     response = user_session.get(
         'https://cloudfunctions.googleapis.com/v1/projects/{project}/locations/us-central1/functions'.format(

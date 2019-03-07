@@ -920,7 +920,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         return True, config, entity, etype, workflow_entities, template, invalid_inputs
 
-    def execute(self, config_name, entity, expression=None, etype=None, zone='us-east1-b', force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=1000, private=False):
+    def execute(self, config_name, entity, expression=None, etype=None, force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=1000, private=False, region=None):
         """
         Validates config parameters then executes a job directly on GCP
         Config name may either be a full slug (config namespace/config name)
@@ -1005,6 +1005,12 @@ class WorkspaceManager(dog.WorkspaceManager):
         else:
             resync = False
 
+        compute_regions = self.gateway.compute_regions
+        if region is None:
+            region = compute_regions[0]
+        elif region not in compute_regions:
+            raise NameError("Compute region %s not enabled for this namespace" % region)
+
         submission_data = {
             'workspace':self.workspace,
             'namespace':self.namespace,
@@ -1028,7 +1034,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                 'memory': memory,
                 'batch_limit': (int(250*memory/3) if batch_limit is None else batch_limit),
                 'query_limit': 100 if query_limit is None else query_limit,
-                'private_access': private
+                'private_access': private,
+                'region': region
             }
         }
 
@@ -1116,14 +1123,12 @@ class WorkspaceManager(dog.WorkspaceManager):
                 self.bucket_id,
                 submission_id,
                 workflow_options={
-                    'default_runtime_attributes': {
-                        'zones': zone,
-                    },
                     'write_to_cache': True,
                     'read_from_cache': True,
                 },
                 memory=submission_data['runtime']['memory'],
-                private=private
+                private=private,
+                region=region
             )
 
             if not status:

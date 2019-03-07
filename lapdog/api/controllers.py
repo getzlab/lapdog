@@ -178,7 +178,8 @@ def get_namespace_registered(namespace, name):
     exists = ws.gateway.exists
     return {
         'exists': exists,
-        'registered': exists and ws.gateway.registered
+        'registered': exists and ws.gateway.registered,
+        'compute_regions': ws.gateway.compute_regions if ws.gateway.exists else []
     }
 
 @controller
@@ -495,7 +496,7 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
         }, 200
 
 @controller
-def execute(namespace, name, config, entity, expression="", etype="", memory=3, batch=250, query=100, private=False):
+def execute(namespace, name, config, entity, expression="", etype="", memory=3, batch=250, query=100, private=False, region=None):
     ws = get_workspace_object(namespace, name)
     try:
         global_id, local_id, operation_id = ws.execute(
@@ -507,7 +508,8 @@ def execute(namespace, name, config, entity, expression="", etype="", memory=3, 
             memory=memory,
             batch_limit=batch,
             query_limit=query,
-            private=private
+            private=private,
+            region=region
         )
         return {
             'failed': False,

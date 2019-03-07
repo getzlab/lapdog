@@ -68,7 +68,7 @@
               a time
             </div>
           </div>
-          <div class="row expandable" v-on:click.prevent="show_advanced = !show_advanced">
+          <div class="row expandable" v-on:click.prevent="toggle_advanced">
             <div class="col s12">
               <i class="material-icons">
                 {{show_advanced ? "keyboard_arrow_down" : "keyboard_arrow_right"}}
@@ -90,6 +90,20 @@
                     Google Services Only (Recommended)
                   </label>
                 </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col s3">
+                Compute Region
+              </div>
+              <div class="col s9 input-field" style="margin-top: 0px !important;">
+                <select class="browser-default" id="region-select" v-model="compute_region">
+                  <option v-bind:value="gateway.compute_regions[0]" selected disabled>{{gateway.compute_regions[0]}} (default)</option>
+                  <option v-for="region in lodash.slice(gateway.compute_regions, 1)" v-bind:value="region" :key="region">
+                    {{region}}
+                  </option>
+                </select>
+                <!-- <label for="region-select">Compute Region</label> -->
               </div>
             </div>
             <div class="row">
@@ -497,7 +511,8 @@
         gateway: null,
         pending_ops: 0,
         submission_error: null,
-        private_access: true
+        private_access: true,
+        compute_region: null
         // entities: null
       }
     },
@@ -551,6 +566,13 @@
       // set_active(etype) {
       //   this.$set(this, '_active_entity', etype);
       // },
+      toggle_advanced() {
+        this.show_advanced = !this.show_advanced;
+        setTimeout(
+          () => {window.$('select').formSelect()},
+          100
+        );
+      },
       turn_page(page)
       {
         if (page < 0 || page >= this.max_pages.length) return;
@@ -628,6 +650,7 @@
         query += "&batch="+encodeURIComponent(_.toString(this.batch_size));
         query += "&query="+encodeURIComponent(_.toString(this.query_size));
         query += "&private="+encodeURIComponent(_.toString(this.private_access));
+        query += "&region="+encodeURIComponent(this.compute_region);
 
         if (this.preflight_entities > 500) window.materialize.toast({
           html: "Preparing job. This may take a while...",
@@ -811,7 +834,10 @@
             if (response.data.exists && !response.data.registered) {
               this.set_acl(this.namespace, this.workspace);
             }
-            else this.gateway = response.data;
+            else {
+              this.gateway = response.data;
+              this.compute_region = this.gateway.compute_regions[0];
+            }
             if (!this.gateway.exists) {
               window.materialize.toast({html: "Lapdog is not initialized for this namespace. Please contact an administrator", displayLength: 20000});
               window.$('.tooltipped').tooltip();
@@ -843,6 +869,7 @@
              console.log("RESPONSE");
              console.log(response.data);
              this.gateway = response.data
+             this.compute_region = this.gateway.compute_regions[0];
            })
            .catch(error => {
              console.error("FAIL")

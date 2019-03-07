@@ -18,7 +18,7 @@ from functools import lru_cache
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
-    'submit': 'v3',
+    'submit': 'v4',
     'abort': 'v1',
     'register': 'v2',
     'signature': 'v1',
@@ -36,7 +36,28 @@ __API_VERSION__ = {
 # This function will deploy new cloud functions and run any other arbitrary code
 # Such as updating iam policy bindings or role permissions
 
-__CROMWELL_TAG__ = 'v0.14.0'
+__CROMWELL_TAG__ = 'v0.15.0'
+
+GCP_ZONES = {
+    'asia-east1':	('a', 'b', 'c'),
+    'asia-east2':	('a', 'b', 'c'),
+    'asia-northeast1':	('a', 'b', 'c'),
+    'asia-south1':	('a', 'b', 'c'),
+    'asia-southeast1':	('a', 'b', 'c'),
+    'australia-southeast1':	('a', 'b', 'c'),
+    'europe-north1':	('a', 'b', 'c'),
+    'europe-west1':	('b', 'c', 'd'),
+    'europe-west2':	('a', 'b', 'c'),
+    'europe-west3':	('a', 'b', 'c'),
+    'europe-west4':	('a', 'b', 'c'),
+    'northamerica-northeast1':	('a', 'b', 'c'),
+    'southamerica-east1':	('a', 'b', 'c'),
+    'us-central1':	('a', 'b', 'c', 'f'),
+    'us-east1':	('b', 'c', 'd'),
+    'us-east4':	('a', 'b', 'c'),
+    'us-west1':	('a', 'b', 'c'),
+    'us-west2':	('a', 'b', 'c'),
+}
 
 @lru_cache()
 def _getblob_client(credentials):

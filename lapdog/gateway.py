@@ -17,7 +17,7 @@ import crayons
 import os
 import json
 from .cloud import RESOLUTION_URL
-from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob, proxy_group_for_user, generate_user_session, update_iam_policy, __API_VERSION__
+from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob, proxy_group_for_user, generate_user_session, update_iam_policy, __API_VERSION__, GCP_ZONES
 from .operations import capture
 from urllib.parse import quote
 import sys
@@ -580,7 +580,7 @@ class Gateway(object):
             raise ValueError("Gateway failed to register user")
         return response.text # your account email
 
-    def create_submission(self, workspace, bucket, submission_id, workflow_options=None, memory=3, private=False):
+    def create_submission(self, workspace, bucket, submission_id, workflow_options=None, memory=3, private=False, region=None):
         """
         Sends a request through the lapdog execution API to start a new submission.
         Takes the local submission ID.
@@ -608,7 +608,8 @@ class Gateway(object):
                 'workspace': workspace,
                 'workflow_options': workflow_options if workflow_options is not None else {},
                 'memory': memory*1024,
-                'no_ip': private
+                'no_ip': private,
+                'compute_region': region
             }
         )
         if response.status_code == 200:
@@ -726,3 +727,59 @@ class Gateway(object):
             return response.json()
         print("Quota error (%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Unable to fetch quotas: status %d" % response.status_code)
+
+    @property
+    def compute_regions(self):
+        if self.project is None:
+            raise ValueError("Unable to check compute regions without a working Engine")
+        blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(self.project)))
+        if blob.exists():
+            # Project owner has defined a list of allowed regions
+            return blob.download_as_string().decode().split()
+        # Otherwise, just use default region
+        return ['us-central1']
+
+    @compute_regions.setter
+    def compute_regions(self, regions):
+        """
+        Sets the list of allowed compute regions for this gateway.
+        You must have Editor permissions to the project for this namespace
+        """
+        if self.project is None:
+            raise ValueError("Unable to set compute regions without a working Engine")
+        if len(regions) <= 0:
+            raise ValueError("Must provide at least one compute region")
+        user_session = generate_user_session(get_access_token())
+        print("Checking VPC configuration for new regions")
+        for region in regions:
+            if region not in GCP_ZONES:
+                raise NameError(region + " is not a valid GCP Region")
+            subnet_url = "https://www.googleapis.com/compute/v1/projects/{project}/regions/{region}/subnetworks/default".format(
+                project=self.project,
+                region=region
+            )
+            response = user_session.get(subnet_url)
+            if response.status_code != 200:
+                raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+            subnet = response.json()
+            if not ('privateIpGoogleAccess' in subnet and subnet['privateIpGoogleAccess']):
+                print("Updating VPC Subnet configuration for", region)
+                response = user_session.post(
+                    subnet_url+'/setPrivateIpGoogleAccess',
+                    headers={
+                        'Content-Type': "application/json"
+                    },
+                    params={
+                        'requestId': str(uuid4())
+                    },
+                    json={
+                        "privateIpGoogleAccess": True
+                    }
+                )
+                if response.status_code >= 400:
+                    raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+        blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(self.project)))
+        blob.upload_from_string("\n".join(regions))
+        acl = blob.acl
+        acl.all_authenticated().grant_read()
+        acl.save()

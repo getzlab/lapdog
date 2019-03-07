@@ -1,12 +1,12 @@
 import os
 try:
     from . import utils
-    from .utils import __API_VERSION__, __CROMWELL_TAG__
+    from .utils import __API_VERSION__, __CROMWELL_TAG__, GCP_ZONES
 except ImportError:
     import sys
     sys.path.append(os.path.dirname(__file__))
     import utils
-    from utils import __API_VERSION__, __CROMWELL_TAG__
+    from utils import __API_VERSION__, __CROMWELL_TAG__, GCP_ZONES
 import math
 import json
 import traceback
@@ -133,6 +133,24 @@ def create_submission(request):
 
         # 4) Submit pipelines request
 
+        region = 'us-central1'
+        if 'compute_region' in data:
+            blob = utils.getblob('gs://{bucket}/regions'.format(bucket=utils.ld_meta_bucket_for_project()))
+            if blob.exists():
+                allowed_regions = blob.download_as_string().decode().split()
+            else:
+                allowed_regions = ['us-central1']
+            if data['compute_region'] in allowed_regions:
+                region = data['compute_region']
+            else:
+                return (
+                    {
+                        'error': "Invalid Region",
+                        'message': "Region not allowed. Enabled regions: " + repr(allowed_regions)
+                    },
+                    400
+                )
+
         if 'memory' in data and data['memory'] > 3072:
             # if data['memory'] > 13312:
             #     mtype = 'custom-2-%d-ext' % data['memory']
@@ -186,13 +204,17 @@ def create_submission(request):
                                 bucket=data['bucket'],
                                 submission_id=data['submission_id']
                             ),
-                            'PRIVATE_ACCESS': 'true' if ('no_ip' in data and data['no_ip']) else 'false'
+                            'PRIVATE_ACCESS': 'true' if ('no_ip' in data and data['no_ip']) else 'false',
+                            'SUBMISSION_ZONES': " ".join(
+                                '{}-{}'.format(region, zone)
+                                for zone in GCP_ZONES[region]
+                            )
                         }
                     }
                 ],
                 'resources': {
                     'projectId': os.environ.get("GCP_PROJECT"),
-                    'regions': ['us-central1'], # FIXME
+                    'regions': [region],
                     'virtualMachine': {
                         'machineType': mtype,
                         'preemptible': False,

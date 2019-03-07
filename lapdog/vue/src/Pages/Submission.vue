@@ -722,6 +722,7 @@ export default {
       if (this.rerun_set.expression) query += "&expression="+encodeURIComponent(this.rerun_set.expression);
       if (this.rerun_set.type) query += "&etype="+encodeURIComponent(this.rerun_set.type);
       if (this.submission.runtime && this.submission.runtime.private_access) query += "&private=true";
+      if (this.submission.runtime && this.submission.runtime.region) query += "&region=" + encodeURIComponent(this.submission.runtime.region);
       window.materialize.toast({
         html: "Preparing job...",
         displayLength: 10000,

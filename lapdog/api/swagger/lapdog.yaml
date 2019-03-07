@@ -945,6 +945,12 @@ paths:
           type: boolean
           description: Restrict workflow internet access to google only (Optional)
           default: false
+        -
+          in: query
+          name: region
+          required: false
+          type: string
+          description: Compute Region
       summary: Checks if the provided inputs are valid to execute
       operationId: lapdog.api.controllers.execute
       responses:
