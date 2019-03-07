@@ -571,7 +571,10 @@ export default {
         })
         .catch(error => {
           console.error("Failed");
-          console.error(error)
+          console.error(error);
+          window.materialize.toast({
+            html: "Unable to fetch Cromwell Log"
+          });
         })
     },
     get_operation(operation_id) {
@@ -589,6 +592,9 @@ export default {
         .catch(error => {
           console.error("FAILURE");
           console.error(error);
+          window.materialize.toast({
+            html: "Failed to get operation"
+          });
         })
     },
     get_log(log_type, call_index) {
@@ -632,6 +638,9 @@ export default {
         .catch(error => {
           console.error("Failed");
           console.error(error);
+          window.materialize.toast({
+            html: "Failed to get workflow status"
+          });
         })
     },
     abort_sub() {
@@ -744,7 +753,10 @@ export default {
         })
         .catch(response => {
           console.error("FAILED");
-          console.error(response)
+          console.error(response);
+          window.materialize.toast({
+            html: "Failed to rerun submission. Try manually rerunning "+this.rerun_set.name
+          })
         })
     }
   },

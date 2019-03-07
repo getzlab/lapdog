@@ -208,6 +208,11 @@ export default {
               console.log("Quotas");
               console.log(response.data);
               this.quotas = response.data
+            })
+            .catch(error => {
+              console.error("FAIL!");
+              console.error(error);
+              // Not toasting here. This would be super annoying
             });
         }
       }, 120000)
@@ -244,6 +249,9 @@ export default {
         .catch(response => {
           console.error("FAIL");
           console.error(response);
+          window.materialize.toast({
+            html: "Failed to create workspace"
+          })
         })
     },
 
@@ -310,6 +318,13 @@ export default {
             console.log("Quotas");
             console.log(response.data);
             this.quotas = response.data
+          })
+          .catch(error => {
+            console.error("FAIL!");
+            console.error(error);
+            window.materialize.toast({
+              html: "Unable to query quotas for namespace " + this.namespace
+            })
           });
       };
       this.namespace = namespace;

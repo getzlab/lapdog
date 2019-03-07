@@ -108,7 +108,9 @@
             }
           })
           .catch(error => {
-            console.error("FAIL!")
+            window.materialize.toast({
+              html: "Unable to query Firecloud status (it may be offline entirely)"
+            })
           })
       }
     }

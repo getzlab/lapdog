@@ -611,6 +611,9 @@
           .catch(response => {
             console.error("FAILED");
             console.error(response)
+            window.materialize.toast({
+              html: "Encountered unexpected error while pre-validating submission"
+            })
           })
       }, 500),
       submit_workflow() {
@@ -664,6 +667,9 @@
           .catch(response => {
             console.error("FAILED");
             console.error(response)
+            window.materialize.toast({
+              html: "Unhandled exception while starting submission"
+            })
           })
       },
       update_expr_mode() {
@@ -766,22 +772,34 @@
                         })
                         .catch(error => {
                           console.error("FAIL");
-                          console.error(error)
+                          console.error(error);
+                          window.materialize.toast({
+                            html: "Failed to query live submissions"
+                          })
                         })
                     })
                     .catch(error => {
                       console.error("FAIL");
-                      console.error(error)
+                      console.error(error);
+                      window.materialize.toast({
+                        html: "Failed to query cached submissions"
+                      })
                     })
               })
               .catch(error => {
                 console.error("FAIL");
-                console.error(error)
+                console.error(error);
+                window.materialize.toast({
+                  html: "Unable to check workspace cache state"
+                })
               })
           })
           .catch(error => {
             console.error("FAIL");
-            console.error(error)
+            console.error(error);
+            window.materialize.toast({
+              html: "Failed to get workspace information"
+            })
           })
       },
 
@@ -811,7 +829,10 @@
           })
           .catch(error => {
             console.error("FAIL")
-            console.error(error)
+            console.error(error);
+            window.materialize.toast({
+              html: "Unable to query gateway status"
+            })
           })
       },
       set_acl(namespace, workspace) {
@@ -826,6 +847,9 @@
            .catch(error => {
              console.error("FAIL")
              console.error(error);
+             window.materialize.toast({
+               html: "Failed to register with gateway"
+             })
            })
        },
 
@@ -870,7 +894,10 @@
           })
           .catch(error => {
             console.error("FAIL");
-            console.error(error)
+            console.error(error);
+            window.materialize.toast({
+              html: "Failed to query available configurations"
+            })
           })
       }
       // get_cache_state(etype) {
