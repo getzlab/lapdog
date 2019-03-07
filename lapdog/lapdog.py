@@ -39,6 +39,9 @@ lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
 lapdog_submission_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/submission.json')
 lapdog_submission_member_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/')
+provenance_submission_pattern = re.compile(r'gs://(.+)/lapdog-executions/([0-9a-f]{32})/workspace/(?:.+)/(.{36})/call-')
+provenance_workspace_pattern = re.compile(r'gs://(.+)/workspace/')
+provenance_data_pattern = re.compile(r'gs://(.+)/((?:sample|participant|pair)(?:_set)?s)/')
 
 timestamp_format = '%Y-%m-%dT%H:%M:%S.000%Z'
 
@@ -283,6 +286,33 @@ def _load_submissions(wm, path):
         except:
             traceback.print_exc()
     return path, None
+
+def provenance(data):
+    """
+    Gets the origin of the provided data.
+    Data must be a string, or a pandas series, dataframe, or arbitrary iterable of strings.
+    """
+    if isinstance(data, pd.DataFrame):
+        return data.applymap(provenance)
+    if isinstance(data, pd.Series):
+        return data.apply(provenance)
+    if isinstance(data, str):
+        result = provenance_submission_pattern.match(data)
+        if result:
+            return "Submission Workflow {}/{}".format(result.group(2), result.group(3))
+        result = provenance_workspace_pattern.match(data)
+        if result:
+            return "User uploaded Workspace Data"
+        result = provenance_data_pattern.match(data)
+        if result:
+            return "User uploaded {} Data".format(result.group(2))
+        return "Unknown"
+    try:
+        return [provenance(element) for element in iter(data)]
+    except TypeError as e:
+        raise TypeError("Unable to infer provenance operation from type " + repr(type(data))) from e
+    raise TypeError("Provenance accepts strings, or iterables and pandas objects of strings")
+
 
 class WorkspaceManager(dog.WorkspaceManager):
     """

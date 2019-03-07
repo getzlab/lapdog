@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+New Features:
+* Added `lapdog.provenance` to provide provenance of provided data
+
 ## 0.15.0 (Beta)
 
 New Features:
