@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.2 (Beta)
+
+New Features:
+* Added `lapdog doctor` command to diagnose issues with lapdog
+
+Other Changes:
+* Resubmitting a job through the UI now retains the same network configuration as the original job
+* Interrupting `lapdog.WorkspaceManager.mop()` with Ctrl+C will abort the process and return the results so far
+
 ## 0.14.1 (Beta)
 
 Bug Fixes:

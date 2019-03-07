@@ -712,8 +712,7 @@ export default {
       query += "&entity="+encodeURIComponent(this.rerun_set.name);
       if (this.rerun_set.expression) query += "&expression="+encodeURIComponent(this.rerun_set.expression);
       if (this.rerun_set.type) query += "&etype="+encodeURIComponent(this.rerun_set.type);
-      // if (this.cromwell_mem % 2 == 1) this.cromwell_mem += 1;
-      // query += "&memory=3&batch=250&query=100";
+      if (this.submission.runtime && this.submission.runtime.private_access) query += "&private=true";
       window.materialize.toast({
         html: "Preparing job...",
         displayLength: 10000,

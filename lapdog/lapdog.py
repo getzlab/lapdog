@@ -1424,6 +1424,9 @@ class WorkspaceManager(dog.WorkspaceManager):
                             blob.delete()
                         size += blob.size
                         deleted.append(bucket_id+blob.name)
+                except KeyboardInterrupt:
+                    print("Aborted")
+                    return deleted, byteSize(size)
                 except:
                     traceback.print_exc()
         return deleted, byteSize(size)

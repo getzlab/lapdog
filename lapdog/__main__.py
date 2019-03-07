@@ -2,6 +2,7 @@ import argparse
 import pandas as pd
 import lapdog
 from .api.__main__ import run as ui_main
+from . import __version__
 import os
 import tempfile
 import json
@@ -44,6 +45,12 @@ def main():
     parser = argparse.ArgumentParser(
         'lapdog',
         description="Command line interface to dalmatian and firecloud"
+    )
+    parser.add_argument(
+        '-v', '--version',
+        action='version',
+        version='lapdog '+__version__,
+        help="Display the current version and exit"
     )
     subparsers = parser.add_subparsers(metavar='<subcommand>')
 
@@ -318,6 +325,19 @@ def main():
     patch_parser.add_argument(
         'namespace',
         help="The firecloud namespace to patch"
+    )
+
+    doc_parser = subparsers.add_parser(
+        'doctor',
+        help='Diagnose issues with lapdog',
+        description='Diagnose issues with lapdog'
+    )
+    doc_parser.set_defaults(func=cmd_doc)
+    doc_parser.add_argument(
+        'namespaces',
+        nargs='*',
+        help="Diagnose issues with the Lapdog Engine for given Firecloud Namespace(s)",
+        default=[]
     )
     # service_account_parser.add_argument(
     #     'email',
@@ -616,6 +636,82 @@ def cmd_service_account(args):
 def cmd_patch(args):
     from .cloud.patch import __project_admin_apply_patch
     __project_admin_apply_patch(args.namespace)
+
+def cmd_doc(args):
+    from pip._internal.utils.misc import get_installed_distributions
+    from pkg_resources import get_distribution
+    from semver import match as ver_match
+    import traceback
+    import re
+
+    pattern = re.compile(r'((\d+\.){0,2}\d+.*?)')
+
+    def recursive_dependent_check(pkg, parent=None):
+        try:
+            dist = get_distribution(pkg.project_name)
+            for spec in pkg.specs:
+                try:
+                    if pattern.match(dist.version):
+                        ver = pattern.match(dist.version).group(1)
+                        while len(ver.split('.')) < 3:
+                            ver += '.0'
+                    if not ver_match(ver, ''.join(spec)):
+                        return False, (parent + '->' + dist.project_name if parent is not None else dist.project_name), dist.version +''.join(spec)
+                except ValueError:
+                    pass
+            for subpackage in dist.requires():
+                result = recursive_dependent_check(subpackage, (parent + '->' + dist.project_name if parent is not None else dist.project_name))
+                if result[0] is False:
+                    return result
+            return True, dist.version
+        except:
+            return (None,)
+
+    print("Diagnosing issues with local lapdog installation")
+    print('----------------------')
+    print(crayons.black("Lapdog Version:", bold=True), __version__)
+    print("Lapdog dependencies")
+    ld = get_distribution('lapdog')
+    for req in ld.requires():
+        result = recursive_dependent_check(req)
+        if result[0] is None:
+            print(req.project_name, crayons.cyan("Unable to validate dependency"))
+        elif result[0] is False:
+            print(req.project_name, crayons.red("Unmet dependency:"))
+            print("   ", result[1], result[2])
+        else:
+            print(req.project_name, crayons.green(result[1]))
+    if len(args.namespaces):
+        print('======================')
+        print("Diagnosing Namespaces")
+        from .cloud.utils import __API_VERSION__
+        for namespace in args.namespaces:
+            print('----------------------')
+            print(crayons.black(namespace, bold=True), end=' ')
+            with lapdog.capture() as (out, err):
+                gateway = lapdog.Gateway(namespace)
+                out.seek(0,0)
+                out.truncate()
+                err.seek(0,0)
+                err.truncate()
+            if not gateway.exists:
+                print(crayons.red("Engine not found"))
+                print("The Engine for this namespace may not be initialized")
+                print("Or it may not have been patched since version 0.13.2")
+                continue
+            fail = False
+            for endpoint, version in __API_VERSION__.items():
+                if endpoint != 'resolve':
+                    try:
+                        gateway.get_endpoint(endpoint)
+                    except:
+                        print(crayons.red("Endpoint {} (version {}) not found".format(endpoint, version)))
+                        print("The Engine for this namespace needs to be patched")
+                        fail = True
+                        break
+            if not fail:
+                print(crayons.green("Engine OK"))
+
 
 if __name__ == '__main__':
     main()
