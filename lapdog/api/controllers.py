@@ -824,7 +824,9 @@ def upload_config(namespace, name, config_filepath, method_filepath=None):
             'reason': "Unable to parse config json"
         }, 200
     try:
-        result = get_workspace_object(namespace, name).update_configuration(
+        ws = get_workspace_object(namespace, name)
+        live = ws.live
+        result = ws.update_configuration(
             config,
             method_filepath, # Either it's a file-object or None
             delete_old=False # UI never deletes old configurations
@@ -833,7 +835,9 @@ def upload_config(namespace, name, config_filepath, method_filepath=None):
         get_configs.cache_clear()
         return {
             'failed': not result,
-            'reason': 'Success' if result else 'API rejected update'
+            'reason': 'Success' if result else (
+                'API rejected update' if live else 'Workspace Offline. WDL cannot be synced to FireCloud'
+            )
         }
     except KeyError:
         traceback.print_exc()

@@ -433,7 +433,9 @@ export default {
         .then(response => {
           console.log(response.data);
           if (response.data.failed) {
-            window.materialize.toast('Unable to update method configuration: '+response.data.reason)
+            window.materialize.toast({
+              html: 'Unable to update method configuration: '+response.data.reason
+            })
           }
           this.reset_uploads();
           window.$('.modal').modal();

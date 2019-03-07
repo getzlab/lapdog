@@ -11,6 +11,7 @@ import traceback
 import pandas as pd
 import threading
 import time
+import warnings
 
 class APIException(ValueError):
     pass
@@ -101,6 +102,12 @@ class Operator(object):
         self.live = True # To halt background thread
 
     def __synchronized(func):
+        # Terrible syntax but it works
+        # During "compile time", while the class is being defined
+        # __synchronized is not yet bound to any instances, so func refers to the
+        # functions it wraps
+        # When a new instance is created, func gets bound to 'self' and this
+        # wrapper stops working right.
         def wrapper(self, *args, **kwargs):
             with self.lock:
                 return func(self, *args, **kwargs)
@@ -328,6 +335,11 @@ class Operator(object):
                 }
             ]
         self.cache[key] = config
+        if config['methodRepoMethod']['methodVersion'] == -1:
+            # Wdl was uploaded offline, so we really shouldn't upload this config
+            # Just put it in the cache and make the user upload later
+            warnings.warn("Not uploading configuration referencing offline WDL")
+            return False
         if self.live:
             result = self._upload_config(config)
             if result:
@@ -341,15 +353,38 @@ class Operator(object):
         return False
 
     @__synchronized
+    def get_method_version(self, namespace, name):
+        # Offline wdl versions are a little complicated
+        # Version -1 indicates a wdl which was uploaded offline, and should always be the priority
+        if 'wdl:%s/%s.-1' % (namespace, name) in self.cache:
+            return -1
+        if self.live:
+            # But if we're live, we can just query the latest version. Easy peasy
+            try:
+                with self.timeout(DEFAULT_LONG_TIMEOUT):
+                    return dog.get_method_version(namespace, name)
+            except:
+                self.go_offline()
+        # However, if we're offline, or that fails, just pick the highest version number available in the offline cache
+        versions = sorted(
+            [k for k in self.cache if k.startswith('wdl:%s/%s.' % (namespace, name))],
+            key=lambda x:int(x.split('.')[-1]),
+            reverse=True
+        )
+        if len(versions):
+            warnings.warn("This Workspace is offline. Version number may not reflect latest available version")
+            return versions[0]
+        # No offline versions. :(
+        self.fail()
+
+    @__synchronized
     def get_wdl(self, namespace, name, version=None):
-        key = 'wdl:%s/%s' % (namespace, name)
-        if version is not None:
-            key += '.%d'%version
+        if version is None:
+            version = self.get_method_version(namespace, name)
+        key = 'wdl:%s/%s.%d' % (namespace, name, version)
         if self.live:
             try:
                 with self.timeout(key):
-                    if version is None:
-                        version = dog.get_method_version(namespace, name)
                     response = api.get_repository_method(namespace, name, version)
                     if response.status_code == 404:
                         raise NameError("No such wdl {}/{}@{}".format(namespace, name, version))
@@ -366,19 +401,22 @@ class Operator(object):
 
     @__synchronized
     def upload_wdl(self, namespace, name, synopsis, path, delete=True):
-        key = 'wdl:%s/%s' % (namespace, name)
-        with open(path) as r:
-            self.cache[key] = r.read()
         if self.live:
             try:
-                dog.update_method(namespace, name, synopsis, path, delete_old=delete)
+                with self.timeout(DEFAULT_LONG_TIMEOUT):
+                    dog.update_method(namespace, name, synopsis, path, delete_old=delete)
+                version = self.get_method_version(namespace, name)
+                key = 'wdl:%s/%s.%d' % (namespace, name, version)
+                with open(path) as r:
+                    self.cache[key] = r.read()
+                if 'wdl:%s/%s.-1' % (namespace, name) in self.cache:
+                    # Once we make a successful upload, remove the offline cached WDL
+                    # Otherwise the offline wdl would continue to supercede this one as the
+                    # primary version
+                    del self.cache['wdl:%s/%s.-1' % (namespace, name)]
+                return version
             except ValueError:
                 self.go_offline()
-                self.pending.append((
-                    key,
-                    partial(dog.update_method, namespace, name, synopsis, path, delete_old=delete),
-                    partial(self.call_with_timeout, DEFAULT_LONG_TIMEOUT, dog.get_wdl, namespace, name)
-                ))
             except AssertionError:
                 self.go_offline()
                 print(
@@ -386,12 +424,13 @@ class Operator(object):
                     "Unable to delete old snapshot. You must manually delete the existing wdl snapshot",
                     file=sys.stderr
                 )
-        else:
-            self.pending.append((
-                key,
-                partial(dog.update_method, namespace, name, synopsis, path, delete_old=delete),
-                partial(self.call_with_timeout, DEFAULT_LONG_TIMEOUT, dog.get_wdl, namespace, name)
-            ))
+        print("Storing offline WDL in cache", file=sys.stderr)
+        warnings.warn("WDL will be cached but not uploaded while offline. Manually re-upload after going live")
+        key = 'wdl:%s/%s.-1' % (namespace, name)
+        # Store wdl as version -1 since we can't lookup the version number
+        with open(path) as r:
+            self.cache[key] = r.read()
+        return -1
 
     @__synchronized
     def validate_config(self, namespace, name):
@@ -440,6 +479,7 @@ class Operator(object):
     @property
     @__synchronized
     def _entities_live_update(self):
+        # Useful for force-updating the list of entity types, even if we're offline
         state = self.live
         self.live = True
         try:

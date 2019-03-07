@@ -630,11 +630,10 @@ class WorkspaceManager(dog.WorkspaceManager):
                 version = int(result.group(1))
         if config['methodRepoMethod']['methodVersion'] == 'latest':
             if version is None:
-                with dalmatian_api():
-                    version = int(dog.get_method_version(
-                        config['methodRepoMethod']['methodNamespace'],
-                        config['methodRepoMethod']['methodName']
-                    ))
+                version = self.operator.get_method_version(
+                    config['methodRepoMethod']['methodNamespace'],
+                    config['methodRepoMethod']['methodName']
+                )
             config['methodRepoMethod']['methodVersion'] = version
         return self.operator.add_config(config)
 
