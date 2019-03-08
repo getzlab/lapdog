@@ -98,7 +98,7 @@
               </div>
               <div class="col s9 input-field" style="margin-top: 0px !important;">
                 <select class="browser-default" id="region-select" v-model="compute_region">
-                  <option v-bind:value="gateway.compute_regions[0]" selected disabled>{{gateway.compute_regions[0]}} (default)</option>
+                  <option v-bind:value="gateway.compute_regions[0]" selected>{{gateway.compute_regions[0]}} (default)</option>
                   <option v-for="region in lodash.slice(gateway.compute_regions, 1)" v-bind:value="region" :key="region">
                     {{region}}
                   </option>

@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.15.1 (Beta)
 
 New Features:
 * Added `lapdog.provenance` to provide provenance of provided data
+
+Bug Fixes:
+* `lapdog.Gateway.compute_regions` now silently handles permission errors by returning the default compute region (`us-central1`)
+* Fixed a bug which prevented users from re-selecting the default compute region in the UI after selecting another one
+* Fixed a bug which allowed some protected files to be deleted by `lapdog.WorkspaceManager.mop()`
 
 ## 0.15.0 (Beta)
 

@@ -562,7 +562,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             None
         ).upload_df(df)
         if len(uploads):
-            _ = [callback() for callback in status_bar.iter(uploads)]
+            _ = [callback() for callback in status_bar.iter(uploads, prepend="Uploading {} data ".format(etype))]
         return df
 
     def prepare_sample_df(self, df):
@@ -1419,12 +1419,13 @@ class WorkspaceManager(dog.WorkspaceManager):
         deleted = []
         size = 0
         time.sleep(10)
+        print(cells)
         bucket_id = 'gs://'+self.bucket_id+'/'
         for page in storage.Client().bucket(self.bucket_id).list_blobs().pages:
             for blob in page:
                 try:
                     if blob.exists():
-                        if blob.name in cells:
+                        if (bucket_id+blob.name) in cells:
                             # Referenced by data model
                             continue
                         protected = (
