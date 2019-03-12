@@ -79,6 +79,32 @@ def getblob(gs_path, credentials=None, user_project=None):
         _getblob_client(credentials).bucket(bucket_id, user_project)
     )
 
+def copyblob(src, dest, credentials=None, user_project=None):
+    """
+    Copy blob from src -> dest
+    src and dest may either be a gs:// path or a premade blob object
+    """
+    if isinstance(src, str):
+        src = getblob(src, credentials, user_project)
+    if isinstance(dest, str):
+        dest = getblob(dest, credentials, user_project)
+    src.bucket.copy_blob(src, dest.bucket, dest.name)
+    return dest.exists()
+
+def moveblob(src, dest, credentials=None, user_project=None):
+    """
+    Move blob from src -> dest
+    src and dest may either be a gs:// path or a premade blob object
+    """
+    if isinstance(src, str):
+        src = getblob(src, credentials, user_project)
+    if isinstance(dest, str):
+        dest = getblob(dest, credentials, user_project)
+    if copyblob(src, dest):
+        src.delete()
+        return True
+    return False
+
 def cors(*methods):
     """
     Wraps functions intended to handle inbound flask requests. The wrapped

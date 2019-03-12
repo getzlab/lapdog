@@ -22,7 +22,7 @@ from . import adapters
 from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader, safe_getblob, build_input_key
 from .cache import cache_init, cache_path
 from .operations import APIException, Operator, capture, set_timeout
-from .cloud.utils import getblob, proxy_group_for_user
+from .cloud.utils import getblob, proxy_group_for_user, copyblob, moveblob
 from .gateway import Gateway, creation_success_pattern
 from itertools import repeat
 import pandas as pd

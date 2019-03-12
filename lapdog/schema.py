@@ -13,9 +13,6 @@ fc_data_types = {
 class EvaluationError(ValueError):
     pass
 
-def determine_reference_type(ref):
-    return ref.rstrip('s_').lower()
-
 class AttrArray(list):
     def __getattr__(self, attr):
         try:
@@ -60,6 +57,12 @@ class Evaluator(object):
     def add_attributes(self, attrs):
         self.attributes = attrs
 
+    def determine_reference_type(self, etype, value, ref):
+        for _etype, data in self.edata.items():
+            if _etype != etype and {entity in data.index for entity in value} == {True}:
+                return _etype
+        return ref.rstrip('s_').lower()
+
     def __call__(self, etype, entity, expression):
         """
         Evaluates an expression.
@@ -90,20 +93,16 @@ class Evaluator(object):
             this = self.edata[etype].loc[entity]
             for key in components[1:-1]:
                 # print(this)
-                _etype = determine_reference_type(key)
-                if _etype not in fc_data_types and _etype not in self.edata:
-                    raise EvaluationError("No such entity type '%s' : %s" % (
-                        _etype,
-                        expression
-                    ))
-                elif _etype not in self.edata:
+                value = getattr(this, key)
+                etype = self.determine_reference_type(etype, value, key)
+                if etype in fc_data_types and etype not in self.edata:
                     raise EvaluationError("Entity type not loaded '%s' : %s" % (
-                        _etype,
+                        etype,
                         expression
                     ))
                 try:
                     #FIXME: Prolly need to check if 'this' is singular or not
-                    this = self.edata[_etype].loc[[*getattr(this, key)]]
+                    this = self.edata[etype].loc[[*value]]
                 except Exception as e:
                     raise EvaluationError("Unable to evaluate expression reference '%s' : %s" % (
                         key,

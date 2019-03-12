@@ -788,3 +788,9 @@ class Gateway(object):
         acl = blob.acl
         acl.all_authenticated().grant_read()
         acl.save()
+
+    def __repr__(self):
+        return '<lapdog.Gateway {}{}>'.format(
+            self.namespace,
+            ' ({})'.format(self.project) if self.project is not None else ''
+        )

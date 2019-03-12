@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.15.2 (Beta)
+
+New Features:
+* Added `lapdog.copyblob` and `lapdog.moveblob` to copy and move blobs
+
+Bug Fixes:
+* Fixed a bug in the CLI preventing new workspaces from being created using `lapdog workspace`
+* Fixed a bug in offline expression evaluation which prevented some complex expressions from being parsed
+
+Other Changes:
+* Cleaned the error messages displayed in `lapdog doctor`
+* `lapdog.Gateway` now has a better string representation
+
 ## 0.15.1 (Beta)
 
 New Features:

@@ -366,7 +366,7 @@ def cmd_add_workspace(args):
 
     if args.create is not False:
         #args.create will either be a workspace type or None
-        ws.create_workspace(wm=args.create)
+        ws.create_workspace(parent=args.create)
 
 def cmd_stats(args):
     try:
@@ -702,15 +702,23 @@ def cmd_doc(args):
             fail = False
             for endpoint, version in __API_VERSION__.items():
                 if endpoint != 'resolve':
-                    try:
-                        gateway.get_endpoint(endpoint)
-                    except:
-                        print(crayons.red("Endpoint {} (version {}) not found".format(endpoint, version)))
-                        print("The Engine for this namespace needs to be patched")
-                        fail = True
-                        break
+                    with lapdog.capture() as (out, err):
+                        try:
+                            gateway.get_endpoint(endpoint)
+                        except:
+                            out.seek(0,0)
+                            out.truncate()
+                            err.seek(0,0)
+                            err.truncate()
+                            fail = True
+                            break
             if not fail:
                 print(crayons.green("Engine OK"))
+            else:
+                # Bad style, but oh well. This allows us to reference the final values of endpoint and version
+                # and print to stdout directly. Inside capture, stdout is no longer a tty
+                print(crayons.red("Endpoint {} (version {}) not found".format(endpoint, version)))
+                print("The Engine for this namespace needs to be patched")
 
 
 if __name__ == '__main__':
