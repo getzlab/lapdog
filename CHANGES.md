@@ -35,6 +35,7 @@ Other Changes:
 
 ### Patch Contents
 * Updated `submit` endpoint to v4 to support customizable compute regions
+* Updated cromwell tag to `v0.15.0`
 
 ## 0.14.2 (Beta)
 
