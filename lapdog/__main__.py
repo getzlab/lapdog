@@ -563,12 +563,14 @@ def cmd_service_account(args):
         "This runs one-time setup for an entire Firecloud",
         crayons.black("Namespace", bold=True)
     )
-    print("This should be considered an equivalent action to creating a Firecloud Billing Project")
+    print("This should be considered an analagous action to creating a Firecloud Billing Project")
     print("You must be an owner of the Firecloud Billing Project and a Billing Account User for the underlying Google Billing Account")
     print("Press Enter to continue, or Ctrl+C to abort")
     try:
         input()
     except KeyboardInterrupt:
+        print()
+        print("Aborted. No action has been taken")
         return
     print(
         crayons.yellow("WARNING:", bold=True),
@@ -609,9 +611,9 @@ def cmd_service_account(args):
     from lapdog.gateway import ld_project_for_namespace
     print("==========================")
     print("Ready to Initialize")
-    print("1) Create Google Project %s" % ld_project_for_namespace(namespace))
-    print("    - This project will contain Lapdog Services and Resources to execute jobs in the %s namespace" % namespace)
-    print("2) Link Project", ld_project_for_namespace(namespace), "to Google Billing Project", billing)
+    print("1) Create Google Project", crayons.black(ld_project_for_namespace(namespace), bold=True))
+    print("    - This project will contain Lapdog Services and Resources to execute jobs in the", crayons.black(namespace, bold=True), "namespace")
+    print("2) Link Project", crayons.black(ld_project_for_namespace(namespace), bold=True), "to Google Billing Project", crayons.black(billing, bold=True))
     print("    - All charges for Lapdog will be billed to this account")
     print("    - Charges include costs for running jobs, storing Lapdog metadata, and operating the Lapdog Engine")
     print("    - Data storage costs will be billed through the associated Firecloud Workspaces")
@@ -622,15 +624,23 @@ def cmd_service_account(args):
     print("4) Grant Admin Access")
     print("    - Your account will have administrator access to the project")
     print("    - You must grant access to any other users which need administrator access to the project")
+    print("    - You (or any other administrators) will be responsible for maintaining the project")
+    print("        *", crayons.blue("https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins", bold=True))
     print("    - End-Users will automatically be granted User access by demonstrating WRITER permissions to any workspace in the namespace")
     print()
     print("Press Enter to Start, or Ctrl+C to abort")
     try:
         input()
     except KeyboardInterrupt:
+        print()
+        print("Aborted. No action has been taken")
         return
     from lapdog.gateway import Gateway
     Gateway.initialize_lapdog_for_project(billing, namespace)
+    print("==========================")
+    print("Initialization complete")
+    print()
+    print("Please read", crayons.black("https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins", bold=True))
 
 
 def cmd_patch(args):
