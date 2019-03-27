@@ -71,24 +71,6 @@ def quotas(request):
                 },
                 400
             )
-        region_usage = default_session.get(
-            'https://www.googleapis.com/compute/v1/projects/{project}/regions/{region}'.format(
-                project=os.environ.get('GCP_PROJECT'),
-                region=os.environ.get('FUNCTION_REGION')
-            )
-        )
-        if region_usage.status_code != 200:
-            return (
-                {
-                    'error': 'Invalid response from Google',
-                    'message': '(%d) : %s' % (
-                        region_usage.status_code,
-                        region_usage.text
-                    )
-                },
-                400
-            )
-        region_name = os.environ.get('FUNCTION_REGION')
         quotas = [
             {
                 **quota,
@@ -97,16 +79,35 @@ def quotas(request):
                 }
             }
             for quota in project_usage.json()['quotas']
-        ] + [
-            {
-                **quota,
-                **{
-                    'percent':  ('%0.2f%%' % (100 * quota['usage'] / quota['limit'])) if quota['limit'] > 0 else '0.00%',
-                    'metric': region_name+'.'+quota['metric']
-                }
-            }
-            for quota in region_usage.json()['quotas']
         ]
+        for region_name in utils.enabled_regions():
+            region_usage = default_session.get(
+                'https://www.googleapis.com/compute/v1/projects/{project}/regions/{region}'.format(
+                    project=os.environ.get('GCP_PROJECT'),
+                    region=region_name
+                )
+            )
+            if region_usage.status_code != 200:
+                return (
+                    {
+                        'error': 'Invalid response from Google',
+                        'message': '(%d) : %s' % (
+                            region_usage.status_code,
+                            region_usage.text
+                        )
+                    },
+                    400
+                    )
+            quotas += [
+                {
+                    **quota,
+                    **{
+                        'percent':  ('%0.2f%%' % (100 * quota['usage'] / quota['limit'])) if quota['limit'] > 0 else '0.00%',
+                        'metric': region_name+'.'+quota['metric']
+                    }
+                }
+                for quota in region_usage.json()['quotas']
+            ]
         return (
             {
                 'raw': quotas,

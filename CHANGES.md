@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* `lapdog.gateway.quota_usage` now returns quota usage from all enabled compute regions, not just `us-central1`
+
+Other Changes:
+* `lapdog.prune_cache` now prints the size of data removed and kept, and returns the size of data removed
+
+### Patch Contents
+* Updated `quotas` endpoint to v2 to support the above bugfix
+
 ## 0.15.2 (Beta)
 
 New Features:

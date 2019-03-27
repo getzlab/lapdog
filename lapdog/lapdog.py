@@ -156,16 +156,21 @@ def prune_cache():
     Returns the size of data cleaned
     """
     deleted = 0
+    kept = 0
     t0 = time.time()
     for filepath in iglob(os.path.join(cache_init(), '*', '*', '*')):
+        size = os.path.getsize(filepath)
         if (t0 - os.stat(filepath).st_atime) > 2628001:
             try:
-                size = os.path.getsize(filepath)
                 os.remove(filepath)
                 deleted += size
             except:
                 pass
-    return byteSize(deleted)
+        else:
+            kept += size
+    print("Removed", byteSize(deleted), "of unused cache entries")
+    print("Kept", byteSize(kept), "of active cache entries")
+    return deleted
 
 
 def alias(func):

@@ -15,6 +15,7 @@ import json
 from urllib.parse import quote
 import time
 from functools import lru_cache
+import traceback
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
@@ -23,7 +24,7 @@ __API_VERSION__ = {
     'register': 'v2',
     'signature': 'v1',
     'query': 'v1',
-    'quotas': 'v1',
+    'quotas': 'v2',
     'resolve': 'v1',
     'existence': 'frozen'
 }
@@ -408,3 +409,12 @@ def update_iam_policy(session, grants, project=None):
         }
     )
     return response.status_code == 200, response
+
+def enabled_regions(project=None):
+    blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
+    if blob.exists():
+        try:
+            return blob.download_as_string().decode().split()
+        except:
+            traceback.print_exc()
+    return ['us-central1']

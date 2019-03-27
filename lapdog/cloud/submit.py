@@ -135,11 +135,7 @@ def create_submission(request):
 
         region = 'us-central1'
         if 'compute_region' in data:
-            blob = utils.getblob('gs://{bucket}/regions'.format(bucket=utils.ld_meta_bucket_for_project()))
-            if blob.exists():
-                allowed_regions = blob.download_as_string().decode().split()
-            else:
-                allowed_regions = ['us-central1']
+            allowed_regions = utils.enabled_regions()
             if data['compute_region'] in allowed_regions:
                 region = data['compute_region']
             else:
@@ -152,10 +148,6 @@ def create_submission(request):
                 )
 
         if 'memory' in data and data['memory'] > 3072:
-            # if data['memory'] > 13312:
-            #     mtype = 'custom-2-%d-ext' % data['memory']
-            # else:
-            #     mtype = 'custom-2-%d' % data['memory']
             mtype = 'custom-%d-%d' % (
                 math.ceil(data['memory']/13312)*2,
                 data['memory']

@@ -21,7 +21,7 @@ from glob import glob
 import yaml
 from .. import firecloud_status
 from ..cache import cached, cache_fetch, cache_write, cache_init
-from ..adapters import NoSuchSubmission, Gateway
+from ..adapters import NoSuchSubmission, Gateway, get_operation_status
 from ..gateway import get_account, proxy_group_for_user
 import re
 import contextlib
@@ -711,11 +711,7 @@ def read_logs(namespace, name, id, workflow_id, log, call):
 @cached(10)
 @controller
 def operation_status(operation_id):
-    from ..adapters import get_operation_status
-    # print("Getting status:", operation_id)
-    text =  get_operation_status(operation_id, False, 'yaml')
-    # print(text[:256])
-    return text, 200
+    return get_operation_status(operation_id, False, 'yaml'), 200
 
 @controller
 def cache_size():

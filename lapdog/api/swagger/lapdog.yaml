@@ -44,7 +44,7 @@ paths:
         200:
           description: A list of quotas and usage
           schema:
-            type: object
+            $ref: "#/definitions/QuotaReport"
   /api/v1/cache:
     get:
       operationId: lapdog.api.controllers.cache_size
@@ -87,6 +87,7 @@ paths:
           description: Operation status
           schema:
             type: string
+            description: A raw (unparsed) YAML string representing the operation
   /api/v1/workspaces/{namespace}/{name}:
     get:
       parameters:
@@ -110,7 +111,7 @@ paths:
         200:
           description: A detailed summary of the workspace
           schema:
-            type: object
+            $ref: "#/definitions/WorkspaceDetail"
     post:
       parameters:
         -
@@ -961,6 +962,34 @@ paths:
           schema:
             $ref: "#/definitions/Preflight"
 definitions:
+  Quota:
+    type: object
+    properties:
+      metric:
+        type: string
+        description: The name of the quota
+      limit:
+        type: number
+        description: The maximum allowed usage of the metric
+      usage:
+        type: number
+        description: The current usage of the metric
+      percent:
+        type: string
+        description: A string representing the current percentage usage
+  QuotaReport:
+    type: object
+    properties:
+      raw:
+        type: array
+        items:
+          $ref: "#/definitions/Quota"
+        description: Raw list of all compute quotas
+      alert:
+        type: array
+        items:
+          $ref: "#/definitions/Quota"
+        description: List of quotas above 50% usage
   Submission:
     type: object
     properties:
@@ -1085,3 +1114,129 @@ definitions:
           - account # service account not registered
           - success # ACL set
           - registration # Service account not registered
+  EntityType:
+    type: object
+    properties:
+      attributeNames:
+        type: array
+        items:
+          type: string
+        description: List of attributes for the entity type
+      count:
+        type: integer
+        description: Number of entities of this type
+      idName:
+        type: string
+        description: Name of the attribute serving as the ID of this entity type
+      type:
+        type: string
+        description: Type of entity
+  WorkspaceDetail:
+    type: object
+    properties:
+      accessLevel:
+        type: string
+        description: Access Level to workspace
+        enum:
+          - OWNER
+          - WRITER
+          - READER
+      canCompute:
+        type: boolean
+        description: If user has FireCloud compute permissions
+      canShare:
+        type: boolean
+        description: If user has permissions to share workspace
+      catalog:
+        type: boolean
+      owners:
+        type: array
+        items:
+          type: string
+        description: List of workspace owners
+      workspace:
+        type: object
+        properties:
+          attributes:
+            type: object
+            description: Workspace attributes
+          authorizationDomain:
+            type: array
+            items:
+              type: string
+          bucketName:
+            type: string
+            description: The bucket ID of the workspace
+          createdBy:
+            type: string
+            description: Workspace Creator
+          createdDate:
+            type: string
+            description: Creation date
+          isLocked:
+            type: boolean
+            description: is the workspace locked
+          lastModified:
+            type: string
+            description: Creation date
+          name:
+            type: string
+            description: Workspace Name
+          namespace:
+            type: string
+            description: Workspace Namespace
+          workflowCollectionName:
+            type: string
+          workspaceId:
+            type: string
+            description: UUID of workspace
+      workspaceSubmissionStats:
+        type: object
+        properties:
+          lastFailureDate:
+            type: string
+            description: Date of last submission failure
+          runningSubmissionsCount:
+            type: integer
+            description: Current active submissions
+      entities:
+        type: array
+        items:
+          $ref: "#/definitions/EntityType"
+        description: List of entity types
+      attributes:
+        type: object
+        description: Workspace attributes
+      configs:
+        type: array
+        items:
+          $ref: "#/definitions/Config"
+        description: List of method configs
+  Config:
+    type: object
+    properties:
+      methodRepoMethod:
+        type: object
+        properties:
+          methodName:
+            type: string
+            description: Name of the Method
+          methodNamespace:
+            type: string
+            description: Name of the Method namespace
+          methodVersion:
+            type: integer
+            description: Method Version
+          methodUri:
+            type: string
+          sourceRepo:
+            type: string
+      name:
+        type: string
+        description: Config name
+      namespace:
+        type: string
+        description: Config Namespace
+      rootEntityType:
+        type: string
+        description: Config root entity type
