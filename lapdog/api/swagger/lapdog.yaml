@@ -153,6 +153,37 @@ paths:
           description: The active service account
           schema:
             type: string
+  /api/v1/workspaces/{namespace}/{name}/autocomplete/{entity}:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+        -
+          in: path
+          name: entity
+          required: true
+          type: string
+      operationId: lapdog.api.controllers.autocomplete
+      summary: returns a workspace
+      responses:
+        default:
+          description: Error
+        200:
+          description: List of matching entities
+          schema:
+            type: array
+            items:
+              type: string
   /api/v1/workspaces/{namespace}/{name}/gateway:
     get:
       parameters:

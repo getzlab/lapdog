@@ -32,13 +32,13 @@
               </select>
             </div>
             <div class="input-field col s6">
-              <input type="text" id="entity-input" required v-model="entity_field" v-on:input="preflight(self_ref)"/>
+              <input autocomplete="off" class="autocomplete" type="text" id="entity-input" required v-model="entity_field" v-on:input="update_and_preflight" v-on:click="bind_autocomplete_listener"/>
               <label style="z-index: -1;">Workflow Entity</label>
             </div>
           </div>
           <div class="row">
             <div class="input-field col s12">
-              <input type="text" id="expression-input" v-model="submission_expression" v-bind:disabled="extract_etype(submission_config) == submission_etype" v-on:input="preflight(self_ref)"/>
+              <input autocomplete="off" type="text" id="expression-input" v-model="submission_expression" v-bind:disabled="extract_etype(submission_config) == submission_etype" v-on:input="preflight(self_ref)"/>
               <label style="z-index: -1;">Entity Expression (optional)</label>
             </div>
           </div>
@@ -249,7 +249,7 @@
           </a>
         </div>
         <div class="col s6 execute-container">
-          <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-bind:class="gateway && gateway.registered && ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
+          <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-on:click="activate_autocomplete" v-bind:class="gateway && gateway.registered && ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
             v-bind:data-tooltip="gateway && gateway.exists ? (ws.entities && ws.entities.length ? 'Ready' : 'There are no entities in this workspace') : 'Lapdog is not initialized for this namespace'"
           >
             Execute new job
@@ -512,7 +512,7 @@
         pending_ops: 0,
         submission_error: null,
         private_access: true,
-        compute_region: null
+        compute_region: null,
         // entities: null
       }
     },
@@ -825,7 +825,55 @@
             })
           })
       },
-
+      activate_autocomplete() {
+        setTimeout(
+          () => {window.$('input.autocomplete').autocomplete({
+            limit: 6
+          })},
+          250
+        );
+      },
+      bind_autocomplete_listener() {
+        setTimeout(
+          () => {
+            window.$("ul.autocomplete-content li").on(
+              'click',
+              (evt) => {
+                console.log("Updating entitiy field");
+                this.entity_field = evt.currentTarget.innerText;
+              }
+            );
+          },
+          100
+        );
+      },
+      update_and_preflight() {
+        this.update_autocomplete(this);
+        this.preflight(this);
+      },
+      update_autocomplete: _.debounce((_this) => {
+        if (_this.entity_field.length == 0) return;
+        axios.get(API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+'/autocomplete/'+encodeURIComponent(_this.entity_field))
+          .then(response => {
+            window.$('input.autocomplete').autocomplete(
+              'updateData',
+              _.reduce(
+                response.data,
+                (obj, key) => {obj[key] = null; return obj},
+                {}
+              )
+            );
+            setTimeout(
+              () => {
+                if (window.$('input.autocomplete').is(':focus')) {
+                  window.$('input.autocomplete').autocomplete('open');
+                  _this.bind_autocomplete_listener();
+                }
+              },
+              50
+            );
+          })
+      }, 500),
      get_acl(namespace, workspace) {
         axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway')
           .then(response => {

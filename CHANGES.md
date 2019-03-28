@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased Changes
+## 0.15.3 (Beta)
+
+New Features:
+* Added autocomplete for the `Entity` field in the UI when running a new job
 
 Bug Fixes:
 * `lapdog.gateway.quota_usage` now returns quota usage from all enabled compute regions, not just `us-central1`

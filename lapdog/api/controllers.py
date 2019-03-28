@@ -861,3 +861,37 @@ def rerun_submission(namespace, name, id):
         },
         **ws.build_retry_set(id)
     }
+
+@controller
+def autocomplete(namespace, name, entity):
+    """
+    Entrypoint for autocomplete system
+    Uses heavy caching to accelerate results
+    1) Checks for previous autocomplete searches in this workspace which could serve as a starting point
+    2) For any searches which are a substring of the current search, fetch those results and then filter using the current search
+    3) Otherwise, start from scratch (fetching new entities again) and filter using the current search
+    """
+    if len(entity) <= 1:
+        return []
+    for search in [*get_autocomplete_cache(namespace, name)]:
+        if search in entity:
+            return [
+                eid for eid in get_autocomplete_entries(namespace, name, search)
+                if entity in eid
+            ]
+    return get_autocomplete_entries(namespace, name, entity)
+
+@cached(60)
+def get_autocomplete_cache(namespace, name):
+    return set()
+
+@cached(60, cache_size=64)
+def get_autocomplete_entries(namespace, name, entity):
+    ws = get_workspace_object(namespace, name)
+    get_autocomplete_cache(namespace, name).add(entity)
+    return [
+        eid
+        for etype in ws.operator.entity_types
+        for eid in ws.operator.get_entities_df(etype).index
+        if entity in eid
+    ]
