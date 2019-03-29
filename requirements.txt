@@ -3,7 +3,7 @@ firecloud-dalmatian>=0.0.4
 google-cloud-storage>=1.13.2
 PyYAML==5.1
 agutil>=4.0.2
-Flask-Cors==3.0.6
+Flask-Cors==3.0.7
 crayons==0.1.2
 connexion==2.2.0
 oauth2client
