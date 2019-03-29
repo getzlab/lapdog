@@ -265,7 +265,7 @@ def get_operation_status(opid, parse=True, fmt='json'):
         if not parse:
             return text
         try:
-            data = yaml.load(StringIO(text))
+            data = yaml.safe_load(StringIO(text))
             if 'done' in data and data['done']:
                 cache_write(text, 'operation', opid)
         except yaml.scanner.ScannerError:
@@ -274,7 +274,7 @@ def get_operation_status(opid, parse=True, fmt='json'):
             print(text)
             raise
     else:
-        data = yaml.load(StringIO(text))
+        data = yaml.safe_load(StringIO(text))
     if not parse:
         return text
     return data

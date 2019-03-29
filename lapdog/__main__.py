@@ -538,7 +538,7 @@ def cmd_exec(args):
     print("Done! Use 'lapdog finish %s' to upload the results after the job finishes" %global_id)
 
 def get_operation_status(opid):
-    return yaml.load(
+    return yaml.safe_load(
         StringIO(
             subprocess.run(
                 'gcloud alpha genomics operations describe %s' % (
