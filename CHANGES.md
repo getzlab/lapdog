@@ -14,6 +14,7 @@ Other Changes:
 * `lapdog.WorkspaceManager.build_retry_set` now handles FireCloud submissions
 * Synchronized methods of `lapdog.Operator` now have the proper docstrings
 * Updated `connexion` to `2.2.0`
+* Updated `pyyaml` to `5.1`
 
 ## 0.15.3 (Beta)
 
