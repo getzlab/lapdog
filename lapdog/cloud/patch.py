@@ -199,7 +199,12 @@ def __project_admin_apply_patch(namespace):
         raise ValueError("Invalid response from Google API")
     print(crayons.black("Phase 3/5:", bold=True), "Checking VPC Configuration")
     blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
-    regions = blob.download_as_string().decode().split() if blob.exists() else ['us-central1']
+    regions = ['us-central1']
+    try:
+        if blob.exists():
+            regions = blob.download_as_string().decode().split()
+    except:
+        pass
     for region in regions:
         subnet_url = "https://www.googleapis.com/compute/v1/projects/{project}/regions/{region}/subnetworks/default".format(
             project=project,

@@ -19,12 +19,12 @@ import traceback
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
-    'submit': 'v4',
+    'submit': 'v5',
     'abort': 'v1',
     'register': 'v2',
     'signature': 'v1',
     'query': 'v1',
-    'quotas': 'v2',
+    'quotas': 'v3',
     'resolve': 'v1',
     'existence': 'frozen'
 }
@@ -412,9 +412,9 @@ def update_iam_policy(session, grants, project=None):
 
 def enabled_regions(project=None):
     blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
-    if blob.exists():
-        try:
+    try:
+        if blob.exists():
             return blob.download_as_string().decode().split()
-        except:
-            traceback.print_exc()
+    except:
+        traceback.print_exc()
     return ['us-central1']

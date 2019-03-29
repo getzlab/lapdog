@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.15.4 (Beta)
 
 New Features:
 * `lapdog.WorkspaceManager`s will attempt to connect with a running lapdog UI (if present)
@@ -9,12 +9,18 @@ New Features:
 
 Bug Fixes:
 * Fixed not being able to upload new method configurations if the version was inferred from "latest"
+* Fixed being unable to submit jobs or check quotas if a regions file was not defined
+* Fixed a bug in the patching process which prevented patches to projects without a regions file
 
 Other Changes:
 * `lapdog.WorkspaceManager.build_retry_set` now handles FireCloud submissions
 * Synchronized methods of `lapdog.Operator` now have the proper docstrings
 * Updated `connexion` to `2.2.0`
 * Updated `pyyaml` to `5.1`
+
+### Patch Contents
+* Updated `quotas` endpoint to v3
+* Updated `submit` endpoint to v5
 
 ## 0.15.3 (Beta)
 
