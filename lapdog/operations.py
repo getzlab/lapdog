@@ -144,9 +144,10 @@ class Operator(object):
         while not self.live:
             try:
                 with self.lock:
-                    print("Attempting to synchronize")
-                    self.go_live()
-                    self.live = False
+                    if len(self.pending):
+                        print("Attempting to synchronize")
+                        self.go_live()
+                        self.live = False
             except:
                 traceback.print_exc()
             time.sleep(60)

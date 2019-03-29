@@ -25,6 +25,7 @@ from ..adapters import NoSuchSubmission, Gateway, get_operation_status
 from ..gateway import get_account, proxy_group_for_user
 import re
 import contextlib
+import pickle
 
 @contextlib.contextmanager
 def log_controller(func):
@@ -52,7 +53,7 @@ def readvar(obj, *args):
 def get_workspace_object(namespace, name):
     ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
     if ws is None:
-        ws = lapdog.WorkspaceManager(namespace, name)
+        ws = lapdog.WorkspaceManager(namespace, name, workspace_seed_url=None)
         if readvar(current_app.config, 'storage', 'cache') is None:
             current_app.config['storage']['cache'] = {}
         if readvar(current_app.config, 'storage', 'cache', namespace) is None:
@@ -412,8 +413,8 @@ def sync_cache(namespace, name):
 
 @controller
 def create_workspace(namespace, name, parent):
-    ws = lapdog.WorkspaceManager(namespace, name)
-    parent = None if '/' not in parent else lapdog.WorkspaceManager(parent)
+    ws = lapdog.WorkspaceManager(namespace, name, workspace_seed_url=None)
+    parent = None if '/' not in parent else lapdog.WorkspaceManager(parent, workspace_seed_url=None)
     with lapdog.capture() as (stdout, stderr):
         result = ws.create_workspace(parent)
         stdout.seek(0,0)
@@ -895,3 +896,11 @@ def get_autocomplete_entries(namespace, name, entity):
         for eid in ws.operator.get_entities_df(etype).index
         if entity in eid
     ]
+
+@controller
+def seed_cache(namespace, name):
+    ws = get_workspace_object(namespace, name)
+    return {
+        key:base64.b64encode(pickle.dumps(value)).decode()
+        for key, value in ws.operator.cache.items()
+    }

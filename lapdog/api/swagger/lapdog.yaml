@@ -322,6 +322,30 @@ paths:
           description: Cache state
           schema:
             type: string
+  /api/v1/workspaces/{namespace}/{name}/cache/seed:
+    get:
+      parameters:
+        -
+          in: path
+          name: namespace
+          required: true
+          type: string
+          description: The workspaces namespace
+        -
+          in: path
+          name: name
+          required: true
+          type: string
+          description: The workspaces name
+      summary: Returns a dictionary of pickled data to seed a workspace manager from the active API
+      operationId: lapdog.api.controllers.seed_cache
+      responses:
+        default:
+          description: Error
+        200:
+          description: Complete dump of the workspace cache in key->pickle form
+          schema:
+            type: object
   /api/v1/workspaces/{namespace}/{name}/submissions:
     get:
       parameters:

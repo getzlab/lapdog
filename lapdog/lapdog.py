@@ -34,6 +34,7 @@ import warnings
 import shutil
 import numpy as np
 import requests
+import pickle
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -326,11 +327,14 @@ class WorkspaceManager(dog.WorkspaceManager):
     Any features from dalmatian which are not explicitly upgraded by lapdog will
     still be accessible via inheritance
     """
-    def __init__(self, reference, workspace=None, timezone='America/New_York'):
+    def __init__(self, reference, workspace=None, timezone='America/New_York', *, workspace_seed_url="http://localhost:4201"):
         """
         Various argument configurations:
         * Dalmatian-style: Workspace('namespace', 'workspace')
         * Lapdog-style: Workspace('namespace/workspace')
+
+        workspace_seed_url controls the url that will be queried to attempt to pre-populate the operator cache with data from
+        a running lapdog UI. set to None to disable this feature
         Returns a Workspace object
         """
         if workspace is not None:
@@ -345,6 +349,22 @@ class WorkspaceManager(dog.WorkspaceManager):
             timezone
         )
         self.operator = Operator(self)
+        if workspace_seed_url is not None:
+            try:
+                self.operator.cache = {
+                    key:pickle.loads(base64.b64decode(value.encode()))
+                    for key, value in requests.get(
+                        workspace_seed_url+"/api/v1/workspaces/{namespace}/{workspace}/cache/seed".format(
+                            namespace=namespace,
+                            workspace=workspace
+                        )
+                    ).json().items()
+                }
+            except requests.ConnectionError:
+                pass # UI probably not running; ignore
+            except:
+                traceback.print_exc()
+                warnings.warn("Failed to pre-seed workspace cache from running Lapdog UI")
         self.gateway = Gateway(self.namespace)
         self._submission_cache = {}
         try:
