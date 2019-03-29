@@ -6,6 +6,9 @@ New Features:
 * `lapdog.WorkspaceManager`s will attempt to connect with a running lapdog UI (if present)
   to initialize the operator cache with data from the UI's cache of this workspace
 
+Bug FIxes:
+* Fixed not being able to upload new method configurations if the version was inferred from "latest"
+
 Other Changes:
 * `lapdog.WorkspaceManager.build_retry_set` now handles FireCloud submissions
 * Synchronized methods of `lapdog.Operator` now have the proper docstrings

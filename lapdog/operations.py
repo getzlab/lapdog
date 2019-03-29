@@ -364,7 +364,7 @@ class Operator(object):
             # But if we're live, we can just query the latest version. Easy peasy
             try:
                 with self.timeout(DEFAULT_LONG_TIMEOUT):
-                    return dog.get_method_version(namespace, name)
+                    return int(dog.get_method_version(namespace, name))
             except:
                 self.go_offline()
         # However, if we're offline, or that fails, just pick the highest version number available in the offline cache
@@ -375,7 +375,7 @@ class Operator(object):
         )
         if len(versions):
             warnings.warn("This Workspace is offline. Version number may not reflect latest available version")
-            return versions[0]
+            return int(versions[0])
         # No offline versions. :(
         self.fail()
 
