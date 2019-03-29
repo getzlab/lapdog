@@ -511,7 +511,7 @@ export default {
                     (idx, el) => {
                       window.$(el).autocomplete({
                         data: autocomplete_data,
-                        minLength: 0,
+                        limit: 6,
                         onAutocomplete: (choice) => {
                           console.log("Updating field");
                           this.active_cfg.config.inputs[el.id] = choice;
