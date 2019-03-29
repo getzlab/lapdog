@@ -1,5 +1,9 @@
 from setuptools import setup
 from lapdog import __version__
+
+with open('requirements.txt') as r:
+    requirements = r.readlines()
+
 setup(
     name = 'lapdog',
     version = __version__,
@@ -34,23 +38,7 @@ setup(
             'lapdog = lapdog.__main__:main'
         ]
     },
-    install_requires = [
-        'firecloud>=0.16.9',
-        'firecloud-dalmatian>=0.0.4',
-        'google-cloud-storage>=1.13.2',
-        'PyYAML==4.2b1',
-        'agutil>=4.0.2',
-        'Flask-Cors==3.0.6',
-        'crayons==0.1.2',
-        'connexion==2.2.0',
-        'oauth2client',
-        'requests>=2.21.0',
-        'googleapis-common-protos>=1.5.3',
-        'google-auth>=1.4.2',
-        'google-cloud-kms==0.2.1',
-        'cryptography>=2.3.0',
-        'pyOpenSSL'
-    ],
+    install_requires = requirements,
     classifiers = [
         "Programming Language :: Python :: 3",
         "Intended Audience :: Science/Research",
