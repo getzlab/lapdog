@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.5 (Beta)
+
+Bug Fixes:
+* Fixed an issue preventing lapdog from launching due to a dependency version conflict
+
 ## 0.15.4 (Beta)
 
 New Features:
