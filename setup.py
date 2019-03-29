@@ -42,7 +42,7 @@ setup(
         'agutil>=4.0.2',
         'Flask-Cors==3.0.6',
         'crayons==0.1.2',
-        'connexion==1.5.3',
+        'connexion==2.2.0',
         'oauth2client',
         'requests>=2.21.0',
         'googleapis-common-protos>=1.5.3',
