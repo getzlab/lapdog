@@ -1205,7 +1205,35 @@ class WorkspaceManager(dog.WorkspaceManager):
             ns, ws, sid = base64.b64decode(submission_id[7:].encode()).decode().split('/')
             return WorkspaceManager(ns, ws).submission_output_df(sid)
         elif not lapdog_id_pattern.match(submission_id):
-            raise ValueError("Retry Failures is not yet available for FireCloud submissions")
+            submission = self.get_submission(submission_id)
+            workflowEntityType = submission['workflows'][0]['workflowEntity']['entityType']
+            retries = [
+                wf['workflowEntity']['entityName']
+                for wf in submission['workflows']
+                if wf['status'] == 'Failed'
+            ]
+            if len(retries) == 0:
+                return None
+            if len(retries) == 1:
+                return {
+                    'name': retries[0]
+                }
+            if workflowEntityType.endswith('_set'):
+                raise TypeError("build_retry_set does not yet support super-sets")
+            set_type = workflowEntityType+'_set'
+            table = self.operator.get_entities_df(set_type)
+            name = submission['methodConfigurationName']+'_retries'
+            if name in table.index:
+                i = 2
+                while '%s_%d' %(name, i) in table.index:
+                    i += 1
+                name = '%s_%d' %(name, i)
+            self.update_entity_set(workflowEntityType, name, retries)
+            return {
+                'name': name,
+                'type': set_type,
+                'expression': 'this.{}s'.format(workflowEntityType)
+            }
         submission = self.get_adapter(submission_id)
         status = submission.status
         done = 'done' in status and status['done']

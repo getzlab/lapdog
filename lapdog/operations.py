@@ -1,6 +1,6 @@
 from firecloud import api
 from .schema import Evaluator
-from functools import partial
+from functools import partial, wraps
 from requests import Response, ReadTimeout
 import sys
 import crayons
@@ -108,6 +108,7 @@ class Operator(object):
         # functions it wraps
         # When a new instance is created, func gets bound to 'self' and this
         # wrapper stops working right.
+        @wraps(func)
         def wrapper(self, *args, **kwargs):
             with self.lock:
                 return func(self, *args, **kwargs)
