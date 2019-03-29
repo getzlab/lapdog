@@ -5,8 +5,9 @@
 New Features:
 * `lapdog.WorkspaceManager`s will attempt to connect with a running lapdog UI (if present)
   to initialize the operator cache with data from the UI's cache of this workspace
+* Added autocomplete to config inputs when editing a method configuration in the UI
 
-Bug FIxes:
+Bug Fixes:
 * Fixed not being able to upload new method configurations if the version was inferred from "latest"
 
 Other Changes:

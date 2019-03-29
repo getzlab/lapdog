@@ -863,6 +863,19 @@ def rerun_submission(namespace, name, id):
         **ws.build_retry_set(id)
     }
 
+@cached(120)
+@controller
+def config_autocomplete(namespace, name, config_namespace, config_name):
+    ws = get_workspace_object(namespace, name)
+    entityTypeMetadata = ws.operator.entity_types[ws.fetch_config(config_namespace+'/'+config_name)['rootEntityType']]
+    return (
+        [
+            'workspace.'+attribute for attribute in ws.attributes
+        ] + [
+        'this.'+attribute for attribute in entityTypeMetadata['attributeNames']
+        ] + ['this.name', 'this.'+entityTypeMetadata['idName']]
+    ), 200
+
 @controller
 def autocomplete(namespace, name, entity):
     """

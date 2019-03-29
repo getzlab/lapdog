@@ -79,7 +79,7 @@
                 <div class="row" v-for="key in lodash.keys(active_cfg.io.inputs)">
                   <div class="input-field col s11" style="margin: 0px;">
                     <!-- v-bind:class="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required && active_cfg.config.inputs[key].length < 1) ? 'invalid' : 'valid'" -->
-                    <input type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
+                    <input class="autocomplete" autocomplete="off" type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
                       v-bind:placeholder="(active_cfg.io.inputs[key].required) ? 'Required' : 'Optional'"
                     />
                     <label style="z-index: -1;" v-bind:for="key">
@@ -92,7 +92,7 @@
                 <div class="row" v-for="key in lodash.keys(active_cfg.config.inputs)">
                   <div class="input-field col s11" style="margin: 0px;">
                     <!-- v-bind:class="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required && active_cfg.config.inputs[key].length < 1) ? 'invalid' : 'valid'" -->
-                    <input type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
+                    <input class="autocomplete" autocomplete="off" type="text" v-bind:id="key" v-model="active_cfg.config.inputs[key]" v-bind:disabled="!edit_on"
                       v-bind:placeholder="(lodash.has(active_cfg, ['io', 'inputs', key]) && active_cfg.io.inputs[key].required) ? 'Required' : 'Optional'"
                     />
                     <label style="z-index: -1;" v-bind:for="key">
@@ -496,11 +496,30 @@ export default {
                 html: "Unable to locate the WDL for this configuration"
               })
             }
-
             setTimeout(() => {
               window.$("#config-modal").modal();
               window.materialize.updateTextFields();
               window.$("#config-modal").modal('open');
+              axios.get(API_URL + '/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/configs/'+config_slug+'/autocomplete')
+                .then(response => {
+                  let autocomplete_data = _.reduce(
+                      response.data,
+                      (obj, key) => {obj[key] = null; return obj},
+                      {}
+                  );
+                  window.$('input.autocomplete').each(
+                    (idx, el) => {
+                      window.$(el).autocomplete({
+                        data: autocomplete_data,
+                        minLength: 0,
+                        onAutocomplete: (choice) => {
+                          console.log("Updating field");
+                          this.active_cfg.config.inputs[el.id] = choice;
+                        }
+                      })
+                    }
+                  )
+                })
             }, 250)
           }
           else {
