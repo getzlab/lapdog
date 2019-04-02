@@ -741,9 +741,11 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         return self.operator.update_entity_set(etype, set_id, entity_ids)
 
-    def update_participant_entities(self, etype):
+    def update_participant_entities(self, etype, target_set=None):
         """
         Attach entities (samples or pairs) to participants.
+        If target_set is not None, only perform the update for samples/pairs
+        belonging to the given set
         Parallelized update to run on 5 entities in parallel
         """
         if not self.live:
@@ -756,13 +758,23 @@ class WorkspaceManager(dog.WorkspaceManager):
         else:
             raise ValueError('Entity type {} not supported'.format(etype))
 
+        if target_set is not None:
+            df = df.loc[
+                df.index.intersection(
+                    self.operator.get_entities_df(etype+'_set')[etype+'s'][target_set]
+                )
+            ]
+
         entitites_dict = {k:g.index.values for k,g in df.groupby('participant')}
         participant_ids = np.unique(df['participant'])
 
         @parallelize(5)
         def update_participant(participant_id):
             attr_dict = {
-                "{}s_".format(etype): {
+                "{}s_{}".format(
+                    etype,
+                    (target_set if target_set is not None else '')
+                ): {
                     "itemsType": "EntityReference",
                     "items": [{"entityType": etype, "entityName": i} for i in entitites_dict[participant_id]]
                 }
@@ -787,6 +799,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                 else:
                     print("\nThe following", len(retries), "participants could not be updated:", ', '.join(retries), file=sys.stderr)
                     raise APIException("{} participants could not be updated after 3 attempts".format(len(retries)))
+            else:
+                break
 
         print('\n    Finished attaching {}s to {} participants'.format(etype, n_participants))
 

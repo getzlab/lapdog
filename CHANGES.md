@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased Changes
+
+New Features:
+* Added a _target\_set_ argument to `lapdog.WorkspaceManager.update_participant_entities`
+  * Allows restricting the participant entities update to a specific entity set
+
 ## 0.15.5 (Beta)
 
 Bug Fixes:
