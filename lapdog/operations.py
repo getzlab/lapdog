@@ -9,6 +9,7 @@ from io import StringIO
 import contextlib
 import traceback
 import pandas as pd
+import numpy as np
 import threading
 import time
 import warnings
@@ -793,4 +794,7 @@ class Operator(object):
             evaluator.add_attributes(
                 self.attributes
             )
-        return evaluator(etype, entity, expression)
+        return [
+            item for item in evaluator(etype, entity, expression)
+            if isinstance(item, str) or not np.isnan(item)
+        ]

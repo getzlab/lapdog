@@ -1125,6 +1125,27 @@ class WorkspaceManager(dog.WorkspaceManager):
             }
         }
 
+        try:
+            config_types = {
+                param['name']:{
+                    'type': param['inputType'],
+                    'required': not param['optional']
+                }
+                for param in getattr(fc, '__post')(
+                    '/api/inputsOutputs',
+                    data=json.dumps({
+                        'methodNamespace': config['methodRepoMethod']['methodNamespace'],
+                        'methodName': config['methodRepoMethod']['methodName'],
+                        'methodVersion': config['methodRepoMethod']['methodVersion']
+                    }),
+                    timeout=2 # If it takes too long, just give up on typechecking
+                ).json()['inputs']
+            }
+        except:
+            traceback.print_exc()
+            print("Warning: Firecloud request timed out. Preflight will not check data types", file=sys.stderr)
+            config_types = {}
+
         @parallelize(5)
         def prepare_workflow(workflow_entity):
             wf_template = {}
@@ -1135,10 +1156,28 @@ class WorkspaceManager(dog.WorkspaceManager):
                         workflow_entity,
                         v
                     )
-                    if len(resolution) == 1:
-                        wf_template[k] = resolution[0]
+                    if k in config_types:
+                        if config_types[k]['type'].startswith('Array'):
+                            wf_template[k] = resolution
+                        elif len(resolution) == 1:
+                            wf_template[k] = resolution[0]
+                        else:
+                            raise ValueError("Unable to coerce array value {} to non-array parameter '{}' for entity '{}'".format(repr(resolution), k, workflow_entity))
                     else:
-                        wf_template[k] = resolution
+                        # We have no type info for this paramter, likely because the request failed
+                        # Assume single-length values are values, and everything else is an array
+                        if len(resolution) == 1:
+                            wf_template[k] = resolution[0]
+                        else:
+                            wf_template[k] = resolution
+            # Attempt robust preflight typecheck
+            # Just check for missing required params
+            for param, data in config_types.items():
+                if data['required'] and param not in wf_template:
+                    raise AttributeError("Parameter '{}' required but not defined for entity '{}'".format(param, workflow_entity))
+                # if data['type'].startswith('Array') and not isinstance(wf_template[param], list):
+                #     wf_template[param] = [wf_template[param]]
+                #     warnings.warn("Coerced single-length ")
             return wf_template
 
         wdl_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/method.wdl".format(

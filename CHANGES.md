@@ -2,10 +2,19 @@
 
 ## Unreleased
 
+Bug Fixes:
+* Fixed the offline evaluation schema returning unexpected results when attributes
+are not defined for one or more entities
+
 Other Changes:
 * `lapdog.WorkspaceManager.get_config` now supports multiple argument syntaxes
   * Check the docstring for details, but essentially, if you have anything that
   could be used to identify a method configuration, it will try and take it
+* `lapdog.WorkspaceManager.get_adapter` now accepts global submission ids, forwarding
+them to the proper `WorkspaceManager` if necessary
+* `lapdog.WorkspaceManager.execute` now attempts robust input checking while preparing
+submission. Missing required parameters or invalid array parameters will now raise
+an exception before requesting to start the submission
 
 ## 0.15.7 (Beta)
 
