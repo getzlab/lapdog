@@ -429,8 +429,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         self.get_attributes()
         for etype in self.operator.entity_types:
             self.operator.get_entities_df(etype)
-        for config in self.list_configs():
-            self.operator.get_config_detail(config['namespace'], config['name'])
+        for config in self.configs:
+            self.get_config(config)
             try:
                 self.operator.get_wdl(
                     config['methodRepoMethod']['methodNamespace'],
@@ -692,11 +692,25 @@ class WorkspaceManager(dog.WorkspaceManager):
             config['methodRepoMethod']['methodVersion'] = version
         return self.operator.add_config(config)
 
-    @alias(update_configuration)
-    def update_config(self):
-        # alias for update_configuration
-        pass
+    update_config = update_configuration
 
+    def get_config(self, reference, config=None):
+        """
+        reference may be one of the following:
+        * The name of a configuration
+        * The full namespace/name slug of a configuration
+        * A config object as returned by list_configs() or fetch_config()
+        * The namespace of the configuration. In this case you must pass
+        the config name as the second argument
+        """
+        if config is None:
+            if isinstance(reference, str):
+                reference = self.fetch_config(reference)
+            config = reference['name']
+            reference = reference['namespace']
+        return self.operator.get_config_detail(reference, config)
+
+    get_configuration = get_config
 
     def update_attributes(self, attr_dict=None, **attrs):
         """
@@ -734,6 +748,10 @@ class WorkspaceManager(dog.WorkspaceManager):
         return self.operator.attributes
 
     attributes = property(get_attributes)
+
+    @attributes.setter
+    def attributes(self, attr_dict):
+        self.update_attributes(attr_dict)
 
     def update_entity_set(self, etype, set_id, entity_ids):
         """
@@ -922,6 +940,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         Returns a submission adapter for a lapdog submission
         """
+        if submission_id.startswith('lapdog/'):
+            return get_adapter(submission_id)
         return adapters.SubmissionAdapter(self.get_bucket_id(), submission_id, self.gateway)
 
     def list_submissions(self, config=None, lapdog_only=False, cached=False):
@@ -976,10 +996,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         elif not len(workflow_entities):
             return False, "Expression evaluates to 0 entities"
 
-        template = self.operator.get_config_detail(
-            config['namespace'],
-            config['name']
-        )['inputs']
+        template = self.get_config(config)['inputs']
 
         invalid_inputs = self.operator.validate_config(
             config['namespace'],
@@ -1318,7 +1335,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             status = submission.status
             done = 'done' in status and status['done']
             if done:
-                output_template = self.operator.get_config_detail(
+                output_template = self.get_config(
                     submission.data['methodConfigurationNamespace'],
                     submission.data['methodConfigurationName']
                 )['outputs']

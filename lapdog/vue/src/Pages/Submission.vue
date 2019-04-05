@@ -209,146 +209,148 @@ Other: error_outline
         <i class="material-icons tiny">arrow_back</i>  {{namespace}}/{{workspace}}
       </router-link>
     </h4>
-    <h3>Submission</h3>
-    <div class="row">
-      <div class="col s2">
-        Submission ID:
-      </div>
-      <div class="col s10" v-if="submission">
-        {{submission.identifier}}
-      </div>
-      <div class="col s10" v-else>
-        Loading...
-      </div>
-    </div>
-    <div class="row">
-      <div class="col s2">
-        Local Submission ID:
-      </div>
-      <div class="col s6">
-        {{submission_id}}
-      </div>
-    </div>
-    <div class="row">
-      <div class="col s2">
-        Operation ID:
-      </div>
-      <div class="col s10" v-if="submission">
-        <a href="#" v-on:click.prevent="get_operation(submission.operation)">{{submission.operation}}</a>
-      </div>
-      <div class="col s10" v-else>
-        Loading...
-      </div>
-    </div>
-    <div class="row">
-      <div class="col s2">
-        Google bucket:
-      </div>
-      <div class="col s10" v-if="submission">
-        <a target="_blank" v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+submission.gs_path.substring(5)">
-          {{submission.gs_path}}
-        </a>
-      </div>
-      <div class="col s10" v-else>
-        Loading...
-      </div>
-    </div>
-    <div v-if="submission">
+    <div class="submission-data-container">
+      <h3>Submission</h3>
       <div class="row">
         <div class="col s2">
-          Submission Date:
+          Submission ID:
         </div>
-        <div class="col s3">
-          {{submission.submissionDate}}
+        <div class="col s10" v-if="submission">
+          {{submission.identifier}}
         </div>
-        <div class="col s5" v-if="cost">
-          (Running for {{Math.round(cost.clock_h * 10) / 10}} hours)
+        <div class="col s10" v-else>
+          Loading...
         </div>
       </div>
       <div class="row">
         <div class="col s2">
-          Configuration:
+          Local Submission ID:
         </div>
-        <div class="col s4">
-          <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace, target_namespace: submission.methodConfigurationNamespace, target_name: submission.methodConfigurationName} }">
-            {{submission.methodConfigurationNamespace+'/'+submission.methodConfigurationName}}
-          </router-link>
+        <div class="col s6">
+          {{submission_id}}
+        </div>
+      </div>
+      <div class="row">
+        <div class="col s2">
+          Operation ID:
+        </div>
+        <div class="col s10" v-if="submission">
+          <a href="#" v-on:click.prevent="get_operation(submission.operation)">{{submission.operation}}</a>
+        </div>
+        <div class="col s10" v-else>
+          Loading...
+        </div>
+      </div>
+      <div class="row">
+        <div class="col s2">
+          Google bucket:
+        </div>
+        <div class="col s10" v-if="submission">
+          <a target="_blank" v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+submission.gs_path.substring(5)">
+            {{submission.gs_path}}
+          </a>
+        </div>
+        <div class="col s10" v-else>
+          Loading...
+        </div>
+      </div>
+      <div v-if="submission">
+        <div class="row">
+          <div class="col s2">
+            Submission Date:
+          </div>
+          <div class="col s3">
+            {{submission.submissionDate}}
+          </div>
+          <div class="col s5" v-if="cost">
+            (Running for {{Math.round(cost.clock_h * 10) / 10}} hours)
+          </div>
+        </div>
+        <div class="row">
+          <div class="col s2">
+            Configuration:
+          </div>
+          <div class="col s4">
+            <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace, target_namespace: submission.methodConfigurationNamespace, target_name: submission.methodConfigurationName} }">
+              {{submission.methodConfigurationNamespace+'/'+submission.methodConfigurationName}}
+            </router-link>
+          </div>
+          <div class="col s1">
+            Entity:
+          </div>
+          <div class="col s5">
+            {{submission.submissionEntity.entityName}}
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col s1">
+          Status:
+        </div>
+        <div class="col s3" v-if="submission"
+          v-bind:class="submission.status == 'Failed' || submission.status == 'Error' ? 'red-text' : (submission.status == 'Succeeded' ? 'green-text' : '')">
+          {{submission.status}}
+        </div>
+        <div class="col s3" v-else>
+          Loading...
         </div>
         <div class="col s1">
-          Entity:
+          Cost:
         </div>
-        <div class="col s5">
-          {{submission.submissionEntity.entityName}}
+        <div class="col s3" v-if="cost">
+          ${{cost.est_cost}}
+          <span v-if="cost.cromwell_overhead" class="tooltipped" data-tooltip="Cromwell Overhead + Compute Cost">(${{cost.cromwell_overhead}} + ${{Math.floor((cost.est_cost - cost.cromwell_overhead) * 100)/100}})</span>
         </div>
-      </div>
-    </div>
-    <div class="row">
-      <div class="col s1">
-        Status:
-      </div>
-      <div class="col s3" v-if="submission"
-        v-bind:class="submission.status == 'Failed' || submission.status == 'Error' ? 'red-text' : (submission.status == 'Succeeded' ? 'green-text' : '')">
-        {{submission.status}}
-      </div>
-      <div class="col s3" v-else>
-        Loading...
-      </div>
-      <div class="col s1">
-        Cost:
-      </div>
-      <div class="col s3" v-if="cost">
-        ${{cost.est_cost}}
-        <span v-if="cost.cromwell_overhead" class="tooltipped" data-tooltip="Cromwell Overhead + Compute Cost">(${{cost.cromwell_overhead}} + ${{Math.floor((cost.est_cost - cost.cromwell_overhead) * 100)/100}})</span>
-      </div>
-      <div class="col s3" v-else>
-        Loading...
-      </div>
-      <div class="col s1">
-        Workflows:
-      </div>
-      <div class="col s3" v-if="submission">
-        {{submission.workflows.length}}
-      </div>
-      <div class="col s3" v-else>
-        Loading...
-      </div>
-    </div>
-    <div class="row" v-if="submission">
-      <div class="col s6" v-if="submission.status == 'Succeeded' || submission.status == 'Failed'">
-        <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
-      </div>
-      <div class="col s6" v-if="(submission.status == 'Error' || submission.status == 'Failed') && workflows && failed_workflows.length">
-        <button class='btn blue' data-target="rerun-modal" v-on:click="rerun">Rerun Failures</button>
-      </div>
-      <div class="col s6" v-if="submission.status == 'Running' || submission.status == 'Aborting'">
-        <button class='btn red darken-3 modal-trigger' data-target="abort-modal">Abort Submission</button>
-      </div>
-    </div>
-    <div class="row">
-      <div v-if="!display_cromwell" class="col s12 expandable" v-on:click.prevent="read_cromwell">
-        <span>
-          <i class="material-icons">keyboard_arrow_right</i>
-          Cromwell Log
-        </span>
-      </div>
-      <div v-else class="col s12 expandable" v-on:click.prevent="display_cromwell = false">
-        <span>
-          <i class="material-icons">keyboard_arrow_down</i>
-          Cromwell Log
-        </span>
-      </div>
-    </div>
-    <div v-if="display_cromwell">
-      <div v-if="cromwell_lines" style="border: 1px solid grey;">
-      <!-- <div v-if="cromwell_lines" class="card-panel"> -->
-        <!-- <p class="flow-text">{{'...\n'+cromwell_lines.join('\n')}}</p> -->
-        <div class="log-container grey lighten-3" id="cromwell-log">
-          {{'\n'+cromwell_lines.join('\n')}}
+        <div class="col s3" v-else>
+          Loading...
+        </div>
+        <div class="col s1">
+          Workflows:
+        </div>
+        <div class="col s3" v-if="submission">
+          {{submission.workflows.length}}
+        </div>
+        <div class="col s3" v-else>
+          Loading...
         </div>
       </div>
-      <div v-else>
-        <div class="progress">
-          <div class="indeterminate blue"></div>
+      <div class="row" v-if="submission">
+        <div class="col s6" v-if="submission.status == 'Succeeded' || submission.status == 'Failed'">
+          <a class='btn blue' v-on:click.prevent="upload">Upload Results</a>
+        </div>
+        <div class="col s6" v-if="(submission.status == 'Error' || submission.status == 'Failed') && workflows && failed_workflows.length">
+          <button class='btn blue' data-target="rerun-modal" v-on:click="rerun">Rerun Failures</button>
+        </div>
+        <div class="col s6" v-if="submission.status == 'Running' || submission.status == 'Aborting'">
+          <button class='btn red darken-3 modal-trigger' data-target="abort-modal">Abort Submission</button>
+        </div>
+      </div>
+      <div class="row">
+        <div v-if="!display_cromwell" class="col s12 expandable" v-on:click.prevent="read_cromwell">
+          <span>
+            <i class="material-icons">keyboard_arrow_right</i>
+            Cromwell Log
+          </span>
+        </div>
+        <div v-else class="col s12 expandable" v-on:click.prevent="display_cromwell = false">
+          <span>
+            <i class="material-icons">keyboard_arrow_down</i>
+            Cromwell Log
+          </span>
+        </div>
+      </div>
+      <div v-if="display_cromwell">
+        <div v-if="cromwell_lines" style="border: 1px solid grey;">
+        <!-- <div v-if="cromwell_lines" class="card-panel"> -->
+          <!-- <p class="flow-text">{{'...\n'+cromwell_lines.join('\n')}}</p> -->
+          <div class="log-container grey lighten-3" id="cromwell-log">
+            {{'\n'+cromwell_lines.join('\n')}}
+          </div>
+        </div>
+        <div v-else>
+          <div class="progress">
+            <div class="indeterminate blue"></div>
+          </div>
         </div>
       </div>
     </div>

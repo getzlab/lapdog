@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+Other Changes:
+* `lapdog.WorkspaceManager.get_config` now supports multiple argument syntaxes
+  * Check the docstring for details, but essentially, if you have anything that
+  could be used to identify a method configuration, it will try and take it
+
 ## 0.15.7 (Beta)
 
 Bug Fixes:

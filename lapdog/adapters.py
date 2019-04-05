@@ -914,6 +914,21 @@ class SubmissionAdapter(object):
     #     pass
 
 
+"""
+Identifying workflows:
+Workflows tend to be identified by 3 different IDs within lapdog
+1) Output Key (WorkflowAdapter.key): This ID is generated based on the inputs to
+the workflow. It is used internally by lapdog because it can be assigned early on
+and is deterministic. Output keys are used to align task outputs with the proper
+entities when uploading results
+2) Long ID (WorkflowAdapter.long_id) : This ID is assigned by the submission's cromwell server.
+It uniquely identifies the workflow, but is not assigned until the workflow is dispatched.
+Long IDs are used to match certain cromwell events to the right Workflow
+3) Short ID (WorkflowAdapter.id) : This ID is the 8 character prefix of the Long ID.
+Short IDs are often more convenient to display, and are used to match status messages
+to the right Workflow
+"""
+
 class WorkflowAdapter(object):
     """
     Represents a single workflow.
