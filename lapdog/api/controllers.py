@@ -15,17 +15,29 @@ import base64
 import traceback
 import select
 from agutil import byteSize
-from agutil.parallel import parallelize
+from agutil.parallel import parallelize, parallelize2
 from itertools import repeat
 from glob import glob
 import yaml
 from .. import firecloud_status
-from ..cache import cached, cache_fetch, cache_write, cache_init
+from ..cache import cached, cache_fetch, cache_write, cache_init, cache_path
 from ..adapters import NoSuchSubmission, Gateway, get_operation_status
 from ..gateway import get_account, proxy_group_for_user
 import re
 import contextlib
 import pickle
+import tempfile
+import html
+
+
+@parallelize2(1)
+def get_womtool():
+    data = cache_fetch('static', 'womtool', '39', 'jar', decode=False)
+    if data is None:
+        print("Downloading womtool for syntax highlighting")
+        data = requests.get('https://github.com/broadinstitute/cromwell/releases/download/39/womtool-39.jar').content
+        cache_write(data, 'static', 'womtool', '39', 'jar', decode=False)
+    return cache_path('static')('womtool', '39', 'jar', dtype='data', ext='')
 
 @contextlib.contextmanager
 def log_controller(func):
@@ -438,6 +450,7 @@ def create_workspace(namespace, name, parent):
 @controller
 def get_configs(namespace, name):
     ws = get_workspace_object(namespace, name)
+    get_womtool() # enque a download without waiting
     return ws.list_configs()
 
 @cached(20)
@@ -779,14 +792,39 @@ def get_config(namespace, name, config_namespace, config_name):
         traceback.print_exc()
         io_types = None
     try:
+        wdl_text = ws.operator.get_wdl(
+            config['methodRepoMethod']['methodNamespace'],
+            config['methodRepoMethod']['methodName'],
+            config['methodRepoMethod']['methodVersion']
+        )
+        try:
+            with tempfile.NamedTemporaryFile('w', suffix='wdl') as tmpwdl:
+                tmpwdl.write(wdl_text)
+                tmpwdl.flush()
+                result = subprocess.run(
+                    'java -jar {} highlight {} --highlight-mode html'.format(get_womtool()(), tmpwdl.name),
+                    shell=True,
+                    executable='/bin/bash',
+                    stdout=subprocess.PIPE
+                )
+                if result.returncode == 0:
+                    raw_text = result.stdout.decode()
+                    wdl_text = ''
+                    pattern = re.compile(r'</?span.*?>')
+                    while pattern.search(raw_text):
+                        match = pattern.search(raw_text)
+                        wdl_text += (
+                            html.escape(raw_text[:match.start()])
+                            + match.group()
+                        )
+                        raw_text = raw_text[match.end():]
+                    wdl_text += html.escape(raw_text)
+        except:
+            traceback.print_exc()
         return {
             'config':config,
             'io': io_types,
-            'wdl': ws.operator.get_wdl(
-                config['methodRepoMethod']['methodNamespace'],
-                config['methodRepoMethod']['methodName'],
-                config['methodRepoMethod']['methodVersion']
-            )
+            'wdl': wdl_text
         }, 200
     except:
         traceback.print_exc()

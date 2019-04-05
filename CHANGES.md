@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.15.8 (Beta)
+
+New Features:
+* Added syntax highlighting when viewing WDLs in the UI
+  * The first time you view a configuration in the UI after updating and after clearing your
+  lapdog cache, the configuration will be slow to load while lapdog downloads
+  WomTool
 
 Bug Fixes:
 * Fixed the offline evaluation schema returning unexpected results when attributes

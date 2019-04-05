@@ -62,7 +62,7 @@
           </div>
           <div class="row" v-if="active_cfg.wdl && show_wdl">
             <div style="border-radius: 10px; padding: 15px; border: 1px solid grey" class="log-contianer">
-              <pre style="overflow-x: scroll;">{{active_cfg.wdl}}</pre>
+              <pre style="overflow-x: scroll;" v-html="active_cfg.wdl"></pre>
             </div>
           </div>
           <div class="row" style="margin-top: 0px;">
@@ -571,5 +571,17 @@ export default {
 
    blockquote {
      border-left: 5px solid #42a5f5
+   }
+
+   span.type {
+     color: #01579b;
+   }
+
+   span.keyword, span.section {
+     color: #8e24aa;
+   }
+
+   span.variable {
+     color: #009688;
    }
 </style>
