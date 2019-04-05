@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.7 (Beta)
+
+Bug Fixes:
+* Fixed bold text not appearing on black background terminals
+
 ## 0.15.6 (Beta)
 
 New Features:

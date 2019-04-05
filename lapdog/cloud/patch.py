@@ -64,7 +64,7 @@ def __project_admin_apply_patch(namespace):
     print("Patch version", __version__)
     print("Patching Namespace:", namespace)
     user_session = generate_user_session(get_access_token())
-    print(crayons.black("Phase 1/5:", bold=True), "Checking resolution status")
+    print(crayons.normal("Phase 1/5:", bold=True), "Checking resolution status")
     blob = getblob(
         'gs://lapdog-resolutions/' + sha512(namespace.encode()).hexdigest()
     )
@@ -90,7 +90,7 @@ def __project_admin_apply_patch(namespace):
     else:
         project = blob.download_as_string().decode()
         print(crayons.green("Remote Resolution intact"))
-    print("Lapdog Project:", crayons.black(project, bold=True))
+    print("Lapdog Project:", crayons.normal(project, bold=True))
     blob = getblob(
         'gs://{bucket}/resolution'.format(
             bucket = ld_meta_bucket_for_project(project)
@@ -108,7 +108,7 @@ def __project_admin_apply_patch(namespace):
     roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
         project=project
     )
-    print(crayons.black("Phase 2/5:", bold=True), "Update IAM Policies")
+    print(crayons.normal("Phase 2/5:", bold=True), "Update IAM Policies")
     response = user_session.get(
         roles_url+"/Core_account"
     )
@@ -197,7 +197,7 @@ def __project_admin_apply_patch(namespace):
     else:
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Invalid response from Google API")
-    print(crayons.black("Phase 3/5:", bold=True), "Checking VPC Configuration")
+    print(crayons.normal("Phase 3/5:", bold=True), "Checking VPC Configuration")
     blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
     regions = ['us-central1']
     try:
@@ -233,7 +233,7 @@ def __project_admin_apply_patch(namespace):
                 raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
         else:
             print(crayons.green("VPC Configuration Valid for region "+region))
-    print(crayons.black("Phase 4/5:", bold=True), "Deploy Cloud API Updates")
+    print(crayons.normal("Phase 4/5:", bold=True), "Deploy Cloud API Updates")
     response = user_session.get(
         'https://cloudfunctions.googleapis.com/v1/projects/{project}/locations/us-central1/functions'.format(
             project=project
@@ -264,7 +264,7 @@ def __project_admin_apply_patch(namespace):
             _deploy(__ENDPOINTS__[func], func, functions_account, project)
     else:
         print(crayons.green("No updates"))
-    print(crayons.black("Phase 5/5:", bold=True), "Redact Insecure Cloud API Endpoints")
+    print(crayons.normal("Phase 5/5:", bold=True), "Redact Insecure Cloud API Endpoints")
     if response.status_code != 200:
         print("Unable to query existing functions. Applying all redactions")
         redactions = __REDACTIONS
@@ -278,7 +278,7 @@ def __project_admin_apply_patch(namespace):
     if len(redactions) == 0:
         print(crayons.green("All endpoints secure"))
         return
-    print(crayons.black("%d insecure endpoints detected"%len(redactions), bold=True))
+    print(crayons.normal("%d insecure endpoints detected"%len(redactions), bold=True))
     print("It is strongly recommended that you redact the insecure endpoints")
     print("Press Enter to redact endpoints, Ctrl+C to abort")
     try:

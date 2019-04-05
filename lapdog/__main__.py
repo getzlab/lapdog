@@ -561,7 +561,7 @@ def cmd_service_account(args):
     print(
         crayons.yellow("WARNING:", bold=True),
         "This runs one-time setup for an entire Firecloud",
-        crayons.black("Namespace", bold=True)
+        crayons.normal("Namespace", bold=True)
     )
     print("This should be considered an analagous action to creating a Firecloud Billing Project")
     print("You must be an owner of the Firecloud Billing Project and a Billing Account User for the underlying Google Billing Account")
@@ -611,9 +611,9 @@ def cmd_service_account(args):
     from lapdog.gateway import ld_project_for_namespace
     print("==========================")
     print("Ready to Initialize")
-    print("1) Create Google Project", crayons.black(ld_project_for_namespace(namespace), bold=True))
-    print("    - This project will contain Lapdog Services and Resources to execute jobs in the", crayons.black(namespace, bold=True), "namespace")
-    print("2) Link Project", crayons.black(ld_project_for_namespace(namespace), bold=True), "to Google Billing Project", crayons.black(billing, bold=True))
+    print("1) Create Google Project", crayons.normal(ld_project_for_namespace(namespace), bold=True))
+    print("    - This project will contain Lapdog Services and Resources to execute jobs in the", crayons.normal(namespace, bold=True), "namespace")
+    print("2) Link Project", crayons.normal(ld_project_for_namespace(namespace), bold=True), "to Google Billing Project", crayons.normal(billing, bold=True))
     print("    - All charges for Lapdog will be billed to this account")
     print("    - Charges include costs for running jobs, storing Lapdog metadata, and operating the Lapdog Engine")
     print("    - Data storage costs will be billed through the associated Firecloud Workspaces")
@@ -640,7 +640,7 @@ def cmd_service_account(args):
     print("==========================")
     print("Initialization complete")
     print()
-    print("Please read", crayons.black("https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins", bold=True))
+    print("Please read", crayons.normal("https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins", bold=True))
 
 
 def cmd_patch(args):
@@ -679,7 +679,7 @@ def cmd_doc(args):
 
     print("Diagnosing issues with local lapdog installation")
     print('----------------------')
-    print(crayons.black("Lapdog Version:", bold=True), __version__)
+    print(crayons.normal("Lapdog Version:", bold=True), __version__)
     print("Lapdog dependencies")
     ld = get_distribution('lapdog')
     for req in ld.requires():
@@ -697,7 +697,7 @@ def cmd_doc(args):
         from .cloud.utils import __API_VERSION__
         for namespace in args.namespaces:
             print('----------------------')
-            print(crayons.black(namespace, bold=True), end=' ')
+            print(crayons.normal(namespace, bold=True), end=' ')
             with lapdog.capture() as (out, err):
                 gateway = lapdog.Gateway(namespace)
                 out.seek(0,0)
