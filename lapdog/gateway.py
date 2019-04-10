@@ -209,7 +209,7 @@ class Gateway(object):
             self.project = None
             traceback.print_exc()
         if not self.exists:
-            warnings.warn("Gateway does not exist")
+            warnings.warn("Gateway does not exist. You will not be able to execute jobs")
         elif not self.registered:
             warnings.warn(
                 "Gateway for namespace {} not registered. Please run Gateway.register()".format(
