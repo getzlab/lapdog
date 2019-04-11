@@ -337,6 +337,7 @@
         </div>
       </div>
       <div v-if="submissions" class="row">
+        <pagination ref="submission_pagination" v-bind:n_pages="lodash.ceil(submissions.length / page_limit)" v-bind:page_size="page_limit" v-bind:getter="next_submissions"></pagination>
         <div class="col s12">
           <table class="highlight">
             <thead>
@@ -349,7 +350,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="sub in submissions">
+              <tr v-for="sub in visible_submissions">
                 <td>
                   <router-link :to="{ name: 'methods', params: {namespace:namespace, workspace:workspace, target_namespace:sub.methodConfigurationNamespace, target_name:sub.methodConfigurationName} }">
                     <!-- {{truncate_cell(sub.methodConfigurationNamespace+'/'+sub.methodConfigurationName, true)}} -->
@@ -396,7 +397,7 @@
           </div>
         </div>
         <div v-if="active_entity">
-          <div class="row" v-if="active_entity.count > page_limit">
+          <!-- <div class="row" v-if="active_entity.count > page_limit">
             <div class="col s12">
               <ul class="pagination center">
                 <li v-bind:class="active_page == 0 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page - 1)">
@@ -410,7 +411,8 @@
                 </li>
               </ul>
             </div>
-          </div>
+          </div> -->
+          <pagination v-bind:n_pages="max_pages.length" v-bind:page_size="page_limit" v-bind:getter="turn_page"></pagination>
           <!-- <div class="row" style="border: 1px solid grey;"> -->
           <div class="row z-depth-1">
             <div class="col s12" style="overflow-x: scroll;">
@@ -447,7 +449,7 @@
               </div>
             </div>
           </div>
-          <div class="row" v-if="active_entity.count > page_limit">
+          <!-- <div class="row" v-if="active_entity.count > page_limit">
             <div class="col s12">
               <ul class="pagination center">
                 <li v-bind:class="active_page == 0 ? 'disabled' : ''" v-on:click.prevent="turn_page(active_page - 1)">
@@ -461,7 +463,7 @@
                 </li>
               </ul>
             </div>
-          </div>
+          </div> -->
         </div>
         <div v-else>
           <div class="row">
@@ -500,7 +502,6 @@
         show_attributes: false,
         active_entity: null,
         entities_data: null,
-        active_page: 0,
         page_limit: 20,
         preflight_entities: 0,
         show_advanced: false,
@@ -513,6 +514,7 @@
         submission_error: null,
         private_access: true,
         compute_region: null,
+        submission_page: 0
         // entities: null
       }
     },
@@ -544,13 +546,9 @@
       max_pages() {
         return _.range(0, _.ceil(this.active_entity.count / this.page_limit));
       },
-      page_range() {
-        return _.slice(
-          this.max_pages,
-          _.max([0, this.active_page - 5]),
-          _.min([this.max_pages.length, this.active_page + 6])
-        );
-      }
+      visible_submissions() {
+        return _.slice(this.submissions, this.submission_page * this.page_limit, (this.submission_page+1) * this.page_limit);
+      },
       // active_entity: {
       //   get() {
       //     return this._active_entity ? this._active_entity : this.ws.entities[0]
@@ -582,6 +580,9 @@
           (this.active_page * this.page_limit),
           ((this.active_page+1) * this.page_limit)
         );
+      },
+      next_submissions(page) {
+        this.submission_page = page;
       },
       load_data(etype, start, stop)
       {
@@ -740,6 +741,7 @@
         this.pending_ops = 0;
         this.submission_error = null;
         this.private_access = true;
+        this.submission_page = 0;
         window.$('.tooltipped').tooltip();
         try {
           window.$('.execute-button').tooltip('destroy');
@@ -792,6 +794,7 @@
                           console.log(response.data);
                           this.submissions = response.data;
                           this.cached_submissions = false;
+                          if (this.$refs.submission_pagination) this.$refs.submission_pagination.turn_page(0);
                         })
                         .catch(error => {
                           console.error("FAIL");
@@ -1005,6 +1008,7 @@
       this.syncing = false;
       this.gateway = null;
       this.pending_ops = 0;
+      this.submission_page = 0;
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();
@@ -1014,9 +1018,6 @@
 </script>
 
 <style lang="css">
-  ul.pagination > li.active {
-    background: #1e88e5;
-  }
 
   div.data-viewer td {
     font-size: 0.9em;

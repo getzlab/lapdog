@@ -365,16 +365,7 @@ Other: error_outline
       </div>
     </div>
     <div class="workflow-container" v-if="workflows && workflows.length">
-      <!-- <ul class="collapsible popout">
-        <li v-for="workflow in workflows">
-          <div class="collapsible-header">
-            {{workflow.entity}}  {{workflow.status}}  ({{workflow.id}})
-          </div>
-          <div class="collapsible-body">
-            (Workflow data)
-          </div>
-        </li>
-      </ul> -->
+      <pagination ref="pagination" v-bind:n_pages="lodash.ceil(workflows.length / 20)" v-bind:page_size="20" v-bind:getter="turn_page"></pagination>
       <table class="highlight">
         <thead>
           <tr>
@@ -408,7 +399,7 @@ Other: error_outline
           </tr>
         </thead>
         <tbody>
-          <tr v-for="workflow in workflows">
+          <tr v-for="workflow in visible_workflows">
             <td>{{workflow.entity}}</td>
             <td v-bind:class="workflow.status == 'Success' ? 'green-text' : (workflow.status == 'Failed' || workflow.status == 'Error')? 'red-text' : 'black-text'">
               {{workflow.status}}
@@ -449,7 +440,8 @@ export default {
       reversed: false,
       cost: null,
       rerun_set: null,
-      rerun_type: null
+      rerun_type: null,
+      page: 0
     }
   },
   computed: {
@@ -465,6 +457,9 @@ export default {
           return workflow.status == 'Failed' || workflow.status == 'Error';
         });
       } else return null;
+    },
+    visible_workflows() {
+      return _.slice(this.workflows, this.page * 20, (this.page + 1) * 20);
     }
   },
   created() {
@@ -493,6 +488,7 @@ export default {
       this.reversed = false;
       this.cost = null;
       this.rerun_set = null;
+      this.page = 0;
       axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid)
         .then(response => {
           console.log("Got submission");
@@ -547,6 +543,9 @@ export default {
           })
         })
     },
+    turn_page(page) {
+      this.page = page;
+    },
     sort_workflows(key) {
       if (key == this.sort_key) {
         this.workflows = _.reverse(this.workflows);
@@ -557,6 +556,7 @@ export default {
         this.sort_key = key;
         this.workflows = _.sortBy(this.workflows, key);
       }
+      this.$refs.pagination.turn_page(0);
     },
     read_cromwell() {
       this.display_cromwell = true;

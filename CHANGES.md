@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased Changes
+
+New Features:
+* Added pagination to UI when listing submissions and workflows
+
+Other Changes:
+* Improved pagination of data table
+
 ## 0.15.8 (Beta)
 
 New Features:
