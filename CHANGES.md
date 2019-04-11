@@ -5,6 +5,9 @@
 New Features:
 * Added pagination to UI when listing submissions and workflows
 
+Bug Fixes:
+* Fixed a bug which would sometimes display submissions of the wrong workspace in the UI
+
 Other Changes:
 * Improved pagination of data table
 

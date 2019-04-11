@@ -514,7 +514,8 @@
         submission_error: null,
         private_access: true,
         compute_region: null,
-        submission_page: 0
+        submission_page: 0,
+        cancel: null
         // entities: null
       }
     },
@@ -587,12 +588,22 @@
       load_data(etype, start, stop)
       {
         this.entities_data = null;
-        axios.get(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/entities/'+etype+'?start='+start+'&end='+stop)
+        axios.get(
+          API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/entities/'+etype,
+          {
+            cancelToken:this.cancel.token,
+            params: {
+              'start': start,
+              'end': stop
+            }
+          }
+        )
           .then(response => {
             console.log("Obtained entities");
             this.entities_data = response.data;
           })
           .catch(error => {
+            if(axios.isCancel(error)) return;
             console.error("Unable to load entities");
             console.error(error);
             window.materialize.toast({
@@ -616,12 +627,20 @@
         _this.submission_message = "-";
         console.log("Executing preflight");
         console.log(_this);
-        let query = API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+"/preflight?";
-        query += "config="+encodeURIComponent(_this.submission_config);
-        query += "&entity="+encodeURIComponent(_this.entity_field);
-        if (_this.submission_expression != "") query += "&expression="+encodeURIComponent(_this.submission_expression);
-        if (_this.submission_etype != "") query += "&etype="+encodeURIComponent(_this.submission_etype);
-        axios.post(query)
+        let query = API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+"/preflight";
+        let params = {
+          config: _this.submission_config,
+          entity: _this.entity_field
+        }
+        if (_this.submission_expression != "") params.expression = _this.submission_expression;
+        if (_this.submission_etype != "") params.etype = _this.submission_etype;
+        axios.post(
+          query,
+          {
+            'cancelToken':this.cancel.token,
+            'params': params
+          }
+        )
           .then(response => {
             console.log("Preflight returned");
             console.log(response);
@@ -632,6 +651,7 @@
             else _this.submission_message = result.message;
           })
           .catch(response => {
+            if(axios.isCancel(error)) return;
             console.error("FAILED");
             console.error(response)
             window.materialize.toast({
@@ -641,17 +661,18 @@
       }, 500),
       submit_workflow() {
         this.submission_error = null;
-        let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
-        query += "config="+encodeURIComponent(this.submission_config);
-        query += "&entity="+encodeURIComponent(this.entity_field);
-        if (this.submission_expression != "") query += "&expression="+encodeURIComponent(this.submission_expression);
-        if (this.submission_etype != "") query += "&etype="+encodeURIComponent(this.submission_etype);
-        // if (this.cromwell_mem % 2 == 1) this.cromwell_mem += 1;
-        query += "&memory="+encodeURIComponent(_.toString(this.cromwell_mem));
-        query += "&batch="+encodeURIComponent(_.toString(this.batch_size));
-        query += "&query="+encodeURIComponent(_.toString(this.query_size));
-        query += "&private="+encodeURIComponent(_.toString(this.private_access));
-        query += "&region="+encodeURIComponent(this.compute_region);
+        let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute";
+        let params = {
+          config: this.submission_config,
+          entity: this.entity_field,
+          memory: this.cromwell_mem,
+          batch: this.batch_size,
+          query: this.query_size,
+          private: this.private_access,
+          region: this.compute_region
+        }
+        if (this.submission_expression != "") params.expression = this.submission_expression;
+        if (this.submission_etype != "") params.etype = this.submission_etype;
 
         if (this.preflight_entities > 500) window.materialize.toast({
           html: "Preparing job. This may take a while...",
@@ -661,7 +682,13 @@
           html: "Preparing job...",
           displayLength: 10000,
         })
-        axios.post(query)
+        axios.post(
+          query,
+          {
+            cancelToken:this.cancel.token,
+            params: params
+          }
+        )
           .then(response => {
             console.log("Execution returned");
             console.log(response);
@@ -689,6 +716,7 @@
             }
           })
           .catch(response => {
+            if(axios.isCancel(error)) return;
             console.error("FAILED");
             console.error(response)
             window.materialize.toast({
@@ -742,6 +770,8 @@
         this.submission_error = null;
         this.private_access = true;
         this.submission_page = 0;
+        if (this.cancel) this.cancel.cancel('Loading new workspace');
+        this.cancel = axios.CancelToken.source();
         window.$('.tooltipped').tooltip();
         try {
           window.$('.execute-button').tooltip('destroy');
@@ -750,7 +780,7 @@
         }
         // window.$('.execute-button').tooltip('close');
         this.$emit('on-namespace-update', namespace);
-        axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace)
+        axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace, {cancelToken:this.cancel.token})
           .then(response => {
             console.log(response.data);
             this.ws = response.data;
@@ -777,18 +807,30 @@
                 console.log(error);
               }
             }, 100);
-            axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/cache')
+            axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/cache', {cancelToken:this.cancel.token})
               .then(response => {
                 console.log(response.data);
                 this.cache_state = response.data.state;
                 this.pending_ops = response.data.pending;
                 console.log("Fetching submissions");
-                  axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions?cache=true')
+                  axios.get(
+                    API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions',
+                    {
+                      cancelToken:this.cancel.token,
+                      params: {cache: true}
+                    }
+                  )
                     .then(response => {
                       console.log("Fetched submissions");
                       console.log(response.data);
                       this.submissions = response.data;
-                      axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions?cache=false')
+                      axios.get(
+                        API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/submissions',
+                        {
+                          cancelToken:this.cancel.token,
+                          params: {cache: false}
+                        }
+                      )
                         .then(response => {
                           console.log("Fetched submissions");
                           console.log(response.data);
@@ -797,6 +839,7 @@
                           if (this.$refs.submission_pagination) this.$refs.submission_pagination.turn_page(0);
                         })
                         .catch(error => {
+                          if(axios.isCancel(error)) return;
                           console.error("FAIL");
                           console.error(error);
                           window.materialize.toast({
@@ -805,6 +848,7 @@
                         })
                     })
                     .catch(error => {
+                      if(axios.isCancel(error)) return;
                       console.error("FAIL");
                       console.error(error);
                       window.materialize.toast({
@@ -813,6 +857,7 @@
                     })
               })
               .catch(error => {
+                if(axios.isCancel(error)) return;
                 console.error("FAIL");
                 console.error(error);
                 window.materialize.toast({
@@ -821,6 +866,7 @@
               })
           })
           .catch(error => {
+            if(axios.isCancel(error)) return;
             console.error("FAIL");
             console.error(error);
             window.materialize.toast({
@@ -856,7 +902,7 @@
       },
       update_autocomplete: _.debounce((_this) => {
         if (_this.entity_field.length == 0) return;
-        axios.get(API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+'/autocomplete/'+encodeURIComponent(_this.entity_field))
+        axios.get(API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+'/autocomplete/'+encodeURIComponent(_this.entity_field), {cancelToken:this.cancel.token})
           .then(response => {
             window.$('input.autocomplete').autocomplete(
               'updateData',
@@ -878,7 +924,7 @@
           })
       }, 500),
      get_acl(namespace, workspace) {
-        axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway')
+        axios.get(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway', {cancelToken:this.cancel.token})
           .then(response => {
             console.log("RESPONSE");
             console.log(response.data);
@@ -905,6 +951,7 @@
             }
           })
           .catch(error => {
+            if(axios.isCancel(error)) return;
             console.error("FAIL")
             console.error(error);
             window.materialize.toast({
@@ -915,7 +962,7 @@
       set_acl(namespace, workspace) {
         console.log("UPDATING ACL");
         this.acl = null;
-         axios.post(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway')
+         axios.post(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway', {cancelToken:this.cancel.token})
            .then(response => {
              console.log("RESPONSE");
              console.log(response.data);
@@ -923,6 +970,7 @@
              this.compute_region = this.gateway.compute_regions[0];
            })
            .catch(error => {
+             if(axios.isCancel(error)) return;
              console.error("FAIL")
              console.error(error);
              window.materialize.toast({
@@ -948,7 +996,7 @@
       sync_cache() {
         this.syncing = true;
         this.cache_state = !this.cache_state;
-        axios.put(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache')
+        axios.put(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache', {cancelToken:this.cancel.token})
           .then(response => {
             console.log(response.data);
             this.cache_state = response.data.state;
@@ -971,6 +1019,7 @@
             // this.$forceUpdate();
           })
           .catch(error => {
+            if(axios.isCancel(error)) return;
             console.error("FAIL");
             console.error(error);
             window.materialize.toast({
@@ -1012,6 +1061,10 @@
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();
+      next();
+    },
+    beforeRouteLeave(to, from, next) {
+      if (this.cancel) this.cancel.cancel('Navigating to new route');
       next();
     }
   }

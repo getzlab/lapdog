@@ -441,7 +441,8 @@ export default {
       cost: null,
       rerun_set: null,
       rerun_type: null,
-      page: 0
+      page: 0,
+      cancel: null
     }
   },
   computed: {
@@ -489,12 +490,14 @@ export default {
       this.cost = null;
       this.rerun_set = null;
       this.page = 0;
-      axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid)
+      if (this.cancel) this.cancel.cancel("Recycling submission page");
+      this.cancel = axios.CancelToken.source();
+      axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid, {cancelToken: this.cancel.token})
         .then(response => {
           console.log("Got submission");
           this.submission = response.data;
           console.log("Fetching workflows");
-          axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/workflows')
+          axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/workflows', {cancelToken: this.cancel.token})
             .then(response => {
               console.log("Got workflows");
               console.log(response.data);
@@ -505,13 +508,14 @@ export default {
               }, 100);
             })
             .catch(error => {
+              if(axios.isCancel(error)) return;
               console.error("Failed");
               console.error(error);
               window.materialize.toast({
                 html: "Unable to load workflows"
               })
             })
-            axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/cost')
+            axios.get(API_URL+'/api/v1/submissions/expanded/'+namespace+'/'+workspace+'/'+sid+'/cost', {cancelToken: this.cancel.token})
               .then(response => {
                 console.log("Got cost");
                 console.log(response.data);
@@ -521,6 +525,7 @@ export default {
                 }, 100);
               })
               .catch(error => {
+                if(axios.isCancel(error)) return;
                 console.error("Failed");
                 console.error(error);
                 window.materialize.toast({
@@ -529,6 +534,7 @@ export default {
               })
         })
         .catch(response => {
+          if(axios.isCancel(response)) return;
           console.error("Failed");
           console.error(response)
           console.log(response.response.data);
@@ -561,7 +567,15 @@ export default {
     read_cromwell() {
       this.display_cromwell = true;
       console.log("Reading cromwell");
-      axios.get(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/cromwell?offset='+encodeURIComponent(''+this.cromwell_offset))
+      axios.get(
+        API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/cromwell',
+        {
+          cancelToken: this.cancel.token,
+          params: {
+            offset: this.cromwell_offset
+          }
+        }
+      )
         .then(response => {
           console.log("Read cromwell lines");
           console.log(response.data);
@@ -572,6 +586,7 @@ export default {
           }, 100);
         })
         .catch(error => {
+          if(axios.isCancel(error)) return;
           console.error("Failed");
           console.error(error);
           window.materialize.toast({
@@ -585,13 +600,20 @@ export default {
         html: "Checking operation "+operation_id+"...",
         displayLength: 2000,
       });
-      axios.get(API_URL+'/api/v1/operations?operation_id='+encodeURIComponent(operation_id))
+      axios.get(
+        API_URL+'/api/v1/operations',
+        {
+          cancelToken: this.cancel.token,
+          params: {operation_id: operation_id}
+        }
+      )
         .then(response => {
           this.active_operation = response.data;
           window.$('#operation-modal').modal();
           window.$('#operation-modal').modal('open');
         })
         .catch(error => {
+          if(axios.isCancel(error)) return;
           console.error("FAILURE");
           console.error(error);
           window.materialize.toast({
@@ -605,13 +627,14 @@ export default {
         html: "Reading log...",
         displayLength: 2000,
       });
-      axios.get(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+this.active_workflow.id+'/'+log_type+'/'+call_index)
+      axios.get(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+this.active_workflow.id+'/'+log_type+'/'+call_index, {cancelToken: this.cancel.token})
         .then(response => {
           this.active_log = response.data;
           window.$('#log-modal').modal();
           window.$('#log-modal').modal('open');
         })
         .catch(error => {
+          if(axios.isCancel(error)) return;
           console.error("FAILURE");
           console.error(error);
           window.materialize.toast({
@@ -626,7 +649,7 @@ export default {
         html: "Loading workflow "+workflow_id+"...",
         displayLength: 2000,
       });
-      axios.get(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+workflow_id)
+      axios.get(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/workflows/'+workflow_id, {cancelToken: this.cancel.token})
         .then(response => {
           console.log("Got workflow detail");
           console.log(response.data);
@@ -638,6 +661,7 @@ export default {
           window.$('#workflow-modal').modal('open');
         })
         .catch(error => {
+          if(axios.isCancel(error)) return;
           console.error("Failed");
           console.error(error);
           window.materialize.toast({
@@ -650,7 +674,7 @@ export default {
         html: "Aborting Submission",
         displayLength: 2000,
       });
-      axios.delete(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
+      axios.delete(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id, {cancelToken: this.cancel.token})
         .then(response => {
           console.log("Abort results");
           console.log(response);
@@ -662,6 +686,7 @@ export default {
           else this.submission.status = 'Aborted';
         })
         .catch(error => {
+          if(axios.isCancel(error)) return;
           window.materialize.toast({
             html: "Failed to abort",
             displayLength: 10000,
@@ -673,7 +698,7 @@ export default {
         html: "Uploading results to Firecloud...",
         displayLength: 5000,
       });
-      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id)
+      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id, {cancelToken: this.cancel.token})
         .then(response => {
           console.log("Upload results");
           console.log(response);
@@ -690,6 +715,7 @@ export default {
           }
         })
         .catch(error => {
+          if(axios.isCancel(error)) return;
           window.materialize.toast({
             html: "Unable to upload results: " + response.data.message,
             displayLength: 10000,
@@ -701,7 +727,7 @@ export default {
         html: "Creating entity set for " + (this.failed_workflows.length) + " failed entitites",
         displayLength: 4000
       });
-      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/rerun')
+      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/rerun', {cancelToken: this.cancel.token})
         .then(response => {
           console.log("Rerun set");
           console.log(response.data);
@@ -710,6 +736,7 @@ export default {
           window.$('#rerun-modal').modal('open');
         })
         .catch(response => {
+          if(axios.isCancel(response)) return;
           console.log("Failed to create rerun set");
           console.error(response);
           window.materialize.toast({
@@ -718,18 +745,26 @@ export default {
         })
     },
     submit_rerun() {
-      let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute?";
-      query += "config="+encodeURIComponent(this.submission.methodConfigurationNamespace+'/'+this.submission.methodConfigurationName);
-      query += "&entity="+encodeURIComponent(this.rerun_set.name);
-      if (this.rerun_set.expression) query += "&expression="+encodeURIComponent(this.rerun_set.expression);
-      if (this.rerun_set.type) query += "&etype="+encodeURIComponent(this.rerun_set.type);
-      if (this.submission.runtime && this.submission.runtime.private_access) query += "&private=true";
-      if (this.submission.runtime && this.submission.runtime.region) query += "&region=" + encodeURIComponent(this.submission.runtime.region);
+      let query = API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+"/execute";
+      let params = {
+        config: this.submission.methodConfigurationNamespace+'/'+this.submission.methodConfigurationName,
+        entity: this.rerun_set.name
+      }
+      if (this.rerun_set.expression) params.expression = this.rerun_set.expression;
+      if (this.rerun_set.type) params.etype = this.rerun_set.type;
+      if (this.submission.runtime && this.submission.runtime.private_access) params.private = true;
+      if (this.submission.runtime && this.submission.runtime.region) params.region = this.submission.runtime.region;
       window.materialize.toast({
         html: "Preparing job...",
         displayLength: 10000,
       })
-      axios.post(query)
+      axios.post(
+        query,
+        {
+          cancelToken: this.cancel.token,
+          params: params
+        }
+      )
         .then(response => {
           console.log("Execution returned");
           console.log(response);
@@ -755,6 +790,7 @@ export default {
           }
         })
         .catch(response => {
+          if(axios.isCancel(response)) return;
           console.error("FAILED");
           console.error(response);
           window.materialize.toast({
@@ -766,6 +802,10 @@ export default {
   beforeRouteUpdate(to, from, next) {
     console.log("Update!");
     this.init(to.params.namespace, to.params.workspace, to.params.submission_id)
+    next();
+  },
+  beforeRouteLeave(to, from, next) {
+    if (this.cancel) this.cancel.cancel("Switching routes");
     next();
   }
 }
