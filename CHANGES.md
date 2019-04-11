@@ -10,6 +10,8 @@ Bug Fixes:
 
 Other Changes:
 * Improved pagination of data table
+* Improved error handling of resolution setup
+  * Updated `resolve` global endpoint to `v2` (no patch necessary)
 
 ## 0.15.8 (Beta)
 

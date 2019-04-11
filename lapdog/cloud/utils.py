@@ -25,7 +25,7 @@ __API_VERSION__ = {
     'signature': 'v1',
     'query': 'v1',
     'quotas': 'v3',
-    'resolve': 'v1',
+    'resolve': 'v2',
     'existence': 'frozen'
 }
 # The api version will allow versioning of cloud functions

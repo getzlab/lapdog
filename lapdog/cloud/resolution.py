@@ -58,6 +58,14 @@ def insert_resolution(request):
             if response.status_code == 200:
                 break
             print(response.status_code, response.text, file=sys.stderr)
+            if response.status_code == 404:
+                return (
+                    {
+                        'error': "User not found",
+                        'message': "You are not registered yet with firecloud"
+                    },
+                    404
+                )
             time.sleep(5)
 
 
