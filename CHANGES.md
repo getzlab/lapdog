@@ -2,6 +2,9 @@
 
 ## Unreleased Changes
 
+Bug Fixes:
+* Fixed error message not being displayed when Firecloud is completely offline
+
 Other Changes:
 * Slider CSS now works in multiple browsers
 

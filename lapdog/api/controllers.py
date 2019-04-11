@@ -131,7 +131,6 @@ def status():
             200
         )
     except:
-        obj['failed'] = True
         print(traceback.format_exc())
     return {'failed': True, 'systems': {}}, 200
 

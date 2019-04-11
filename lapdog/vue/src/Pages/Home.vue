@@ -98,6 +98,9 @@
         axios.get(API_URL+'/api/v1/status')
           .then(response => {
             console.log(response.data);
+            if (response.data.failed) window.materialize.toast({
+              html: "Unable to query Firecloud status (it may be offline entirely)"
+            });
             this.systems = [];
             for(let key in response.data.systems)
             {
