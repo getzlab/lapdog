@@ -1100,4 +1100,16 @@
       background-color: #1e88e5;
   }
 
+  input[type='range']::-moz-range-thumb {
+      background-color: #1e88e5;
+  }
+
+  input[type='range']::-ms-thumb {
+      background-color: #1e88e5;
+  }
+
+  ul.pagination li.active {
+    background: #1e88e5;
+  }
+
 </style>

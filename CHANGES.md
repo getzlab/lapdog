@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Other Changes:
+* Slider CSS now works in multiple browsers
+
 ##  0.15.9 (Beta)
 
 New Features:
