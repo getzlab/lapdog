@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+##  0.15.9 (Beta)
 
 New Features:
 * Added pagination to UI when listing submissions and workflows
