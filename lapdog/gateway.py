@@ -152,7 +152,7 @@ def get_token_expired(token):
             return True
     return int(expiry) < time.time()
 
-def generate_core_key(ld_project, session=None):
+def __generate_core_key(ld_project, worker_account, session=None):
     """
     Issues a new core service account access key for a given lapdog engine project.
     This cannot be used unless you are an administrator.
@@ -164,6 +164,8 @@ def generate_core_key(ld_project, session=None):
     keys for the core service account before calling this function. You should also
     check the acl bindings to ensure that no unathorized users have access to the metadata bucket
     either directly on object in the bucket or inheriting through project-level permissions
+    You should also add a new key version of the lapdog-sign key in google KMS and
+    remove all existing versions
     """
     if session is None:
         session = generate_user_session(get_access_token())
@@ -175,13 +177,23 @@ def generate_core_key(ld_project, session=None):
         )
     )
     if response.status_code == 200:
-        getblob(
+        blob = getblob(
             'gs://{bucket}/auth_key.json'.format(
                 bucket=ld_meta_bucket_for_project(ld_project)
             )
-        ).upload_from_string(
+        )
+        blob.upload_from_string(
             base64.b64decode(response.json()['privateKeyData'].encode())
         )
+        acl = blob.acl
+        for entity in acl.get_entities():
+            if entity.type == 'project':
+                if entity.identifier.startswith('editors-'):
+                    entity.revoke_owner()
+                elif entity.identifier.startswith('viewers-'):
+                    entity.revoke_read()
+        acl.user(worker_account).grant_read()
+        acl.save()
     else:
         print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
         raise ValueError("Could not generate core key")
@@ -488,22 +500,7 @@ class Gateway(object):
         print("Waiting for service account creation...")
         time.sleep(30)
         print("Issuing Core Service Account Key")
-        generate_core_key(custom_lapdog_project, user_session)
-        print("Updating Key Metadata ACL")
-        blob = getblob(
-            'gs://{bucket}/auth_key.json'.format(
-                bucket=ld_meta_bucket_for_project(custom_lapdog_project)
-            )
-        )
-        acl = blob.acl
-        for entity in acl.get_entities():
-            if entity.type == 'project':
-                if entity.identifier.startswith('editors-'):
-                    entity.revoke_owner()
-                elif entity.identifier.startswith('viewers-'):
-                    entity.revoke_read()
-        acl.user(functions_account).grant_read()
-        acl.save()
+        __generate_core_key(custom_lapdog_project, functions_account, user_session)
         print("Saving Project Resolution to Engine")
         blob = getblob(
             'gs://{bucket}/resolution'.format(

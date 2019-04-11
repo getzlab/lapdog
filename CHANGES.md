@@ -12,6 +12,8 @@ Other Changes:
 * Improved pagination of data table
 * Improved error handling of resolution setup
   * Updated `resolve` global endpoint to `v2` (no patch necessary)
+* Renamed `lapdog.gateway.generate_core_key` to `__generate_core_key`
+  * This change reflects the fact that this function should not be called by end-users
 
 ## 0.15.8 (Beta)
 

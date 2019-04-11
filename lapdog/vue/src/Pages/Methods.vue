@@ -298,7 +298,6 @@ export default {
       this.method_filepath = "";
       this.reset_uploads();
       this.get_configs(namespace, workspace);
-      console.log(this.target_namespace)
     },
     get_configs(ns, ws) {
       axios.get(API_URL+'/api/v1/workspaces/'+ns+'/'+ws+'/configs')
