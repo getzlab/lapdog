@@ -698,7 +698,7 @@ export default {
         html: "Uploading results to Firecloud...",
         displayLength: 5000,
       });
-      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id, {cancelToken: this.cancel.token})
+      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id, {}, {cancelToken: this.cancel.token})
         .then(response => {
           console.log("Upload results");
           console.log(response);
@@ -727,7 +727,7 @@ export default {
         html: "Creating entity set for " + (this.failed_workflows.length) + " failed entitites",
         displayLength: 4000
       });
-      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/rerun', {cancelToken: this.cancel.token})
+      axios.put(API_URL+'/api/v1/submissions/expanded/'+this.namespace+'/'+this.workspace+'/'+this.submission_id+'/rerun', {}, {cancelToken: this.cancel.token})
         .then(response => {
           console.log("Rerun set");
           console.log(response.data);
@@ -760,6 +760,7 @@ export default {
       })
       axios.post(
         query,
+        {},
         {
           cancelToken: this.cancel.token,
           params: params

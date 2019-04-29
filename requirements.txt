@@ -13,3 +13,4 @@ google-auth>=1.4.2
 google-cloud-kms>=1.0.0
 cryptography>=2.3.0
 pyOpenSSL>=19.0.0
+protobuf>=3.6.0

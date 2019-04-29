@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased Changes
+## 0.15.10 (Beta)
 
 Bug Fixes:
 * Fixed error message not being displayed when Firecloud is completely offline
+* Fixed UI not being able to start jobs or validate job inputs
+* Fixed a crash caused by outdated protobuf
 
 Other Changes:
 * Slider CSS now works in multiple browsers

@@ -636,9 +636,10 @@
         if (_this.submission_etype != "") params.etype = _this.submission_etype;
         axios.post(
           query,
+          {},
           {
-            'cancelToken':this.cancel.token,
-            'params': params
+            cancelToken:_this.cancel.token,
+            params: params
           }
         )
           .then(response => {
@@ -651,7 +652,9 @@
             else _this.submission_message = result.message;
           })
           .catch(response => {
-            if(axios.isCancel(error)) return;
+            if(axios.isCancel(response)) return;
+            _this.submit_okay = false;
+            _this.submission_message = "Unhandled error in response";
             console.error("FAILED");
             console.error(response)
             window.materialize.toast({
@@ -684,6 +687,7 @@
         })
         axios.post(
           query,
+          {},
           {
             cancelToken:this.cancel.token,
             params: params
@@ -902,7 +906,7 @@
       },
       update_autocomplete: _.debounce((_this) => {
         if (_this.entity_field.length == 0) return;
-        axios.get(API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+'/autocomplete/'+encodeURIComponent(_this.entity_field), {cancelToken:this.cancel.token})
+        axios.get(API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+'/autocomplete/'+encodeURIComponent(_this.entity_field), {cancelToken:_this.cancel.token})
           .then(response => {
             window.$('input.autocomplete').autocomplete(
               'updateData',
@@ -962,7 +966,7 @@
       set_acl(namespace, workspace) {
         console.log("UPDATING ACL");
         this.acl = null;
-         axios.post(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway', {cancelToken:this.cancel.token})
+         axios.post(API_URL+'/api/v1/workspaces/'+namespace+'/'+workspace+'/gateway', {},{cancelToken:this.cancel.token})
            .then(response => {
              console.log("RESPONSE");
              console.log(response.data);
@@ -996,7 +1000,7 @@
       sync_cache() {
         this.syncing = true;
         this.cache_state = !this.cache_state;
-        axios.put(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache', {cancelToken:this.cancel.token})
+        axios.put(API_URL+'/api/v1/workspaces/'+this.namespace+'/'+this.workspace+'/cache', {}, {cancelToken:this.cancel.token})
           .then(response => {
             console.log(response.data);
             this.cache_state = response.data.state;
