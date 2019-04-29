@@ -2,6 +2,9 @@
 
 ## Unreleased Changes
 
+New Features:
+* **Experimental:** When arrays are present in entity data, `lapdog.WorkspaceManager`s attempt to silently translate to the appropriate FireCloud format
+
 Other Changes:
 * Updated UI's Jquery version to 3.4.0
 

@@ -513,6 +513,52 @@ class Operator(object):
             return self.cache[key]
         self.fail()
 
+    def __patch(self, url, **kwargs):
+        return getattr(api, "__SESSION").patch(
+            api.urljoin(
+                api.fcconfig.root_url,
+                url
+            ),
+            headers=api._fiss_agent_header({"Content-type":  "application/json"}),
+            **kwargs
+        )
+
+    @__synchronized
+    def _df_upload_translation_layer(self, func, workspace, etype, updates, *args):
+        if isinstance(updates, pd.DataFrame):
+            selector = {*updates.index}
+            for name, data in updates.iterrows():
+                for attr, val in data.items():
+                    if isinstance(val, list):
+                        selector.remove(name)
+                        break
+                if name not in selector:
+                    # Apply the manual translated update to this row
+                    self._df_upload_translation_layer(func, workspace, etype, data)
+                func(workspace, etype, updates.loc[[*selector]], *args)
+        else:
+            self.__patch(
+                '/api/workspaces/{}/{}/entities/{}/{}'.format(
+                    self.workspace.namespace,
+                    self.workspace.workspace,
+                    etype,
+                    updates.name
+                ),
+                json=[
+                    {
+                        'op': 'AddUpdateAttribute',
+                        'attributeName': attr,
+                        'addUpdateAttribute': (
+                            {
+                                'itemsType': "AttributeValue",
+                                'items': val
+                            } if isinstance(val, list) else val
+                        )
+                    }
+                    for attr, val in updates.items()
+                ]
+            )
+
     @__synchronized
     def update_entities_df(self, etype, updates, index=True):
         getter = partial(
@@ -547,7 +593,8 @@ class Operator(object):
         self.dirty.add('entity_types')
         if self.live:
             try:
-                dog.WorkspaceManager.upload_entities(
+                self._df_upload_translation_layer(
+                    dog.WorkspaceManager.upload_entities,
                     self.workspace,
                     etype,
                     updates,
@@ -560,7 +607,7 @@ class Operator(object):
                 self.go_offline()
                 self.pending.append((
                     key,
-                    partial(dog.WorkspaceManager.upload_entities, self.workspace, etype, updates, index),
+                    partial(Operator._df_upload_translation_layer, self, dog.WorkspaceManager.upload_entities, self.workspace, etype, updates, index),
                     getter
                 ))
                 self.pending.append((
@@ -571,7 +618,7 @@ class Operator(object):
         else:
             self.pending.append((
                 key,
-                partial(dog.WorkspaceManager.upload_entities, self.workspace, etype, updates, index),
+                partial(Operator._df_upload_translation_layer, self, dog.WorkspaceManager.upload_entities, self.workspace, etype, updates, index),
                 getter
             ))
             self.pending.append((
@@ -619,7 +666,8 @@ class Operator(object):
         self.dirty.add('entity_types')
         if self.live:
             try:
-                dog.WorkspaceManager.update_entity_attributes(
+                self._df_upload_translation_layer(
+                    dog.WorkspaceManager.update_entity_attributes,
                     self.workspace,
                     etype,
                     updates
@@ -631,7 +679,7 @@ class Operator(object):
                 self.go_offline()
                 self.pending.append((
                     key,
-                    partial(dog.WorkspaceManager.update_entity_attributes, self.workspace, etype, updates),
+                    partial(Operator._df_upload_translation_layer, self, dog.WorkspaceManager.update_entity_attributes, self.workspace, etype, updates),
                     getter
                 ))
                 self.pending.append((
@@ -642,7 +690,7 @@ class Operator(object):
         else:
             self.pending.append((
                 key,
-                partial(dog.WorkspaceManager.update_entity_attributes, self.workspace, etype, updates),
+                partial(Operator._df_upload_translation_layer, self, dog.WorkspaceManager.update_entity_attributes, self.workspace, etype, updates),
                 getter
             ))
             self.pending.append((
