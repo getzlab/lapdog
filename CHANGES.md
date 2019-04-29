@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Other Changes:
+* Updated UI's Jquery version to 3.4.0
+
 ## 0.15.10 (Beta)
 
 Bug Fixes:
