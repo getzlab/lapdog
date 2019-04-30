@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased Changes
+## 0.15.11 (Beta)
 
 New Features:
-* **Experimental:** When arrays are present in entity data, `lapdog.WorkspaceManager`s attempt to silently translate to the appropriate FireCloud format
+* When arrays are present in entity data, `lapdog.WorkspaceManager`s attempt to silently translate to the appropriate FireCloud format.
+* Added Terra upgrade banner to the UI. Use it to opt into a new Terra-style UI
 
 Other Changes:
 * Updated UI's Jquery version to 3.4.0

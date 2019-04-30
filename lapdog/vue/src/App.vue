@@ -117,8 +117,16 @@
             }}
           </div>
         </div>
+        <div v-if="rotation_offset == 0" class="row" style="margin-top: 10px; border: 2px solid #558b2f;">
+          <div class="col s10 offset s1 light-green-text text-darken-3">
+            <div style="display: inline-flex">
+              <img src="https://portal.firecloud.org/assets/terra-logo.svg" style="height: 30px; width: 30px;"/>
+              <span style="margin-top: 7px;">Lapdog is getting a <strong>Terr</strong>-ific upgrade. Click <a href="#" v-on:click.prevent="enable_terra">here</a> to enable the new UI elements! Click <a href="#" v-on:click.prevent="rotation_offset=1">here</a> to dismiss</span>
+            </div>
+          </div>
+        </div>
         <div class="row" style="margin-top: 10px; border: 2px solid orange;">
-          <div class="col s10 offset s1 orange-text pushpin">
+          <div class="col s10 offset s1 orange-text">
             Lapdog is still in beta. Please submit any bug reports to the
             <a href="https://github.com/broadinstitute/lapdog/issues">Lapdog Github repository</a>
           </div>
@@ -176,7 +184,8 @@ export default {
       create_failed: null,
       cache_size: null,
       quotas: null,
-      namespace: null
+      namespace: null,
+      rotation_offset: 0
     }
   },
 
@@ -219,6 +228,34 @@ export default {
   },
 
   methods: {
+    enable_terra() {
+      let _this = this;
+      this.rotation_offset = 0.01;
+      window.$('.blue').addClass('terra');
+      setTimeout(
+        () => {
+          window.$('body').css('-moz-transform', 'rotate(0deg)');
+          window.$('body').css('-webkit-transform', 'rotate(0deg)');
+          window.$('body').css('-ms-transform', 'rotate(0deg)');
+          window.$('body').css('-o-transform', 'rotate(0deg)');
+          window.$('body').css('transform', 'rotate(0deg)');
+          setInterval(
+            () => {
+              window.$('.blue').addClass('terra');
+              _this.rotation_offset += 0.01;
+              window.$('body').css('-moz-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('body').css('-webkit-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('body').css('-ms-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('body').css('-o-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('body').css('transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+            },
+            1000
+          )
+        },
+        2000
+      );
+      window.materialize.toast({html:"Terra features enabled!"});
+    },
     create_new_workspace(event) {
       let url = API_URL+'/api/v1/workspaces/'+this.create_namespace+'/'+this.create_workspace;
       if (this.parent_workspace.length > 1 && this.parent_workspace.includes('/')) {
@@ -337,6 +374,14 @@ export default {
 
 .expandable {
   cursor: pointer;
+}
+
+.terra {
+  background-color: #558b2f !important;
+}
+
+nav.terra.darken-2 {
+  background-color: #558b2f !important;
 }
 
 </style>
