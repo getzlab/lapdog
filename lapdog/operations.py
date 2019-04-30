@@ -523,8 +523,14 @@ class Operator(object):
             **kwargs
         )
 
-    @__synchronized
     def _df_upload_translation_layer(self, func, workspace, etype, updates, *args):
+        result = self.__df_upload_translation_layer_internal(func, workspace, etype, updates, *args)
+        if result:
+            print("Manually updated one or more {}s requiring array translation".format(etype))
+
+    @__synchronized
+    def __df_upload_translation_layer_internal(self, func, workspace, etype, updates, *args):
+        translations = False
         if isinstance(updates, pd.DataFrame):
             selector = {*updates.index}
             for name, data in updates.iterrows():
@@ -534,10 +540,10 @@ class Operator(object):
                         break
                 if name not in selector:
                     # Apply the manual translated update to this row
-                    self._df_upload_translation_layer(func, workspace, etype, data)
+                    translations |= self.__df_upload_translation_layer_internal(func, workspace, etype, data)
                 func(workspace, etype, updates.loc[[*selector]], *args)
         else:
-            self.__patch(
+            response = self.__patch(
                 '/api/workspaces/{}/{}/entities/{}/{}'.format(
                     self.workspace.namespace,
                     self.workspace.workspace,
@@ -558,6 +564,13 @@ class Operator(object):
                     for attr, val in updates.items()
                 ]
             )
+            if response.status_code >= 400:
+                warnings.warn("Not Uploaded: Unable to translate entity %s" % repr(updates), stacklevel=2)
+                self.tentative_json(response) # Just to log response as last error
+                print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            else:
+                translations = True
+        return translations
 
     @__synchronized
     def update_entities_df(self, etype, updates, index=True):
