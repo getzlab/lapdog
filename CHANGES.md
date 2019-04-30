@@ -7,6 +7,8 @@ New Features:
 
 Other Changes:
 * Updated UI's Jquery version to 3.4.0
+* Improved error handling in all cloud endpoints. This change is not critical so
+it will not trigger a patch. Newly created/patched Engines will receive this change.
 
 ## 0.15.10 (Beta)
 

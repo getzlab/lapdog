@@ -10,6 +10,8 @@ import base64
 @utils.cors("POST")
 def check_abort(request):
     data = request.get_json()
+    if not isinstance(data, dict):
+        return "No Data", 400
     if not ('key' in data and 'id' in data):
         return "missing params", 400
     if utils.verify_signature(base64.b64decode(data['key'].encode()), data['id'].encode(), _is_blob=False):

@@ -14,6 +14,15 @@ def quotas(request):
 
         # 1) Validate the token
 
+        if not isinstance(data, dict):
+            return (
+                {
+                    'error': "Bad Request",
+                    'message': ("No data was provided" if data is None else "Expected JSON dictionary in request body")
+                },
+                400
+            )
+
         if 'token' not in data:
             return (
                 {
