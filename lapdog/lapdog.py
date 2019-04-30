@@ -473,6 +473,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     def update_acl(self, acl):
         """
         Sets the ACL. Provide a dictionary of email -> access level
+        ex: {email: "WRITER"}
         """
         with set_timeout(30):
             response = fc.update_workspace_acl(
@@ -487,8 +488,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                 ]
             )
         if response.status_code >= 400:
-            exc = APIException("The FireCloud API returned an unhandled status: %d" % result.status_code)
-            exc._request_text = result.text
+            exc = APIException("The FireCloud API returned an unhandled status: %d" % response.status_code)
+            exc._request_text = response.text
             raise exc
         return response.json()
 
@@ -510,13 +511,13 @@ class WorkspaceManager(dog.WorkspaceManager):
                 try:
                     from .gateway import get_access_token, get_token_info
                     response = self.update_acl({
-                        proxy_group_for_user(get_token_info(get_access_token())['email']): 'WRITER'
+                        proxy_group_for_user(get_token_info(get_access_token())['email'])+'@firecloud.org': 'WRITER'
                     })
                 except:
                     traceback.print_exc()
                     warnings.warn("Unable to update new workspace ACL")
             print("Updating ACL in a background thread")
-            Thread(target=update_acl, daemon=True).start()
+            Thread(target=update_acl, daemon=True, name="ACL Update").start()
             self.sync()
             return True
         return False

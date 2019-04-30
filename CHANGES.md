@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* Fixed a bug preventing lapdog from automatically adding your own proxy group to
+new workspaces when you create them
+
 ## 0.15.11 (Beta)
 
 New Features:
