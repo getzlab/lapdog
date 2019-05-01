@@ -541,7 +541,7 @@ class Operator(object):
                 if name not in selector:
                     # Apply the manual translated update to this row
                     translations |= self.__df_upload_translation_layer_internal(func, workspace, etype, data)
-                func(workspace, etype, updates.loc[[*selector]], *args)
+            func(workspace, etype, updates.loc[[*selector]], *args)
         else:
             response = self.__patch(
                 '/api/workspaces/{}/{}/entities/{}/{}'.format(

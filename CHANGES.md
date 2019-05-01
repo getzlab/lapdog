@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased Changes
+## 0.15.12 (Beta)
 
 Bug Fixes:
 * Fixed a bug preventing lapdog from automatically adding your own proxy group to
 new workspaces when you create them
+* Fixed a bug causing data to be uploaded and overwritten numerous times while attempting
+to translate arrays
 
 ## 0.15.11 (Beta)
 
