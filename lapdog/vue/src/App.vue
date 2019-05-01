@@ -234,20 +234,20 @@ export default {
       window.$('.blue').addClass('terra');
       setTimeout(
         () => {
-          window.$('body').css('-moz-transform', 'rotate(0deg)');
-          window.$('body').css('-webkit-transform', 'rotate(0deg)');
-          window.$('body').css('-ms-transform', 'rotate(0deg)');
-          window.$('body').css('-o-transform', 'rotate(0deg)');
-          window.$('body').css('transform', 'rotate(0deg)');
+          window.$('main').css('-moz-transform', 'rotate(0deg)');
+          window.$('main').css('-webkit-transform', 'rotate(0deg)');
+          window.$('main').css('-ms-transform', 'rotate(0deg)');
+          window.$('main').css('-o-transform', 'rotate(0deg)');
+          window.$('main').css('transform', 'rotate(0deg)');
           setInterval(
             () => {
               window.$('.blue').addClass('terra');
               _this.rotation_offset += 0.01;
-              window.$('body').css('-moz-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
-              window.$('body').css('-webkit-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
-              window.$('body').css('-ms-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
-              window.$('body').css('-o-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
-              window.$('body').css('transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('main').css('-moz-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('main').css('-webkit-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('main').css('-ms-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('main').css('-o-transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
+              window.$('main').css('transform', 'rotate('+_.toString(_this.rotation_offset)+'deg)');
             },
             1000
           )
