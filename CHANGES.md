@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.13 (Beta)
+
+Bug Fixes:
+* Fixed a missing file in the UI framework
+
 ## 0.15.12 (Beta)
 
 Bug Fixes:

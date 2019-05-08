@@ -24,6 +24,7 @@ setup(
             'vue/src/main.js',
             'vue/src/App.vue',
             'vue/src/Pages/*.vue',
+            'vue/src/Components/*.vue',
             'api/swagger/lapdog.yaml',
             'wdl_pipeline.yaml'
         ],
