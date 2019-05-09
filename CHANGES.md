@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Other Changes:
+* Phased out the Terra UI
+
 ## 0.15.13 (Beta)
 
 Bug Fixes:
