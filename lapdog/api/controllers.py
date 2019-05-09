@@ -28,6 +28,9 @@ import contextlib
 import pickle
 import tempfile
 import html
+from .. import getblob
+from urllib.parse import unquote
+from google.api_core.exceptions import Forbidden, BadRequest
 
 
 @parallelize2(1)
@@ -954,3 +957,140 @@ def seed_cache(namespace, name):
         key:base64.b64encode(pickle.dumps(value)).decode()
         for key, value in ws.operator.cache.items()
     }
+
+__USER_PROJECT = None
+
+def get_user_project(project=None):
+    global __USER_PROJECT
+    if project is not None:
+        __USER_PROJECT = project
+    else:
+        if __USER_PROJECT is None:
+            proj = subprocess.run(
+                'gcloud config get-value billing/quota_project',
+                shell=True,
+                stdout=subprocess.PIPE
+            ).stdout.decode().strip()
+            if proj == 'CURRENT_PROJECT' or proj == '':
+                proj = subprocess.run(
+                    'gcloud config get-value project',
+                    shell=True,
+                    stdout=subprocess.PIPE
+                ).stdout.decode().strip()
+                __USER_PROJECT = (
+                    proj if proj != '' else None
+                )
+
+    return __USER_PROJECT
+
+
+@cached(15)
+@controller
+def preview_blob(path, project=None):
+    return _preview_blob_internal(
+        unquote(path.replace('~', '%')),
+        project
+    )
+
+def _preview_blob_internal(path, project):
+    if not path.startswith('gs://'):
+        path = 'gs://'+path
+    blob = getblob(path, user_project=project)
+    try:
+        exists = blob.exists()
+        blob.bucket.reload()
+        if exists: # file
+            blob.reload()
+            return (
+                {
+                    'requesterPays': blob.bucket.requester_pays,
+                    'exists': exists,
+                    'size': byteSize(blob.size),
+                    'url': None, # Temporary. Need a way to generate signed urls
+                    'preview': blob.download_as_string(end=1024).decode('ascii', 'replace'),
+                    'visitUrl': "https://console.cloud.google.com/storage/browser/{}/{}".format(
+                        blob.bucket.name,
+                        os.path.dirname(blob.name)
+                    ),
+                    'children': [],
+                    'bucket': blob.bucket.name
+                },
+                200
+            )
+        elif len([*blob.bucket.list_blobs(prefix=blob.name, max_results=1)]):
+            # is a directory
+            return (
+                {
+                    'requesterPays': blob.bucket.requester_pays,
+                    'exists': False,
+                    'size': None,
+                    'preview': None,
+                    'url': None,
+                    'visitUrl': "https://console.cloud.google.com/storage/browser/{}/{}".format(
+                        blob.bucket.name,
+                        blob.name
+                    ),
+                    'children': sorted({
+                        os.path.relpath(child.name, blob.name).split('/')[0]
+                        for page in blob.bucket.list_blobs(prefix=blob.name).pages
+                        for child in page
+                    }),
+                    'bucket': blob.bucket.name
+                }
+            )
+    except BadRequest as e:
+        if 'requester pays' in e.message.lower():
+            project = get_user_project(project)
+            if project is not None:
+                return _preview_blob_internal(path, project)
+            return (
+                {
+                    'requesterPays': True,
+                    'exists': False,
+                    'size': None,
+                    'preview': None,
+                    'url': None,
+                    'visitUrl': "https://console.cloud.google.com/storage/browser/{}/{}".format(
+                        blob.bucket.name,
+                        os.path.dirname(blob.name)
+                    ),
+                    'children': [],
+                    'bucket': blob.bucket.name
+                },
+                200
+            )
+        traceback.print_exc()
+        return (
+            {
+                "error": "Unable to query path",
+                "message": traceback.format_exc()
+            },
+            400
+        )
+    except Forbidden:
+        traceback.print_exc()
+    except:
+        traceback.print_exc()
+        return (
+            {
+                "error": "Unable to query path",
+                "message": traceback.format_exc()
+            },
+            500
+        )
+    return (
+        {
+            'requesterPays': False,
+            'exists': False,
+            'size': None,
+            'preview': None,
+            'url': None,
+            'visitUrl': "https://console.cloud.google.com/storage/browser/{}/{}".format(
+                blob.bucket.name,
+                os.path.dirname(blob.name)
+            ),
+            'children': [],
+            'bucket': blob.bucket.name
+        },
+        200
+    )

@@ -6,6 +6,7 @@ import Workspace from './Pages/Workspace.vue'
 import Submission from './Pages/Submission.vue'
 import Methods from './Pages/Methods.vue'
 import Pagination from './Components/Pagination.vue'
+import Preview from './Components/Preview.vue'
 // import Slideout from 'vue-slideout'
 window.$ = require('jquery')
 window.jQuery = require('jquery')
@@ -55,6 +56,7 @@ const router = new Router({
 // })
 
 Vue.component('pagination', Pagination);
+Vue.component('preview', Preview);
 
 new Vue({
   el: '#app',

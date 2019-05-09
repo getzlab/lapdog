@@ -246,9 +246,7 @@ Other: error_outline
           Google bucket:
         </div>
         <div class="col s10" v-if="submission">
-          <a target="_blank" v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+submission.gs_path.substring(5)">
-            {{submission.gs_path}}
-          </a>
+          <preview v-bind:value="submission.gs_path"></preview>
         </div>
         <div class="col s10" v-else>
           Loading...
@@ -812,7 +810,7 @@ export default {
 }
 </script>
 
-<style lang="css">
+<style lang="css" scoped>
   div.log-container {
     max-height: 250px;
     border-radius: 8px;

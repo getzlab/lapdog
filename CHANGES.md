@@ -2,6 +2,9 @@
 
 ## Unreleased Changes
 
+New Features:
+* Added a previewer for `gs://` links, enabled for most UI elements
+
 Other Changes:
 * Phased out the Terra UI
 

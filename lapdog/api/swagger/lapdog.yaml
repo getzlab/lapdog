@@ -88,6 +88,57 @@ paths:
           schema:
             type: string
             description: A raw (unparsed) YAML string representing the operation
+  /api/v1/blob/{path}:
+    get:
+      operationId: lapdog.api.controllers.preview_blob
+      summary: Gets metadata associated with a blob for preview
+      parameters:
+        -
+          in: path
+          name: path
+          required: true
+          type: string
+          description: URL-encoded gs:// path including bucket id
+        -
+          in: query
+          name: project
+          required: false
+          type: string
+          description: User-project for requester pays operations
+      responses:
+        default:
+          description: Error
+        200:
+          description: Object Metadata
+          schema:
+            type: object
+            properties:
+              requesterPays:
+                type: boolean
+                description: If the blob's bucket is requester pays
+              exists:
+                type: boolean
+                description: If the blob exists
+              size:
+                type: string
+                description: Size of blob, if it exists
+              url:
+                type: string
+                description: Download URL for previews and download
+              preview:
+                type: string
+                description: Last kilobyte of preview content
+              visitUrl:
+                type: string
+                description: URL when user visits object
+              children:
+                type: array
+                description: list of direct children, if any. Indicates directory
+                items:
+                  type: string
+              bucket:
+                type: string
+                description: Bucket id
   /api/v1/workspaces/{namespace}/{name}:
     get:
       parameters:

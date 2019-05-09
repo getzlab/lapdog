@@ -291,13 +291,14 @@
               <tr v-for="key in lodash.keys(ws.attributes)" :key="key">
                 <td>{{key}}</td>
                 <td>
-                  <a v-if="lodash.startsWith(lodash.toString(ws.attributes[key]), 'gs://')"
+                  <!-- <a v-if="lodash.startsWith(lodash.toString(ws.attributes[key]), 'gs://')"
                     v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+ws.attributes[key].substr(5)"
                     target="_blank" rel="noopener"
                   >
                     {{ws.attributes[key]}}
                   </a>
-                  <span v-else>{{ws.attributes[key]}}</span>
+                  <span v-else>{{ws.attributes[key]}}</span> -->
+                  <preview v-bind:value="ws.attributes[key]"></preview>
                 </td>
               </tr>
             </tbody>
@@ -429,7 +430,7 @@
                   <tr v-for="entity in entities_data">
                     <td>{{entity[active_entity.idName]}}</td>
                     <td v-for="attr in active_entity.attributeNames" class="trunc">
-                      <a v-if="lodash.startsWith(lodash.toString(entity[attr]), 'gs://')"
+                      <!-- <a v-if="lodash.startsWith(lodash.toString(entity[attr]), 'gs://')"
                         v-bind:href="'https://accounts.google.com/AccountChooser?continue=https://console.cloud.google.com/storage/browser/'+lodash.toString(entity[attr]).substr(5)"
                         target="_blank" rel="noopener"
                       >
@@ -437,7 +438,8 @@
                       </a>
                       <span v-else>
                         {{truncate_cell(entity[attr])}}
-                      </span>
+                      </span> -->
+                      <preview v-bind:value="entity[attr]" v-bind:text="truncate_cell(entity[attr])"></preview>
                     </td>
                   </tr>
                 </tbody>
@@ -613,12 +615,12 @@
       },
       truncate_cell(value, front) {
         let string_value = _.toString(value);
-        return string_value;
-        // if (string_value.length > 25) {
-        //   if (!front) string_value = string_value.substr(0, 25)+"...";//"..."+string_value.substr(string_value.length - 25);
-        //   else string_value = "..."+string_value.substr(string_value.length - 25);
-        // }
         // return string_value;
+        if (string_value.length > 25) {
+          if (!front) string_value = string_value.substr(0, 25)+"...";//"..."+string_value.substr(string_value.length - 25);
+          else string_value = "..."+string_value.substr(string_value.length - 25);
+        }
+        return string_value;
       },
       preflight: _.debounce((_this) => {
         _this.submission_message = "Incomplete fields";
@@ -1074,7 +1076,7 @@
   }
 </script>
 
-<style lang="css">
+<style lang="css" scoped>
 
   div.data-viewer td {
     font-size: 0.9em;
@@ -1087,7 +1089,7 @@
     overflow: hidden;
   }
 
-  td.trunc {
+  td.trunc .preview-display{
     max-width: 100px;
     direction: rtl;
   }
