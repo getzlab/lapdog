@@ -344,9 +344,10 @@ class WorkspaceManager(dog.WorkspaceManager):
                 time.sleep(30)
                 try:
                     from .gateway import get_access_token, get_token_info
-                    response = self.update_acl({
-                        proxy_group_for_user(get_token_info(get_access_token())['email'])+'@firecloud.org': 'WRITER'
-                    })
+                    with self.initialize_hound().with_reason('<Automated> Auto-add lapdog proxy-group to workspace'):
+                        response = self.update_acl({
+                            proxy_group_for_user(get_token_info(get_access_token())['email'])+'@firecloud.org': 'WRITER'
+                        })
                 except:
                     traceback.print_exc()
                     warnings.warn("Unable to update new workspace ACL")

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.16.0 (Beta)
 
 Breaking Changes:
 * `safe_getblob` renamed to `strict_getblob`
