@@ -17,15 +17,15 @@ import crayons
 import os
 import json
 from .cloud import RESOLUTION_URL
-from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, getblob, proxy_group_for_user, generate_user_session, update_iam_policy, __API_VERSION__, GCP_ZONES
-from .operations import capture
+from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, proxy_group_for_user, generate_user_session, update_iam_policy, __API_VERSION__, GCP_ZONES
 from urllib.parse import quote
+from dalmatian import capture
 import google.api_core.exceptions
 import sys
 import tempfile
 import base64
 from agutil import cmd as run_cmd
-from dalmatian import WorkspaceManager
+from dalmatian import WorkspaceManager, getblob
 import traceback
 import re
 from uuid import uuid4

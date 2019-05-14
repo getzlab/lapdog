@@ -224,6 +224,9 @@ export default {
       if (this.parent_workspace.length > 1 && this.parent_workspace.includes('/')) {
         url += '?parent='+encodeURIComponent(this.parent_workspace);
       }
+      window.materialize.toast({
+        html: "Creating workspace..."
+      });
       axios.post(url)
         .then(response => {
           if (response.data.failed) {

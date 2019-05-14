@@ -9,6 +9,7 @@ import traceback
 import sys
 import json
 from hashlib import sha512
+from dalmatian import getblob
 
 @utils.cors("POST")
 def insert_resolution(request):
@@ -133,7 +134,7 @@ def insert_resolution(request):
         for policy in response.json()['bindings']:
             if policy['role'] == 'roles/owner':
                 if ('user:'+token_data['email']) in policy['members']:
-                    blob = utils.getblob(
+                    blob = getblob(
                         'gs://lapdog-resolutions/%s' % sha512(data['namespace'].encode()).hexdigest(),
                         credentials=utils.generate_default_session().credentials
                     )

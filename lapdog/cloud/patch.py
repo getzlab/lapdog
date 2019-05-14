@@ -8,11 +8,12 @@ This function may:
 * Update iam policy or bindings
 * Regenerate signing keys
 """
-from .utils import ld_project_for_namespace, __API_VERSION__, generate_user_session, ld_meta_bucket_for_project, getblob
+from .utils import ld_project_for_namespace, __API_VERSION__, generate_user_session, ld_meta_bucket_for_project
 from . import _deploy, RESOLUTION_URL
 from .. import __version__
 from ..gateway import get_access_token, resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS
 from ..lapdog import WorkspaceManager
+from dalmatian import getblob
 import sys
 import crayons
 import traceback

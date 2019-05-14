@@ -549,7 +549,7 @@ export default {
 }
 </script>
 
-<style lang="css">
+<style lang="css" scoped>
   div.log-container {
     max-height: 250px;
     border-radius: 8px;

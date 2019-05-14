@@ -2,11 +2,27 @@
 
 ## Unreleased Changes
 
+Breaking Changes:
+* `safe_getblob` renamed to `strict_getblob`
+* `lapdog.operations.Operator` class removed and integrated with `dalmatian.WorkspaceManager` and `lapdog.WorkspaceManager`
+* removed attribute `.operator` from `lapdog.WorkspaceManager`
+* `lapdog.WorkspaceManager.operator.get_entities_df` renamed to `lapdog.WorkspaceManager._get_entities_internal`
+* `lapdog.Workspacemanager.operator.pending` renamed to `lapdog.WorkspaceManager.pending_operations`
+    * Removed previous `lapdog.WorkspaceManager.pending_operations` property
+* `lapdog.WorkspaceManager.execute_preflight` renamed to `lapdog.WorkspaceManager.preflight`
+* `lapdog.WorkspaceManager.operator.get_config_detail` renamed to `lapdog.WorkspaceManager.get_config`
+* `lapdog.WorkspaceManager.prepare_*_df` renamed to `lapdog.WorkspaceManager.upload_entity_metadata`
+* Removed module `lapdog.operations`
+* Removed `lapdog.provenance`. Use `lapdog.WorkspaceManager.attribute_provenance` and `lapdog.WorkspaceManager.entity_provenance`
+
 New Features:
 * Added a previewer for `gs://` links, enabled for most UI elements
 
-Other Changes:
+Other Changes
 * Phased out the Terra UI
+* `lapdog.WorkspaceManager.preflight` now returns a namedtuple
+* `lapdog.WorkspaceManager` now uses [Hound](https://pypi.org/project/hound/) to log changes to workspace
+* `lapdog.provenance` now used [Hound](https://pypi.org/project/hound/) to parse provenance
 
 ## 0.15.13 (Beta)
 

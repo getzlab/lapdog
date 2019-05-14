@@ -12,7 +12,7 @@ import contextlib
 import re
 import select
 from .cache import cache_fetch, cache_write, cached, cache_path
-from .cloud.utils import getblob
+from dalmatian import getblob, strict_getblob
 from .gateway import Gateway
 import traceback
 import sys
@@ -133,16 +133,6 @@ class Recall(object):
         self.value = value
         return value
 
-def safe_getblob(gs_path):
-    """
-    A wrapper to getblob which raises a FileNotFoundError if the gs:// path does not exist
-    Use when reading a file
-    """
-    blob = getblob(gs_path)
-    if not blob.exists():
-        raise FileNotFoundError("No such blob: "+gs_path)
-    return blob
-
 def do_select(reader, t):
     if isinstance(reader, BytesIO):
         # print("Bytes seek")
@@ -179,7 +169,7 @@ class Call(object):
         10 second cache
         """
         try:
-            blob = safe_getblob(os.path.join(self.path, 'rc'))
+            blob = strict_getblob(os.path.join(self.path, 'rc'))
             return int(blob.download_as_string().decode())
         except FileNotFoundError:
             return None
@@ -235,7 +225,7 @@ class Call(object):
                 self.task + suffix
             )
             print("Trying", path)
-            blob = safe_getblob(path)
+            blob = strict_getblob(path)
         text = blob.download_as_string().decode()
         if not self.parent.parent.live:
             cache_write(text, 'workflow', self.parent.parent.submission, self.parent.long_id, dtype=str(idx)+'.', ext=log_type+'.log')
@@ -405,7 +395,7 @@ class SubmissionAdapter(object):
             _do_cache_write = False
             if self.data is None:
                 try:
-                    self.data = safe_getblob(gs_path).download_as_string().decode()
+                    self.data = strict_getblob(gs_path).download_as_string().decode()
                     self._cached = False
                     _do_cache_write = True
                 except FileNotFoundError as e:
@@ -460,7 +450,7 @@ class SubmissionAdapter(object):
                 if stored_cost is not None:
                     return json.loads(stored_cost)
                 try:
-                    workflow_metadata = json.loads(safe_getblob(
+                    workflow_metadata = json.loads(strict_getblob(
                         os.path.join(
                             self.path,
                             'results',
@@ -731,7 +721,7 @@ class SubmissionAdapter(object):
                 self.path,
                 'submission.json'
             )
-            self.data = json.loads(safe_getblob(gs_path).download_as_string().decode())
+            self.data = json.loads(strict_getblob(gs_path).download_as_string().decode())
             if 'operation' not in self.data:
                 print("<GATEWAY DEV> Delete submission", submission)
             self.workspace = self.data['workspace']
@@ -751,7 +741,7 @@ class SubmissionAdapter(object):
     def config(self):
         config = cache_fetch('submission-config', self.bucket, self.submission)
         if config is None:
-            config = safe_getblob(self.path+'/config.tsv').download_as_string().decode()
+            config = strict_getblob(self.path+'/config.tsv').download_as_string().decode()
             cache_write(config, 'submission-config', self.bucket, self.submission)
         return pd.read_csv(StringIO(config), sep='\t')
 

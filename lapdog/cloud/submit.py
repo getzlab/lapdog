@@ -10,6 +10,7 @@ except ImportError:
 import math
 import json
 import traceback
+from dalmatian import getblob
 
 @utils.cors('POST')
 def create_submission(request):
@@ -263,7 +264,7 @@ def create_submission(request):
 
                 utils.sign_object(
                     (data['submission_id'] + operation).encode(),
-                    utils.getblob(
+                    getblob(
                         'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
                             bucket=data['bucket'],
                             submission_id=data['submission_id']

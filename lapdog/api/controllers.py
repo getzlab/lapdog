@@ -157,7 +157,7 @@ def list_workspaces():
         if all_workspaces is not None:
             workspace_data = []
             for ns, ws, in all_workspaces:
-                workspace = get_workspace_object(ns, ws).operator.firecloud_workspace
+                workspace = get_workspace_object(ns, ws).firecloud_workspace
                 workspace_data.append({
                     'accessLevel': workspace['accessLevel'],
                     'public': False,
@@ -176,10 +176,10 @@ def list_workspaces():
 @controller
 def workspace(namespace, name):
     ws = get_workspace_object(namespace, name)
-    data = ws.operator.firecloud_workspace
+    data = ws.firecloud_workspace
     data['entities'] = [
         {**v, **{'type':k}}
-        for k,v in ws.operator.entity_types.items()
+        for k,v in ws.entity_types.items()
     ]
     data['configs'] = get_configs(namespace, name)
     data['attributes'] = ws.attributes
@@ -382,12 +382,12 @@ def set_acl(namespace, name):
 @cached(60)
 def _get_entitites_df(namespace, name, etype):
     ws = get_workspace_object(namespace, name)
-    return ws.operator.get_entities_df(etype)
+    return ws._get_entities_internal(etype)
 
 @cached(10)
 @controller
 def get_entities(namespace, name, etype, start=0, end=None):
-    # result = get_workspace_object(namespace, name).operator.entity_types
+    # result = get_workspace_object(namespace, name).entity_types
     # return {
     #     'failed': False,
     #     'reason': 'success',
@@ -412,15 +412,15 @@ def get_entities(namespace, name, etype, start=0, end=None):
 @controller
 def get_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
-    return {'state': ws.live, 'pending': len(ws.operator.pending)}, 200
+    return {'state': ws.live, 'pending': len(ws.pending_operations)}, 200
 
 @controller
 def sync_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
     if ws.live:
         ws.populate_cache()
-        ws.operator._webcache_ = True
-        ws.operator.go_offline()
+        ws._webcache_ = True
+        ws.go_offline()
     else:
         ws.sync()
     return get_cache(namespace, name)
@@ -477,27 +477,26 @@ def list_submissions(namespace, name, cache):
 def preflight(namespace, name, config, entity, expression="", etype=""):
     ws = get_workspace_object(namespace, name)
     try:
-        result = ws.execute_preflight(
+        result = ws.preflight(
             config,
             entity,
             expression if expression != "" else None,
             etype if etype != "" else None
         )
-        if result[0]:
-            _okay, _config, _entity, _etype, _workflow_entities, _template, _invalid_inputs = result
+        if result.result:
             return {
                 'failed': False,
-                'ok': _okay,
+                'ok': result.result,
                 'message': 'Okay',
-                'workflows': len(_workflow_entities),
+                'workflows': len(result.workflow_entities),
                 'invalid_inputs': ', '.join(
-                    value for value in _invalid_inputs
+                    value for value in result.invalid_inputs
                 )
             }, 200
         return {
             'failed': False,
             'ok': False,
-            'message': result[1],
+            'message': result.reason,
             'workflows': 0,
             'invalid_inputs': 'None'
         }, 200
@@ -756,7 +755,7 @@ def quotas(namespace):
 def get_config(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
     try:
-         config = ws.operator.get_config_detail(config_namespace, config_name)
+         config = ws.get_config(config_namespace, config_name)
     except:
         ws.sync()
         return (
@@ -794,7 +793,7 @@ def get_config(namespace, name, config_namespace, config_name):
         traceback.print_exc()
         io_types = None
     try:
-        wdl_text = ws.operator.get_wdl(
+        wdl_text = ws.get_wdl(
             config['methodRepoMethod']['methodNamespace'],
             config['methodRepoMethod']['methodName'],
             config['methodRepoMethod']['methodVersion']
@@ -868,7 +867,6 @@ def upload_config(namespace, name, config_filepath, method_filepath=None):
         result = ws.update_configuration(
             config,
             method_filepath, # Either it's a file-object or None
-            delete_old=False # UI never deletes old configurations
         )
         get_config.cache_clear()
         get_configs.cache_clear()
@@ -907,7 +905,7 @@ def rerun_submission(namespace, name, id):
 @controller
 def config_autocomplete(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
-    entityTypeMetadata = ws.operator.entity_types[ws.fetch_config(config_namespace+'/'+config_name)['rootEntityType']]
+    entityTypeMetadata = ws.entity_types[ws.get_config(config_namespace, config_name)['rootEntityType']]
     return (
         [
             'workspace.'+attribute for attribute in ws.attributes
@@ -945,8 +943,8 @@ def get_autocomplete_entries(namespace, name, entity):
     get_autocomplete_cache(namespace, name).add(entity)
     return [
         eid
-        for etype in ws.operator.entity_types
-        for eid in ws.operator.get_entities_df(etype).index
+        for etype in ws.entity_types
+        for eid in ws._get_entities_internal(etype).index
         if entity in eid
     ]
 
@@ -955,7 +953,7 @@ def seed_cache(namespace, name):
     ws = get_workspace_object(namespace, name)
     return {
         key:base64.b64encode(pickle.dumps(value)).decode()
-        for key, value in ws.operator.cache.items()
+        for key, value in ws.cache.items()
     }
 
 __USER_PROJECT = None

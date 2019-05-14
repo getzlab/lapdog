@@ -8,6 +8,7 @@ except ImportError:
 import json
 from urllib.parse import quote
 import traceback
+from dalmatian import getblob
 
 @utils.cors('DELETE')
 def abort_submission(request):
@@ -125,7 +126,7 @@ def abort_submission(request):
                 400
             )
 
-        signature_blob = utils.getblob(
+        signature_blob = getblob(
             'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
                 bucket=data['bucket'],
                 submission_id=data['submission_id']
@@ -156,7 +157,7 @@ def abort_submission(request):
 
         utils.sign_object(
             data['submission_id'].encode(),
-            utils.getblob(
+            getblob(
                 'gs://{bucket}/lapdog-executions/{submission_id}/abort-key'.format(
                     bucket=data['bucket'],
                     submission_id=data['submission_id']

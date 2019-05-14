@@ -1,4 +1,3 @@
-from google.cloud import storage
 from google.cloud import kms_v1 as kms
 import google.auth
 from google.auth.transport.requests import AuthorizedSession
@@ -16,6 +15,7 @@ from urllib.parse import quote
 import time
 from functools import lru_cache
 import traceback
+from dalmatian import getblob
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
@@ -59,52 +59,6 @@ GCP_ZONES = {
     'us-west1':	('a', 'b', 'c'),
     'us-west2':	('a', 'b', 'c'),
 }
-
-@lru_cache()
-def _getblob_client(credentials):
-    return storage.Client(credentials=credentials)
-
-def getblob(gs_path, credentials=None, user_project=None):
-    """
-    Return a GCP "blob" object for a given gs:// path.
-    Path must start with "gs://".
-    By default, uses the current application default credentials for authentication.
-    Alternatively, you may provide a `google.auth.Credentials` object.
-    When interacting with a requester pays bucket, you must set `user_project` to
-    be the name of the project to bill for the data transfer fees
-    """
-    bucket_id = gs_path[5:].split('/')[0]
-    bucket_path = '/'.join(gs_path[5:].split('/')[1:])
-    return storage.Blob(
-        bucket_path,
-        _getblob_client(credentials).bucket(bucket_id, user_project)
-    )
-
-def copyblob(src, dest, credentials=None, user_project=None):
-    """
-    Copy blob from src -> dest
-    src and dest may either be a gs:// path or a premade blob object
-    """
-    if isinstance(src, str):
-        src = getblob(src, credentials, user_project)
-    if isinstance(dest, str):
-        dest = getblob(dest, credentials, user_project)
-    src.bucket.copy_blob(src, dest.bucket, dest.name)
-    return dest.exists()
-
-def moveblob(src, dest, credentials=None, user_project=None):
-    """
-    Move blob from src -> dest
-    src and dest may either be a gs:// path or a premade blob object
-    """
-    if isinstance(src, str):
-        src = getblob(src, credentials, user_project)
-    if isinstance(dest, str):
-        dest = getblob(dest, credentials, user_project)
-    if copyblob(src, dest):
-        src.delete()
-        return True
-    return False
 
 def cors(*methods):
     """

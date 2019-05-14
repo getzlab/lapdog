@@ -727,8 +727,8 @@
             console.error(response)
             window.materialize.toast({
               html: "Unhandled exception while starting submission"
-            })
-          })
+            });
+          });
       },
       update_expr_mode() {
         this.expr_disabled = this.extract_etype(this.submission_config) == this.submission_etype;
