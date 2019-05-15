@@ -4,6 +4,9 @@ from lapdog import __version__
 with open('requirements.txt') as r:
     requirements = r.readlines()
 
+with open('README.md') as r:
+    readme = r.read()
+
 setup(
     name = 'lapdog',
     version = __version__,
@@ -33,7 +36,8 @@ setup(
     url = 'https://github.com/broadinstitute/lapdog',
     author = 'Aaron Graubert - Broad Institute - Cancer Genome Computational Analysis',
     author_email = 'aarong@broadinstitute.org',
-    long_description = 'A wrapper for FISS and dalmatian',
+    long_description = readme,
+    long_description_content_type='text/markdown',
     entry_points = {
         'console_scripts': [
             'lapdog = lapdog.__main__:main'
