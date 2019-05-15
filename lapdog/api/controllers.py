@@ -30,8 +30,16 @@ import tempfile
 import html
 from .. import getblob
 from urllib.parse import unquote
+from google.cloud import storage
 from google.api_core.exceptions import Forbidden, BadRequest
 
+
+@cached(600)
+def get_alerts():
+    return [
+        json.loads(blob.download_as_string())
+        for blob in storage.Client().bucket('lapdog-alerts').list_blobs()
+    ]
 
 @parallelize2(1)
 def get_womtool():

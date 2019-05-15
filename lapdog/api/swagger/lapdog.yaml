@@ -27,6 +27,19 @@ paths:
           description: A Status Object representing the current Firecloud status
           schema:
             $ref: "#/definitions/Status"
+  /api/v1/alerts:
+    get:
+      operationId: lapdog.api.controllers.get_alerts
+      summary: Gets a list of active alerts
+      responses:
+        default:
+          description: Error
+        200:
+          description: List of alerts
+          schema:
+            type: array
+            items:
+              type: object
   /api/v1/quotas/{namespace}:
     get:
       operationId: lapdog.api.controllers.quotas

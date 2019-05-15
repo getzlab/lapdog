@@ -2,6 +2,10 @@
 
 ## Unreleased Changes
 
+New Features:
+* Added global alert system to Lapdog UI, allowing for real-time updates to be posted
+by Lapdog maintainers
+
 Bug Fixes:
 * Fixed bucket previews not being able to copy paths to clipboard
 * Fixed pagination allowing you to get to blank pages

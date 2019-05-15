@@ -107,6 +107,13 @@
       <aside class="sidebar">
       </aside>
       <div class="content container">
+        <div v-for="alert in global_alerts" class="alert-container">
+          <div class="row" style="margin-top: 10px;" v-bind:style="'border: 2px solid ' + ((alert.type == 'critical') ? 'red' : ((alert.type == 'warning') ? 'orange' : 'black') )">
+            <div class="col s10 offset s1" v-bind:class=" ((alert.type == 'critical') ? 'red' : ((alert.type == 'warning') ? 'orange' : 'black') ) + '-text'">
+              <span v-html="alert.content"></span>
+            </div>
+          </div>
+        </div>
         <div v-if="quotas && quotas.alerts.length" class="row" style="margin-top: 10px; border: 2px solid red;">
           <div class="col s10 offset s1 red-text pushpin">
             Alert: The following quotas may delay workflows: {{
@@ -115,12 +122,6 @@
                 .join(', ')
                 .value()
             }}
-          </div>
-        </div>
-        <div class="row" style="margin-top: 10px; border: 2px solid orange;">
-          <div class="col s10 offset s1 orange-text">
-            Lapdog is still in beta. Please submit any bug reports to the
-            <a href="https://github.com/broadinstitute/lapdog/issues">Lapdog Github repository</a>
           </div>
         </div>
         <router-view @on-namespace-update="fetchQuotas"></router-view>
@@ -176,7 +177,8 @@ export default {
       create_failed: null,
       cache_size: null,
       quotas: null,
-      namespace: null
+      namespace: null,
+      global_alerts: []
     }
   },
 
@@ -191,6 +193,14 @@ export default {
   created() {
     this.getWorkspaces();
     this.getServiceAccount();
+    axios.get(API_URL+'/api/v1/alerts')
+      .then(response => {
+        this.global_alerts = response.data;
+      })
+      .catch(response => {
+        console.log(response);
+        window.materialize.toast({html: "Unable to check for active alerts"});
+      })
     axios.get(API_URL+'/api/v1/cache')
       .then(response => {
         this.cache_size = response.data;

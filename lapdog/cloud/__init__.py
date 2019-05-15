@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import glob
 import os
+import json
 
 __FUNCTION_MAPPING__ = {
     'create_submission': 'submit.py',
@@ -58,3 +59,16 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
             cmd,
             shell=True
         )
+
+def __generate_alert_internal(title, alert_type, content):
+    """
+    You're welcome to use this function, but you won't have permissions
+    """
+    assert alert_type in {'critical', 'warning', 'info'}
+    blob = utils.getblob(
+        'gs://lapdog-alerts/{}'.format(title)
+    )
+    blob.upload_from_string(json.dumps({
+        'type': alert_type,
+        'content': content
+    }))
