@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* Fixed bucket previews not being able to copy paths to clipboard
+* Fixed pagination allowing you to get to blank pages
+* Fixed some CSS scoping issues
+
 ## 0.16.0 (Beta)
 
 Breaking Changes:

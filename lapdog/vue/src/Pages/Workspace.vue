@@ -1076,7 +1076,7 @@
   }
 </script>
 
-<style lang="css" scoped>
+<style lang="css">
 
   div.data-viewer td {
     font-size: 0.9em;

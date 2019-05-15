@@ -43,8 +43,10 @@ export default {
   },
   methods: {
     turn_page(n) {
-      this.current_page = n;
-      this.getter(n);
+      if (n >= 0 && n < this.n_pages) {
+        this.current_page = n;
+        this.getter(n);
+      }
     }
   }
 

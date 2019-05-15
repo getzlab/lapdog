@@ -48,7 +48,7 @@
                           <span v-bind:title="value+'/'+child">
                             {{child}}
                           </span>
-                          <a href="#" v-on:click.prevent="" class="black-text"><i class="material-icons tiny">content_copy</i></a>
+                          <a href="#" v-on:click.prevent="clipboard(value+'/'+child)" class="black-text"><i class="material-icons tiny">content_copy</i></a>
                         </li>
                       </ul>
                     </div>
@@ -149,6 +149,23 @@ export default {
         .catch((error) => {
           window.materialize.toast({html:"Unable to generate preview"});
         })
+    },
+    clipboard(text) {
+      navigator.permissions.query({
+        name: 'clipboard-write'
+      }).then(result => {
+        if (result.state == 'granted' || result.state == 'prompt')
+          navigator.clipboard.writeText(text).then(() => {
+            window.materialize.toast({html: "Copied!"});
+          })
+          .catch(() => {
+            window.materialize.toast({html: "Unable to interact with clipboard"});
+          });
+        else window.materialize.toast({html: "Unable to interact with clipboard"});
+      })
+      .catch(() => {
+        window.materialize.toast({html: "Unable to interact with clipboard"});
+      })
     }
   },
   created() {
