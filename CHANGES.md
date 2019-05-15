@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.16.1 (Beta)
 
 New Features:
 * Added global alert system to Lapdog UI, allowing for real-time updates to be posted
