@@ -31,7 +31,7 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
             w.write('google-cloud-storage\n')
             w.write('google-cloud-kms\n')
             w.write('cryptography\n')
-            w.write('firecloud-dalmatian>=0.0.8\n')
+            w.write('firecloud-dalmatian>=0.0.9\n')
         shutil.copyfile(
             os.path.join(
                 os.path.dirname(__file__),

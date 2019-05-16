@@ -344,7 +344,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 time.sleep(30)
                 try:
                     from .gateway import get_access_token, get_token_info
-                    with self.initialize_hound().with_reason('<Automated> Auto-add lapdog proxy-group to workspace'):
+                    with self.hound.with_reason('<Automated> Auto-add lapdog proxy-group to workspace'):
                         response = self.update_acl({
                             proxy_group_for_user(get_token_info(get_access_token())['email'])+'@firecloud.org': 'WRITER'
                         })
@@ -666,7 +666,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 **{'operation': result}
             }
 
-            if self.initialize_hound() is not None:
+            if self.hound is not None:
                 self.hound.write_log_entry(
                     'job',
                     (
@@ -741,7 +741,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     i += 1
                 name = '%s_%d' %(name, i)
             with contextlib.ExitStack() as stack:
-                if self.initialize_hound() is not None:
+                if self.hound is not None:
                     stack.enter_context(self.hound.with_reason("<Automated> Retrying submission {}".format(submission_id)))
                 self.update_entity_set(workflowEntityType, name, retries)
             return {
@@ -780,7 +780,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     i += 1
                 name = '%s_%d' %(name, i)
             with contextlib.ExitStack() as stack:
-                if self.initialize_hound() is not None:
+                if self.hound is not None:
                     stack.enter_context(self.hound.with_reason("<Automated> Retrying submission {}".format(submission_id)))
                 self.update_entity_set(submission.data['workflowEntityType'], name, retries)
             return {
@@ -860,7 +860,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             if done:
                 print("All workflows completed. Uploading results...")
                 with contextlib.ExitStack() as stack:
-                    if self.initialize_hound() is not None:
+                    if self.hound is not None:
                         stack.enter_context(self.hound.with_reason('Uploading results from submission {}'.format(submission_id)))
                     self.update_entity_attributes(
                         submission.data['workflowEntityType'],
@@ -1016,7 +1016,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                         deleted.append(bucket_id+blob.name)
                 except KeyboardInterrupt:
                     print("Aborted")
-                    if not (dry or self.initialize_hound() is None):
+                    if not (dry or self.hound is None):
                         self.hound.write_log_entry(
                             'other',
                             "Completed Workspace Mop. Freed size: {}".format(byteSize(size)),
@@ -1025,7 +1025,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     return deleted, byteSize(size)
                 except:
                     traceback.print_exc()
-        if not (dry or self.initialize_hound() is None):
+        if not (dry or self.hound is None):
             self.hound.write_log_entry(
                 'other',
                 "Completed Workspace Mop. Freed size: {}".format(byteSize(size)),
@@ -1077,7 +1077,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             try:
                 with self.timeout(dog.DEFAULT_LONG_TIMEOUT):
                     dog.update_method(namespace, name, synopsis, path, delete_old=delete)
-                    if self.initialize_hound() is not None:
+                    if self.hound is not None:
                         self.hound.write_log_entry(
                             'other',
                             "Uploaded/Updated Method for workspace: {}/{}".format(

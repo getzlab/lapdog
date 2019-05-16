@@ -134,6 +134,7 @@ export default {
     display() {
       let _this = this;
       //for some stupid reason swagger/connexion can't handle slashes in path components, even if encoded
+      window.materialize.toast({html: "Generating link preview"});
       let encoded = encodeURIComponent(this.value.replace(/~/g, '~7E')).replace(/%/g, '~');
       axios.get(API_URL+'/api/v1/blob/'+encoded)
         .then((response) => {

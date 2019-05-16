@@ -34,13 +34,6 @@ from google.cloud import storage
 from google.api_core.exceptions import Forbidden, BadRequest
 
 
-@cached(600)
-def get_alerts():
-    return [
-        json.loads(blob.download_as_string())
-        for blob in storage.Client().bucket('lapdog-alerts').list_blobs()
-    ]
-
 @parallelize2(1)
 def get_womtool():
     data = cache_fetch('static', 'womtool', '39', 'jar', decode=False)
@@ -90,6 +83,14 @@ def get_workspace_object(namespace, name):
             current_app.config['storage']['cache']['all_workspaces'] = []
         current_app.config['storage']['cache']['all_workspaces'].append((namespace, name))
     return ws
+
+# @cached(600)
+@controller
+def get_alerts():
+    return [
+        json.loads(blob.download_as_string())
+        for blob in storage.Client().bucket('lapdog-alerts').list_blobs()
+    ]
 
 @lru_cache()
 @controller

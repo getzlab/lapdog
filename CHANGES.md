@@ -7,6 +7,7 @@ Bug Fixes:
 
 Other Changes:
 * `lapdog initialize-project` now checks required gcloud version first
+* Updated Dalmatian to latest
 
 ## 0.16.1 (Beta)
 
