@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.16.2 (Beta)
 
 Bug Fixes:
 * **Critical:** Fixed an error preventing new function deployments
