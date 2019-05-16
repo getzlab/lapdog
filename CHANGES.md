@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* Fixed a bug preventing new Engine initialization
+
+Other Changes:
+* `lapdog initialize-project` now checks required gcloud version first
+
 ## 0.16.1 (Beta)
 
 New Features:

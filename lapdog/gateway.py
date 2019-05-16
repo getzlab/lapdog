@@ -152,7 +152,7 @@ def get_token_expired(token):
             return True
     return int(expiry) < time.time()
 
-def __generate_core_key(ld_project, worker_account, session=None):
+def _generate_core_key_internal(ld_project, worker_account, session=None):
     """
     Issues a new core service account access key for a given lapdog engine project.
     This cannot be used unless you are an administrator.
@@ -241,6 +241,32 @@ class Gateway(object):
         """
         if custom_lapdog_project is None:
             custom_lapdog_project = ld_project_for_namespace(project_id)
+        print("Checking prerequisites")
+        cmd = (
+            'gcloud --version'
+        )
+        print(cmd)
+        result = run_cmd(cmd)
+        gcloud_version = {}
+        for line in result.buffer.decode().split('\n'):
+            if len(line.strip()):
+                words = line.strip().split()
+                gcloud_version[' '.join(words[:-1])] = int(words[-1].split('.')[0])
+        if gcloud_version['Google Cloud SDK'] < 232:
+            print("Update gcloud SDK? Lapdog requires >= 232.0.0")
+            choice = input("Y/N : ")
+            if not choice.strip().lower().startswith('y'):
+                raise ValueError("Lapdog requires gcloud version >= 232.0.0; Please run 'gcloud components update'")
+            print('gcloud components update')
+            run_cmd('gcloud components update')
+        if not ('alpha' in gcloud_version and 'beta' in gcloud_version):
+            print("Install additional components? Lapdog requires gcloud alpha and beta")
+            choice = input("Y/N : ")
+            if not choice.strip().lower().startswith('y'):
+                raise ValueError("Lapdog requires gcloud alpha and beta; Please run 'gcloud components install alpha beta'")
+            print('gcloud components install alpha beta')
+            run_cmd('gcloud components install alpha beta')
+
         print("Testing permissions")
         test_url = "https://cloudbilling.googleapis.com/v1/billingAccounts/{billing_account}:testIamPermissions".format(
             billing_account=billing_id
@@ -500,7 +526,7 @@ class Gateway(object):
         print("Waiting for service account creation...")
         time.sleep(30)
         print("Issuing Core Service Account Key")
-        __generate_core_key(custom_lapdog_project, functions_account, user_session)
+        _generate_core_key_internal(custom_lapdog_project, functions_account, user_session)
         print("Saving Project Resolution to Engine")
         blob = getblob(
             'gs://{bucket}/resolution'.format(
