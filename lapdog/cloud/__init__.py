@@ -60,7 +60,7 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
             executable='/bin/bash'
         )
 
-def __generate_alert_internal(title, alert_type, content):
+def __generate_alert_internal(title, alert_type, content, text=None):
     """
     You're welcome to use this function, but you won't have permissions
     """
@@ -68,7 +68,10 @@ def __generate_alert_internal(title, alert_type, content):
     blob = utils.getblob(
         'gs://lapdog-alerts/{}'.format(title)
     )
-    blob.upload_from_string(json.dumps({
+    alert = {
         'type': alert_type,
         'content': content
-    }))
+    }
+    if text is not None:
+        alert['text'] = text
+    blob.upload_from_string(json.dumps(alert))
