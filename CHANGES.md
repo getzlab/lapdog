@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Other Changes:
+* During startup, lapdog will print any critical alerts to the terminal
+
 ## 0.16.2 (Beta)
 
 Bug Fixes:

@@ -215,7 +215,18 @@ def get_user_session():
     global _USER_SESSION_INTERNAL
     if _USER_SESSION_INTERNAL is None:
         _USER_SESSION_INTERNAL = generate_default_session()
+        try:
+            from hound.client import _getblob_bucket
+            for blob in _getblob_bucket(None, 'lapdog-alerts', None).list_blobs():
+                content = json.loads(blob.download_as_string())
+                if content['type'] == 'critical':
+                    text = content['text'] if 'text' in content else content['content']
+                    print(crayons.red("Critical Alert:"), text)
+        except:
+            traceback.print_exc()
+            warnings.warn("Unable to check Lapdog global alerts during startup")
     return _USER_SESSION_INTERNAL
+
 
 class Gateway(object):
     """
