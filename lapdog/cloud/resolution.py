@@ -9,7 +9,6 @@ import traceback
 import sys
 import json
 from hashlib import sha512
-from dalmatian import getblob
 
 @utils.cors("POST")
 def insert_resolution(request):
@@ -18,6 +17,7 @@ def insert_resolution(request):
     It is deployed once into my personal project which serves as a centralized
     database.
     """
+    print(request.headers)
     try:
         data = request.get_json()
 
@@ -30,16 +30,9 @@ def insert_resolution(request):
                 400
             )
 
-        if 'token' not in data:
-            return (
-                {
-                    'error': 'Bad Request',
-                    'message': 'Missing required parameter "token"'
-                },
-                400
-            )
+        token = utils.extract_token(request.headers, data)
 
-        token_data = utils.get_token_info(data['token'])
+        token_data = utils.get_token_info(token)
         if 'error' in token_data:
             return (
                 {
@@ -58,7 +51,7 @@ def insert_resolution(request):
                 400
             )
 
-        user_session = utils.generate_user_session(data['token'])
+        user_session = utils.generate_user_session(token)
 
         while True:
             response = user_session.get(
@@ -134,7 +127,7 @@ def insert_resolution(request):
         for policy in response.json()['bindings']:
             if policy['role'] == 'roles/owner':
                 if ('user:'+token_data['email']) in policy['members']:
-                    blob = getblob(
+                    blob = utils.getblob(
                         'gs://lapdog-resolutions/%s' % sha512(data['namespace'].encode()).hexdigest(),
                         credentials=utils.generate_default_session().credentials
                     )

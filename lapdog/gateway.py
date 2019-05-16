@@ -17,7 +17,7 @@ import crayons
 import os
 import json
 from .cloud import RESOLUTION_URL
-from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, proxy_group_for_user, generate_user_session, update_iam_policy, __API_VERSION__, GCP_ZONES
+from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, proxy_group_for_user, generate_default_session, update_iam_policy, __API_VERSION__, GCP_ZONES
 from urllib.parse import quote
 from dalmatian import capture
 import google.api_core.exceptions
@@ -168,7 +168,7 @@ def _generate_core_key_internal(ld_project, worker_account, session=None):
     remove all existing versions
     """
     if session is None:
-        session = generate_user_session(get_access_token())
+        session = get_user_session()
     warnings.warn("Generating new root authentication key for project")
     response = session.post(
         "https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}/keys".format(
@@ -208,6 +208,14 @@ def resolve_project_for_namespace(namespace):
             raise NameError("No resolution for "+namespace)
         resolution = blob.download_as_string().decode()
     return resolution
+
+_USER_SESSION_INTERNAL = None
+
+def get_user_session():
+    global _USER_SESSION_INTERNAL
+    if _USER_SESSION_INTERNAL is None:
+        _USER_SESSION_INTERNAL = generate_default_session()
+    return _USER_SESSION_INTERNAL
 
 class Gateway(object):
     """
@@ -272,7 +280,7 @@ class Gateway(object):
             billing_account=billing_id
         )
         print("POST", test_url)
-        user_session = generate_user_session(get_access_token())
+        user_session = get_user_session()
         response = user_session.post(
             test_url,
             headers={"Content-Type": "application/json"},
@@ -326,11 +334,10 @@ class Gateway(object):
         print(cmd)
         subprocess.check_call(cmd, shell=True)
         print("Saving Namespace Resolution")
-        response = requests.post(
+        response = user_session.post(
             RESOLUTION_URL,
             headers={"Content-Type": "application/json"},
             json={
-                'token': get_access_token(),
                 'namespace': project_id,
                 'project': custom_lapdog_project
             }
@@ -573,12 +580,9 @@ class Gateway(object):
         """
         Property. Verifies that the current user is registered with this gateway
         """
-        response = requests.post(
+        response = get_user_session().post(
             self.get_endpoint('query'),
             headers={'Content-Type': 'application/json'},
-            json={
-                'token': get_access_token(),
-            }
         )
         return response.status_code == 200
 
@@ -589,11 +593,10 @@ class Gateway(object):
         to at least one workspace for this namespace
         """
         warnings.warn("[BETA] Gateway Register")
-        response = requests.post(
+        response = get_user_session().post(
             self.get_endpoint('register'),
             headers={'Content-Type': 'application/json'},
             json={
-                'token': get_access_token(),
                 'bucket': bucket,
                 'namespace': self.namespace,
                 'workspace': workspace,
@@ -621,11 +624,10 @@ class Gateway(object):
         download the input files specified in the workflow inputs.
         """
         warnings.warn("[BETA] Gateway Create Submission")
-        response = requests.post(
+        response = get_user_session().post(
             self.get_endpoint('submit'),
             headers={'Content-Type': 'application/json'},
             json={
-                'token': get_access_token(),
                 'bucket': bucket,
                 'submission_id': submission_id,
                 'namespace': self.namespace,
@@ -678,11 +680,10 @@ class Gateway(object):
         then deletes all workflow machines, then finally the cromwell machine.
         """
         warnings.warn("[BETA] Gateway Abort Submission")
-        response = requests.delete(
+        response = get_user_session().delete(
             self.get_endpoint('abort'),
             headers={'Content-Type': 'application/json'},
             json={
-                'token': get_access_token(),
                 'bucket': bucket,
                 'submission_id': submission_id,
                 'hard': hard
@@ -708,7 +709,7 @@ class Gateway(object):
             endpoint=quote(endpoint),
             version=_version
         )
-        response = requests.options(endpoint_url)
+        response = get_user_session().options(endpoint_url)
         if response.status_code == 204:
             return endpoint_url
         if response.status_code == 200 or response.status_code == 404:
@@ -729,7 +730,7 @@ class Gateway(object):
         Checks that a specific internal endpoint exists and returns the expected response
         """
         try:
-            response = requests.get(self.get_endpoint('existence'))
+            response = get_user_session().get(self.get_endpoint('existence'))
             return response.status_code == 200 and response.text == 'OK'
         except ValueError:
             return False
@@ -740,12 +741,9 @@ class Gateway(object):
         Property. Connects to the Gateway to fetch the current quota usage
         """
         warnings.warn("[BETA] Gateway Quotas")
-        response = requests.post(
+        response = get_user_session().post(
             self.get_endpoint('quotas'),
             headers={'Content-Type': 'application/json'},
-            json={
-                'token': get_access_token()
-            }
         )
         if response.status_code == 200:
             return response.json()
@@ -777,7 +775,7 @@ class Gateway(object):
             raise ValueError("Unable to set compute regions without a working Engine")
         if len(regions) <= 0:
             raise ValueError("Must provide at least one compute region")
-        user_session = generate_user_session(get_access_token())
+        user_session = get_user_session()
         print("Checking VPC configuration for new regions")
         for region in regions:
             if region not in GCP_ZONES:

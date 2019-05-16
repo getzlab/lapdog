@@ -10,29 +10,21 @@ import traceback
 @utils.cors('POST')
 def quotas(request):
     try:
-        data = request.get_json()
 
         # 1) Validate the token
 
-        if not isinstance(data, dict):
-            return (
-                {
-                    'error': "Bad Request",
-                    'message': ("No data was provided" if data is None else "Expected JSON dictionary in request body")
-                },
-                400
-            )
 
-        if 'token' not in data:
+        token = utils.extract_token(request.headers, None)
+        if token is None:
             return (
                 {
                     'error': 'Bad Request',
-                    'message': 'Missing required parameter "token"'
+                    'message': 'Token must be provided in header or body'
                 },
                 400
             )
 
-        token_data = utils.get_token_info(data['token'])
+        token_data = utils.get_token_info(token)
         if 'error' in token_data:
             return (
                 {

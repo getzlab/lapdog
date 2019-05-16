@@ -8,7 +8,6 @@ except ImportError:
 import json
 from urllib.parse import quote
 import traceback
-from dalmatian import getblob
 
 @utils.cors('DELETE')
 def abort_submission(request):
@@ -29,16 +28,17 @@ def abort_submission(request):
                 400
             )
 
-        if 'token' not in data:
+        token = utils.extract_token(request.headers, data)
+        if token is None:
             return (
                 {
                     'error': 'Bad Request',
-                    'message': 'Missing required parameter "token"'
+                    'message': 'Token must be provided in header or body'
                 },
                 400
             )
 
-        token_data = utils.get_token_info(data['token'])
+        token_data = utils.get_token_info(token)
         if 'error' in token_data:
             return (
                 {
@@ -59,7 +59,7 @@ def abort_submission(request):
                 400
             )
 
-        session = utils.generate_user_session(data['token'])
+        session = utils.generate_user_session(token)
 
         read, write = utils.validate_permissions(session, data['bucket'])
         if read is None:
@@ -126,7 +126,7 @@ def abort_submission(request):
                 400
             )
 
-        signature_blob = getblob(
+        signature_blob = utils.getblob(
             'gs://{bucket}/lapdog-executions/{submission_id}/signature'.format(
                 bucket=data['bucket'],
                 submission_id=data['submission_id']
@@ -157,7 +157,7 @@ def abort_submission(request):
 
         utils.sign_object(
             data['submission_id'].encode(),
-            getblob(
+            utils.getblob(
                 'gs://{bucket}/lapdog-executions/{submission_id}/abort-key'.format(
                     bucket=data['bucket'],
                     submission_id=data['submission_id']

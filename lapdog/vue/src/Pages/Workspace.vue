@@ -200,7 +200,7 @@
             Not Registered. Insufficient Permissions
           </span>
           <span v-else class="red-text">
-            Not Ready. Contact Namespace Admin
+            Not Ready. Please see <a rel="noopener" target="_blank" href="https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins">this article</a> for more information
           </span>
         </div>
       </div>

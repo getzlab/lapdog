@@ -84,7 +84,7 @@ def get_workspace_object(namespace, name):
         current_app.config['storage']['cache']['all_workspaces'].append((namespace, name))
     return ws
 
-# @cached(600)
+@cached(60)
 @controller
 def get_alerts():
     return [

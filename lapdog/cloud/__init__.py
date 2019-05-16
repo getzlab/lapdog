@@ -27,11 +27,10 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
         overload_version = __API_VERSION__[endpoint]
     with tempfile.TemporaryDirectory() as tempdir:
         with open(os.path.join(tempdir, 'requirements.txt'), 'w') as w:
-            w.write('google-auth\n')
-            w.write('google-cloud-storage\n')
-            w.write('google-cloud-kms\n')
-            w.write('cryptography\n')
-            w.write('firecloud-dalmatian>=0.0.9\n')
+            w.write('google-auth==1.6.3\n')
+            w.write('google-cloud-storage==1.14.0\n')
+            w.write('google-cloud-kms==1.0.0\n')
+            w.write('cryptography==2.3\n')
         shutil.copyfile(
             os.path.join(
                 os.path.dirname(__file__),
@@ -46,7 +45,7 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
             ),
             os.path.join(tempdir, 'utils.py')
         )
-        cmd = 'gcloud {project} beta functions deploy {endpoint}-{version} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
+        cmd = 'gcloud {project} functions deploy {endpoint}-{version} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
             endpoint=endpoint,
             version=overload_version,
             function=function,
@@ -57,7 +56,8 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
         print(cmd)
         subprocess.check_call(
             cmd,
-            shell=True
+            shell=True,
+            executable='/bin/bash'
         )
 
 def __generate_alert_internal(title, alert_type, content):

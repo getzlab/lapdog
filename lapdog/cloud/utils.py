@@ -1,4 +1,4 @@
-from google.cloud import kms_v1 as kms
+from google.cloud import kms_v1 as kms, storage
 import google.auth
 from google.auth.transport.requests import AuthorizedSession
 import google.oauth2.service_account
@@ -13,19 +13,18 @@ import os
 import json
 from urllib.parse import quote
 import time
-from functools import lru_cache
+from functools import lru_cache, wraps
 import traceback
-from dalmatian import getblob
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
-    'submit': 'v5',
-    'abort': 'v1',
-    'register': 'v2',
-    'signature': 'v1',
-    'query': 'v1',
-    'quotas': 'v3',
-    'resolve': 'v2',
+    'submit': 'v6',
+    'abort': 'v2',
+    'register': 'v3',
+    'signature': 'v2',
+    'query': 'v2',
+    'quotas': 'v4',
+    'resolve': 'v3',
     'existence': 'frozen'
 }
 # The api version will allow versioning of cloud functions
@@ -70,6 +69,7 @@ def cors(*methods):
     4) Passes on requests to the decorated function only if they have an accepted method and localhost origin
     """
     def wrapper(func):
+        @wraps(func)
         def call(request):
             if request.method == 'OPTIONS':
                 headers = {
@@ -92,6 +92,39 @@ def cors(*methods):
             return tuple(result)
         return call
     return wrapper
+
+## This is a redundant getblob
+## However, google-cloud-functions seems to take issue with dalmatian
+
+@lru_cache()
+def _getblob_client(credentials):
+    return storage.Client(credentials=credentials)
+
+def getblob(gs_path, credentials=None, user_project=None):
+    """
+    Return a GCP "blob" object for a given gs:// path.
+    Path must start with "gs://".
+    By default, uses the current application default credentials for authentication.
+    Alternatively, you may provide a `google.auth.Credentials` object.
+    When interacting with a requester pays bucket, you must set `user_project` to
+    be the name of the project to bill for the data transfer fees
+    """
+    if not gs_path.startswith('gs://'):
+        raise ValueError("Getblob path must start with gs://")
+    bucket_id = gs_path[5:].split('/')[0]
+    bucket_path = '/'.join(gs_path[5:].split('/')[1:])
+    return storage.Blob(
+        bucket_path,
+        _getblob_client(credentials).bucket(bucket_id, user_project)
+    )
+
+
+def extract_token(headers, data):
+    if headers is not None and 'Authorization' in headers and headers['Authorization'].startswith("Bearer "):
+        return headers['Authorization'][7:]
+    elif data is not None and 'token' in data:
+        return data['token']
+    return None
 
 def get_token_info(token):
     """

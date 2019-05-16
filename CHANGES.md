@@ -3,11 +3,21 @@
 ## Unreleased Changes
 
 Bug Fixes:
+* **Critical:** Fixed an error preventing new function deployments
 * Fixed a bug preventing new Engine initialization
 
 Other Changes:
 * `lapdog initialize-project` now checks required gcloud version first
 * Updated Dalmatian to latest
+* Updated `resolve` internal endpoint to v3 (no patch necessary)
+
+### Patch Contents
+* Updated `submit` to v6
+* Updated `abort` to v2
+* Updated `register` to v3
+* Updated `signature` to v2
+* Updated `query` to v2
+* Updated `quotas` to v4
 
 ## 0.16.1 (Beta)
 

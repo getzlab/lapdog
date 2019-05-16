@@ -8,7 +8,7 @@ This function may:
 * Update iam policy or bindings
 * Regenerate signing keys
 """
-from .utils import ld_project_for_namespace, __API_VERSION__, generate_user_session, ld_meta_bucket_for_project
+from .utils import ld_project_for_namespace, __API_VERSION__, generate_default_session, ld_meta_bucket_for_project
 from . import _deploy, RESOLUTION_URL
 from .. import __version__
 from ..gateway import get_access_token, resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS
@@ -64,18 +64,17 @@ def __project_admin_apply_patch(namespace):
     """
     print("Patch version", __version__)
     print("Patching Namespace:", namespace)
-    user_session = generate_user_session(get_access_token())
+    user_session = generate_default_session()
     print(crayons.normal("Phase 1/5:", bold=True), "Checking resolution status")
     blob = getblob(
         'gs://lapdog-resolutions/' + sha512(namespace.encode()).hexdigest()
     )
     if not blob.exists():
         print("Patching resolution")
-        response = requests.post(
+        response = user_session.post(
             RESOLUTION_URL,
             headers={"Content-Type": "application/json"},
             json={
-                'token': get_access_token(),
                 'namespace': namespace,
                 'project': ld_project_for_namespace(namespace)
             }
