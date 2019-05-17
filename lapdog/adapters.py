@@ -21,6 +21,7 @@ from hashlib import md5
 import warnings
 from agutil import ActiveTimeout, TimeoutExceeded, context_lock
 import pandas as pd
+from hound import HoundClient
 
 # Label filter format: labels.(label name)=(label value)
 
@@ -778,6 +779,11 @@ class SubmissionAdapter(object):
                     RuntimeWarning
                 )
                 print(result.text, file=sys.stderr)
+            else:
+                HoundClient(self.bucket).write_log_entry(
+                    'job',
+                    'User aborted submission {}'.format(self.submission)
+                )
         except:
             traceback.print_exc()
             warnings.warn(

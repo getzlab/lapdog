@@ -7,6 +7,7 @@ Other Changes:
 * Lowered the offline threshold for `WorkspaceManager.execute` to 100 entities
 * Significant speed improvements to `WorkspaceManager.execute` when preparing a
 submission in offline mode
+* Aborting a submission now generates a Hound log entry
 
 ## 0.16.2 (Beta)
 
