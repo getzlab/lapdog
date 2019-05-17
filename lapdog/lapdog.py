@@ -408,7 +408,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 results.append(submission)
         return results
 
-    def execute(self, config_name, entity, expression=None, etype=None, force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=1000, private=False, region=None):
+    def execute(self, config_name, entity, expression=None, etype=None, force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=100, private=False, region=None):
         """
         Validates config parameters then executes a job directly on GCP
         Config name may either be a full slug (config namespace/config name)
@@ -463,6 +463,13 @@ class WorkspaceManager(dog.WorkspaceManager):
         while blob.exists():
             print("Submission ID collision detected. Generating a new ID...", file=sys.stderr)
             submission_id = md5((submission_id + str(time.time())).encode()).hexdigest()
+            submission_data_path = os.path.join(
+                'gs://'+self.get_bucket_id(),
+                'lapdog-executions',
+                submission_id,
+                'submission.json'
+            )
+            blob = getblob(submission_data_path)
 
         global_id = 'lapdog/'+base64.b64encode(
             ('%s/%s/%s' % (self.namespace, self.workspace, submission_id)).encode()
@@ -546,12 +553,20 @@ class WorkspaceManager(dog.WorkspaceManager):
             print("Warning: Firecloud request timed out. Preflight will not check data types", file=sys.stderr)
             config_types = {}
 
+        if self.live:
+            evaluator = self.evaluate_expression
+        else:
+            evaluator = dog.Evaluator(self.entity_types)
+            for etype in self.entity_types:
+                evaluator.add_entities(etype, self._get_entities_internal(etype))
+            evaluator.add_attributes(self.attributes)
+
         @parallelize(5)
         def prepare_workflow(workflow_entity):
             wf_template = {}
             for k,v in preflight.config['inputs'].items():
                 if len(v):
-                    resolution = self.evaluate_expression(
+                    resolution = evaluator(
                         preflight.config['rootEntityType'],
                         workflow_entity,
                         v

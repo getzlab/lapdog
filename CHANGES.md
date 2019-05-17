@@ -4,6 +4,9 @@
 
 Other Changes:
 * During startup, lapdog will print any critical alerts to the terminal
+* Lowered the offline threshold for `WorkspaceManager.execute` to 100 entities
+* Significant speed improvements to `WorkspaceManager.execute` when preparing a
+submission in offline mode
 
 ## 0.16.2 (Beta)
 
