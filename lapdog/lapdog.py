@@ -300,14 +300,9 @@ class WorkspaceManager(dog.WorkspaceManager):
             print("Warning: Unable to prepopulate workspace submission cache. Workspace may not exist", file=sys.stderr)
             self.sync()
 
-    def initialize_hound(self, credentials=None, user_project=None):
-        """
-        Initializes the HoundClient for the workspace, if it is None
-        credentials: (optional) google.cloud.auth.Credentials to use when
-        interacting with bucket, if not using default credentials
-        user_project: (optional) name of project to bill, if bucket is requester pays
-        """
-        hound = super().initialize_hound(credentials, user_project)
+    @property
+    def hound(self):
+        hound = super().hound
         hound.author = get_current_user()
         return hound
 

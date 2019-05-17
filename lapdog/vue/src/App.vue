@@ -352,4 +352,12 @@ export default {
   cursor: pointer;
 }
 
+span.icon-align {
+  vertical-align: super;
+}
+
+span.icon-align-header {
+  vertical-align: middle;
+}
+
 </style>

@@ -261,13 +261,13 @@
       <div v-if="!show_attributes" class="col s6" >
         <span>
           <i class="material-icons">keyboard_arrow_right</i>
-          Workspace Attributes
+          <span class="icon-align">Workspace Attributes</span>
         </span>
       </div>
       <div v-else class="col s6">
         <span>
           <i class="material-icons">keyboard_arrow_down</i>
-          Workspace Attributes
+          <span class="icon-align">Workspace Attributes</span>
         </span>
       </div>
     </div>

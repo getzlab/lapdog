@@ -47,13 +47,13 @@
             <div v-if="!show_wdl" class="col s4" >
               <span>
                 <i class="material-icons">keyboard_arrow_right</i>
-                WDL
+                <span class="icon-align">WDL</span>
               </span>
             </div>
             <div v-else class="col s4">
               <span>
                 <i class="material-icons">keyboard_arrow_down</i>
-                WDL
+                <span class="icon-align">WDL</span>
               </span>
             </div>
             <div class="col s8 right">
@@ -203,7 +203,7 @@
     </div>
     <h4>
       <router-link :to="{name: 'workspace', params: {namespace: namespace, workspace: workspace}}">
-        <i class="material-icons tiny">arrow_back</i>  {{namespace}}/{{workspace}}
+        <i class="material-icons tiny">arrow_back</i>  <span class="icon-align-header">{{namespace}}/{{workspace}}</span>
       </router-link>
     </h4>
     <h3>Methods</h3>

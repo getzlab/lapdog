@@ -32,6 +32,7 @@ from .. import getblob
 from urllib.parse import unquote
 from google.cloud import storage
 from google.api_core.exceptions import Forbidden, BadRequest
+from dalmatian.core import APIException
 
 
 @parallelize2(1)
@@ -185,13 +186,29 @@ def list_workspaces():
 @controller
 def workspace(namespace, name):
     ws = get_workspace_object(namespace, name)
-    data = ws.firecloud_workspace
-    data['entities'] = [
-        {**v, **{'type':k}}
-        for k,v in ws.entity_types.items()
-    ]
-    data['configs'] = get_configs(namespace, name)
-    data['attributes'] = ws.attributes
+    data = {
+        '__failures__': []
+    }
+    try:
+        data.update(ws.firecloud_workspace)
+        if 'workspace' in data and 'attributes' in data['workspace']:
+            data['attributes'] = data['workspace']['attributes']
+    except APIException:
+        traceback.print_exc()
+        data['__failures__'].append('metadata')
+    try:
+        data['entities'] = [
+            {**v, **{'type':k}}
+            for k,v in ws.entity_types.items()
+        ]
+    except APIException:
+        traceback.print_exc()
+        data['__failures__'].append('entities')
+    try:
+        data['configs'] = get_configs(namespace, name)
+    except APIException:
+        traceback.print_exc()
+        data['__failures__'].append('configs')
     return data, 200
 
 
