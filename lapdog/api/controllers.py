@@ -1021,7 +1021,10 @@ def _preview_blob_internal(path, project):
         path = 'gs://'+path
     blob = getblob(path, user_project=project)
     try:
-        exists = blob.exists()
+        try:
+            exists = blob.exists()
+        except ValueError:
+            exists = False
         blob.bucket.reload()
         if exists: # file
             blob.reload()
@@ -1056,7 +1059,7 @@ def _preview_blob_internal(path, project):
                     ),
                     'children': sorted({
                         os.path.relpath(child.name, blob.name).split('/')[0]
-                        for page in blob.bucket.list_blobs(prefix=blob.name).pages
+                        for page in blob.bucket.list_blobs(prefix=blob.name, fields='items/name,nextPageToken').pages
                         for child in page
                     }),
                     'bucket': blob.bucket.name

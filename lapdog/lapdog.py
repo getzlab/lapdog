@@ -89,25 +89,15 @@ def check_api(result):
 def _gsutil_available():
     return subprocess.run('which gsutil', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
+
 def list_potential_submissions(bucket_id):
     """
     Lists submission.json files found in a given bucket
     """
-    if _gsutil_available():
-        # Reading the gsutil output is slightly faster
-        for line in re.finditer(r'.+submission\.json', subprocess.run(
-                    'gsutil ls gs://{}/lapdog-executions/*/submission.json'.format(bucket_id),
-                    shell=True,
-                    stdout=subprocess.PIPE
-                    ).stdout.decode()):
-            yield line.group(0)
-    else:
-        # Using google-cloud-storage will always work, but is crazy slow
-        warnings.warn("gsutil is not available. Using slower google-cloud-storage backend")
-        for page in storage.Client().bucket(bucket_id).list_blobs(prefix="lapdog-executions").pages:
-            for blob in page:
-                if blob.exists() and lapdog_submission_pattern.match(blob.name):
-                    yield 'gs://{}/{}'.format(bucket_id, blob.name)
+    for page in storage.Client().bucket(bucket_id).list_blobs(prefix="lapdog-executions", fields='items/name,nextPageToken').pages:
+        for blob in page:
+            if lapdog_submission_pattern.match(blob.name):
+                yield 'gs://{}/{}'.format(bucket_id, blob.name)
 
 
 @parallelize2(5)
@@ -985,7 +975,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         time.sleep(10)
         print(cells)
         bucket_id = 'gs://'+self.bucket_id+'/'
-        for page in storage.Client().bucket(self.bucket_id).list_blobs().pages:
+        for page in storage.Client().bucket(self.bucket_id).list_blobs(fields='items/name,nextPageToken').pages:
             for blob in page:
                 try:
                     if blob.exists():

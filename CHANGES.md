@@ -8,6 +8,8 @@ Other Changes:
 * Significant speed improvements to `WorkspaceManager.execute` when preparing a
 submission in offline mode
 * Aborting a submission now generates a Hound log entry
+* UI link previews timeout after 10s and display a fallback dialog
+* Speed improvements to `WorkspaceManager.mop`, `WorkspaceManager.list_submissions`, and UI link previews
 
 ## 0.16.2 (Beta)
 

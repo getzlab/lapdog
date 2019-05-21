@@ -131,24 +131,41 @@ export default {
     close() {
       window.$('#'+_this.modal_identifier).modal('close');
     },
-    display() {
+    open(data) {
       let _this = this;
+      this.preview = data;
+      window.$('#'+this.modal_identifier).modal();
+      setTimeout(
+        () => {
+          window.$('#'+_this.modal_identifier).modal('open');
+        },
+        100
+      )
+    },
+    display() {
       //for some stupid reason swagger/connexion can't handle slashes in path components, even if encoded
       window.materialize.toast({html: "Generating link preview"});
       let encoded = encodeURIComponent(this.value.replace(/~/g, '~7E')).replace(/%/g, '~');
-      axios.get(API_URL+'/api/v1/blob/'+encoded)
+      axios.get(API_URL+'/api/v1/blob/'+encoded, {timeout: 10000})
         .then((response) => {
-          this.preview = response.data;
-          window.$('#'+_this.modal_identifier).modal();
-          setTimeout(
-            () => {
-              window.$('#'+_this.modal_identifier).modal('open');
-            },
-            100
-          )
+          this.open(response.data);
         })
         .catch((error) => {
-          window.materialize.toast({html:"Unable to generate preview"});
+          if (error.code == 'ECONNABORTED') {
+            window.materialize.toast({html: "Took too long to generate preview"});
+            let bucketname = _.split(this.value.substr(5), '/')[0];
+            this.open({
+              requesterPays: false,
+              exists: false,
+              size: null,
+              preview: null,
+              url: null,
+              visitUrl: "https://console.cloud.google.com/storage/browser/"+encodeURI(this.value.substr(5)),
+              children: [],
+              bucket: bucketname
+            });
+          }
+          else window.materialize.toast({html:"Unable to generate preview"});
         })
     },
     clipboard(text) {
