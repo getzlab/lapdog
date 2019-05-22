@@ -11,7 +11,7 @@ This function may:
 from .utils import ld_project_for_namespace, __API_VERSION__, generate_default_session, ld_meta_bucket_for_project
 from . import _deploy, RESOLUTION_URL
 from .. import __version__
-from ..gateway import get_access_token, resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS
+from ..gateway import get_access_token, resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS, ADMIN_PERMISSIONS
 from ..lapdog import WorkspaceManager
 from dalmatian import getblob
 import sys
@@ -109,94 +109,9 @@ def __project_admin_apply_patch(namespace):
         project=project
     )
     print(crayons.normal("Phase 2/5:", bold=True), "Update IAM Policies")
-    response = user_session.get(
-        roles_url+"/Core_account"
-    )
-    if response.status_code == 404:
-        print("Redeploying Policy")
-        print("POST", roles_url)
-        response = user_session.post(
-            roles_url,
-            headers={
-                'Content-Type': 'application/json'
-            },
-            json={
-                "roleId": "Core_account",
-                "role": {
-                    "title": "Core_account",
-                    "includedPermissions": CORE_PERMISSIONS,
-                    "stage": "GA"
-                }
-            }
-        )
-    elif response.status_code == 200:
-        perms = {*response.json()['includedPermissions']}
-        if len(perms ^ set(CORE_PERMISSIONS)):
-            print("Updating Policy")
-            print("PATCH", roles_url+"/Core_account")
-            response = user_session.patch(
-                roles_url+"/Core_account",
-                headers={
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "title": "Core_account",
-                    "includedPermissions": CORE_PERMISSIONS,
-                    "stage": "GA"
-                }
-            )
-            if response.status_code != 200:
-                print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
-                raise ValueError("Invalid response from Google API")
-        else:
-            print(crayons.green("Policy OK"))
-    else:
-        print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
-        raise ValueError("Invalid response from Google API")
-    response = user_session.get(
-        roles_url+"/Functions_account"
-    )
-    if response.status_code == 404:
-        print("Redeploying Policy")
-        print("POST", roles_url)
-        response = user_session.post(
-            roles_url,
-            headers={
-                'Content-Type': 'application/json'
-            },
-            json={
-                "roleId": "Functions_account",
-                "role": {
-                    "title": "Functions_account",
-                    "includedPermissions": FUNCTIONS_PERMISSIONS,
-                    "stage": "GA"
-                }
-            }
-        )
-    elif response.status_code == 200:
-        perms = {*response.json()['includedPermissions']}
-        if len(perms ^ set(FUNCTIONS_PERMISSIONS)):
-            print("Updating Policy")
-            print("PATCH", roles_url+"/Functions_account")
-            response = user_session.patch(
-                roles_url+"/Functions_account",
-                headers={
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "title": "Functions_account",
-                    "includedPermissions": FUNCTIONS_PERMISSIONS,
-                    "stage": "GA"
-                }
-            )
-            if response.status_code != 200:
-                print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
-                raise ValueError("Invalid response from Google API")
-        else:
-            print(crayons.green("Policy OK"))
-    else:
-        print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
-        raise ValueError("Invalid response from Google API")
+    patch_role(user_session, roles_url, "Core_account", CORE_PERMISSIONS)
+    patch_role(user_session, roles_url, "Functions_account", FUNCTIONS_PERMISSIONS)
+    patch_role(user_session, roles_url, "Engine_Admin", ADMIN_PERMISSIONS)
     print(crayons.normal("Phase 3/5:", bold=True), "Checking VPC Configuration")
     blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
     regions = ['us-central1']
@@ -291,3 +206,51 @@ def __project_admin_apply_patch(namespace):
         print(crayons.red("Redacting "+redaction))
         endpoint, version = redaction.split('-')
         _deploy('redacted', endpoint, functions_account, project, version)
+
+
+def patch_role(session, url, title, permissions):
+    url = "{}/{}".format(url, title)
+    response = session.get(
+        url
+    )
+    if response.status_code == 404:
+        print("Redeploying Policy")
+        print("POST", url)
+        response = session.post(
+            url,
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                "roleId": title,
+                "role": {
+                    "title": title,
+                    "includedPermissions": permissions,
+                    "stage": "GA"
+                }
+            }
+        )
+    elif response.status_code == 200:
+        perms = {*response.json()['includedPermissions']}
+        if len(perms ^ set(permissions)):
+            print("Updating Policy")
+            print("PATCH", url)
+            response = session.patch(
+                url,
+                headers={
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    "title": title,
+                    "includedPermissions": permissions,
+                    "stage": "GA"
+                }
+            )
+            if response.status_code != 200:
+                print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+                raise ValueError("Invalid response from Google API")
+        else:
+            print(crayons.green("Policy OK"))
+    else:
+        print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+        raise ValueError("Invalid response from Google API")

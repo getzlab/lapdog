@@ -24,7 +24,7 @@ __API_VERSION__ = {
     'signature': 'v2',
     'query': 'v2',
     'quotas': 'v4',
-    'resolve': 'v3',
+    'resolve': 'v4',
     'existence': 'frozen'
 }
 # The api version will allow versioning of cloud functions
@@ -134,7 +134,10 @@ def get_token_info(token):
         data = requests.get('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token='+token).json()
         return data
     except:
-        return None
+        return {
+            "error": "Unknown Error",
+            "error_description": traceback.format_exc()
+        }
 
 def ld_acct_in_project(account, ld_project=None):
     """

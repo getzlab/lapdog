@@ -73,6 +73,39 @@ FUNCTIONS_PERMISSIONS = [
     "compute.subnetworks.setPrivateIpGoogleAccess"
 ]
 
+ADMIN_PERMISSIONS = [
+    "cloudfunctions.functions.call",
+    "cloudfunctions.functions.create",
+    "cloudfunctions.functions.get",
+    "cloudfunctions.functions.list",
+    "cloudfunctions.functions.sourceCodeGet",
+    "cloudfunctions.functions.sourceCodeSet",
+    "cloudfunctions.functions.update",
+    "cloudfunctions.operations.get",
+    "cloudfunctions.operations.list",
+    "compute.networks.get",
+    "compute.networks.list",
+    "compute.networks.use",
+    "compute.subnetworks.get",
+    "compute.subnetworks.list",
+    "compute.subnetworks.setPrivateIpGoogleAccess",
+    "compute.subnetworks.update",
+    "iam.roles.create",
+    "iam.roles.get",
+    "iam.roles.list",
+    "iam.roles.update",
+    "storage.objects.setIamPolicy",
+    "storage.objects.update",
+    "storage.buckets.get",
+    "storage.objects.create",
+    "storage.objects.delete",
+    "storage.objects.get",
+    "storage.objects.getIamPolicy",
+    "storage.objects.list",
+    "serviceusage.quotas.get",
+    "serviceusage.quotas.update"
+]
+
 creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
 
 id_rsa = os.path.join(
@@ -322,6 +355,34 @@ class Gateway(object):
         permissions = permissions['permissions']
         if "billing.accounts.get" not in permissions or "billing.accounts.getIamPolicy" not in permissions or "billing.resourceAssociations.create" not in permissions:
             raise ValueError("Insufficient permissions to use this billing account")
+
+        print("GET https://api.firecloud.org/api/profile/billing")
+        while True:
+            response = user_session.get(
+                'https://api.firecloud.org/api/profile/billing'
+            )
+
+            if response.status_code == 200:
+                break
+            print(response.status_code, response.text, file=sys.stderr)
+            if response.status_code == 404:
+                return (
+                    {
+                        'error': "User not found",
+                        'message': "You are not registered yet with firecloud"
+                    },
+                    404
+                )
+            time.sleep(5)
+
+
+        projects = {proj['projectName']:proj for proj in response.json()}
+        if project_id not in projects:
+            raise NameError("The provided namespace '%s' could not be found" % project_id)
+
+        if projects[project_id]['role'] not in {'Owner', 'Admin', 'Administrator'}:
+            raise ValueError("You lack Owner/Admin privilages on the provided namespace")
+
         cmd = (
             'gcloud projects create {project_id}'.format(
                 project_id=custom_lapdog_project
@@ -477,6 +538,24 @@ class Gateway(object):
                 "role": {
                     "title": "Functions_account",
                     "includedPermissions": FUNCTIONS_PERMISSIONS,
+                    "stage": "GA"
+                }
+            }
+        )
+        if response.status_code != 200 and 'ALREADY_EXISTS' not in response.text:
+            print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
+            raise ValueError("Invalid response from Google API")
+        print("POST", roles_url)
+        response = user_session.post(
+            roles_url,
+            headers={
+                'Content-Type': 'application/json'
+            },
+            json={
+                "roleId": "Engine_Admin",
+                "role": {
+                    "title": "Engine_Admin",
+                    "includedPermissions": ADMIN_PERMISSIONS,
                     "stage": "GA"
                 }
             }

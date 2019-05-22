@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.16.4 (Beta)
+
+Other Changes:
+* Updated `resolve` internal endpoint to v4 (no patch necessary)
+    * This change raises requirements for inserting a namespace resolution
+    * Redacted previous versions
+* Added additional checks at the start of engine initialization to check required
+Firecloud permissions prior to making any changes
+
+### Patch Contents
+
+This patch is non-critical and does not contain any endpoint updates.
+
+* Added role definition for `Engine_Admin` role
+
 ## 0.16.3 (Beta)
 
 Bug Fixes:

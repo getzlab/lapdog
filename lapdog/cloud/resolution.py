@@ -82,11 +82,11 @@ def insert_resolution(request):
                 400
             )
 
-        if projects[data['namespace']]['role'] not in {'User', 'Owner', 'Admin', 'Administrator'}:
+        if projects[data['namespace']]['role'] not in {'Owner', 'Admin', 'Administrator'}:
             return (
                 {
                     'error': "Insufficient Permissions",
-                    'message': "The user lacks required privilages on the provided namespace"
+                    'message': "The user lacks Owner/Admin privilages on the provided namespace"
                 },
                 401
             )
