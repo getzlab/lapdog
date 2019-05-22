@@ -164,19 +164,14 @@
         <h5>Lapdog Status</h5>
       </div>
     </div>
-    <div v-if="workspace == 'do-not-delete-lapdog-resolution'" class="row">
-      <div class="col s12 red-text">
-        <h5>Resolution Workspace</h5>
-      </div>
-    </div>
-    <div class="row">
-      <div class="col s12" v-if="!ws">
+    <div v-if="!ws" class="row">
+      <div class="col s12" >
         <div class="progress">
           <div class="indeterminate blue"></div>
         </div>
       </div>
     </div>
-    <div class="stats-container" v-if="ws">
+    <div v-else class="stats-container">
       <div class="row">
         <div class="col s2">
           Google Bucket:
@@ -792,6 +787,11 @@
             this.ws = response.data;
             this.entity_types = response.data.entities;
             this.method_configs = response.data.configs;
+            if (response.data.__failures__.length) {
+              window.materialize.toast({
+                html: "Failed to get: "+_.join(response.data.__failures__, ', ')
+              })
+            };
             window.$('.modal').modal();
             setTimeout(() => {
               window.$('.tooltipped').tooltip();
@@ -1010,6 +1010,7 @@
             this.syncing = false;
           })
           .catch(error => {
+            if (axios.isCancel(error)) return;
             console.error("FAIL")
             console.error(error)
             window.materialize.toast({html:"Failed to sync the workspace cache: "+error.response.data});

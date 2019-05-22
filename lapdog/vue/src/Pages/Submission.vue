@@ -715,7 +715,7 @@ export default {
         .catch(error => {
           if(axios.isCancel(error)) return;
           window.materialize.toast({
-            html: "Unable to upload results: " + response.data.message,
+            html: "Unable to upload results: " + error.response.data.message,
             displayLength: 10000,
           });
         })

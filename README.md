@@ -8,7 +8,7 @@ A relaxed wrapper for dalmatian and FISS
 * Lapdog requires MacOS or Linux. Windows is not officially supported
 * Lapdog requires Python >= 3.3
 * Lapdog requires the Google Cloud SDK, which can be installed [here](https://cloud.google.com/sdk/).
-    * Your `gcloud --version` should be at least `232.0.0`. If it is not, please run `gcloud components update`
+    * Your `gcloud --version` should be at least `241.0.0`. If it is not, please run `gcloud components update`
 * Lapdog uses your Gcloud application-default credentials
     * Use `gcloud auth application-default login` and `gcloud config set account {account}` before running Lapdog
 * Lapdog requires the Alpha and Beta suite for Gcloud

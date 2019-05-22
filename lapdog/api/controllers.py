@@ -187,7 +187,7 @@ def list_workspaces():
 def workspace(namespace, name):
     ws = get_workspace_object(namespace, name)
     data = {
-        '__failures__': []
+        '__failures__': [],
     }
     try:
         data.update(ws.firecloud_workspace)
@@ -195,7 +195,14 @@ def workspace(namespace, name):
             data['attributes'] = data['workspace']['attributes']
     except APIException:
         traceback.print_exc()
-        data['__failures__'].append('metadata')
+        # Fill in fallback data for UI to work
+        data.update({
+            '__failures__': ['metadata'],
+            'workspace': {'bucketName': 'UNKNOWN'},
+            'accessLevel': 'UNKNOWN',
+            'owners': ['UNKNOWN'],
+            'workspaceSubmissionStats': {'runningSubmissionsCount': 0}
+        })
     try:
         data['entities'] = [
             {**v, **{'type':k}}
@@ -624,11 +631,13 @@ def upload_submission(namespace, name, id):
             'failed': True,
             'message': 'Job did not complete. It may have been aborted'
         }, 200
-    except:
+    except Exception as e:
         traceback.print_exc()
         return {
             'failed': True,
-            'message': 'Exception: '+ traceback.format_exc()
+            'message': 'Exception ({}); Check your terminal for more info'.format(
+                type(e)
+            )
         }, 500
     else:
         return {

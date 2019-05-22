@@ -207,6 +207,17 @@ def resolve_project_for_namespace(namespace):
         if not blob.exists():
             raise NameError("No resolution for "+namespace)
         resolution = blob.download_as_string().decode()
+        try:
+            # Before caching the resolution, check the inverse
+            # The resolved project should report that it manages the provided namespace
+            # It would be unusual if it did not, perhaps a resolution was manually changed
+            local_blob = getblob(
+                'gs://{}/resolution'.format(ld_meta_bucket_for_project(resolution))
+            )
+            if local_blob.exists() and local_blob.download_as_string().decode() == namespace:
+                cache_write(resolution, 'namespace', 'resolution', namespace=namespace)
+        except:
+            traceback.print_exc()
     return resolution
 
 _USER_SESSION_INTERNAL = None
@@ -271,11 +282,11 @@ class Gateway(object):
             if len(line.strip()):
                 words = line.strip().split()
                 gcloud_version[' '.join(words[:-1])] = int(words[-1].split('.')[0])
-        if gcloud_version['Google Cloud SDK'] < 232:
-            print("Update gcloud SDK? Lapdog requires >= 232.0.0")
+        if gcloud_version['Google Cloud SDK'] < 241:
+            print("Update gcloud SDK? Lapdog requires >= 241.0.0")
             choice = input("Y/N : ")
             if not choice.strip().lower().startswith('y'):
-                raise ValueError("Lapdog requires gcloud version >= 232.0.0; Please run 'gcloud components update'")
+                raise ValueError("Lapdog requires gcloud version >= 241.0.0; Please run 'gcloud components update'")
             print('gcloud components update')
             run_cmd('gcloud components update')
         if not ('alpha' in gcloud_version and 'beta' in gcloud_version):

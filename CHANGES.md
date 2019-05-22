@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased Changes
+## 0.16.3 (Beta)
+
+Bug Fixes:
+* Fixed an offline workspace with a cold cache disabling ui (#87)
+* Fixed page navigation logging an error to the console during workspace sync
 
 Other Changes:
+* Updated required version of Google Cloud SDK to `241.0.0`
 * During startup, lapdog will print any critical alerts to the terminal
 * Lowered the offline threshold for `WorkspaceManager.execute` to 100 entities
 * Significant speed improvements to `WorkspaceManager.execute` when preparing a
