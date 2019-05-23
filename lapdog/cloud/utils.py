@@ -85,6 +85,17 @@ def cors(*methods):
                 return ('Not allowed', 405, {'Allow': ', '.join(methods)})
             elif 'Origin' in request.headers and not request.headers['Origin'].startswith('http://localhost'):
                 return ('Forbidden', 403)
+            response = requests.get("https://us-central1-a-graubert.cloudfunctions.net/ld-master-switch")
+            if response.status_code != 200 or response.text != "OK":
+                return (
+                    (
+                        "The Lapdog Master Switch has been disabled."
+                        " Generally this means Lapdog has been taken offline"
+                        " for security reasons. Check https://github.com/broadinstitute/lapdog"
+                        " for updates"
+                    ),
+                    510
+                )
             result = list(func(request))
             print("RESULT", result)
             if isinstance(result[0], dict):

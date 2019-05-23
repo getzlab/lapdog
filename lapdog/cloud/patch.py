@@ -55,7 +55,8 @@ __ENDPOINTS__ = {
     'signature': 'check_abort',
     'register': 'register',
     'query': 'query_account',
-    'quotas': 'quotas'
+    'quotas': 'quotas',
+    'existence': 'existence'
 }
 
 def __project_admin_apply_patch(namespace):
@@ -157,7 +158,7 @@ def __project_admin_apply_patch(namespace):
     if response.status_code != 200:
         print("Unable to query existing functions. Redeploying all functions")
         deployments = {
-            k:v
+            f:v
             for f,v in __API_VERSION__.items()
             if f != 'resolve'
         }

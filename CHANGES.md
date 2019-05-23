@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* Fixed a bug which sometimes prevented functions from being deployed during a patch
+
 ## 0.16.4 (Beta)
 
 Other Changes:
