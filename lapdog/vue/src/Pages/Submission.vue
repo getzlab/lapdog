@@ -560,6 +560,7 @@ export default {
         this.sort_key = key;
         this.workflows = _.sortBy(this.workflows, key);
       }
+      this.$refs.pagination.turn_page(1);
       this.$refs.pagination.turn_page(0);
     },
     read_cromwell() {
