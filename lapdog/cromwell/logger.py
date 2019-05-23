@@ -8,8 +8,6 @@ import requests
 import threading
 import base64
 
-last_call = None
-
 abort_path = os.path.join(
     os.path.dirname(os.path.dirname(sys.argv[1])),
     'abort-key'
@@ -45,62 +43,6 @@ def abort():
     else:
         print('<<<INVALID ABORT KEY>>>')
 
-
-def throttle(n):
-    def wrapper(func):
-        def call(*args, **kwargs):
-            global last_call
-            if last_call is None or (time.time() - last_call) > n:
-                last_call = time.time()
-                return func(*args, **kwargs)
-            # Abort
-        return call
-    return wrapper
-
-def _flush(handle):
-    global volume
-    handle.flush()
-    subprocess.check_call('gsutil -h "Content-Type:text/plain" cp %s %s' % (handle.name, sys.argv[1]), shell=True)
-    volume += os.path.getsize(handle.name)
-
-def flush(handle, debounce_interval):
-    global last_call
-    call_time = time.time()
-    last_call = call_time
-    n = debounce_interval / 2
-    for i in range(n):
-        time.sleep(2)
-        if last_call != call_time:
-            return
-    if last_call == call_time:
-        _flush(handle)
-
-# flush = throttle(120)(_flush)
-# flush_slow = throttle(300)(_flush)
-# flush_rare = throttle(3600)(_flush)
-
-def write(handle, line):
-    handle.write(line.rstrip() + '\n')
-    while threading.activeCount() >= 1000:
-        time.sleep(1)
-    thread = threading.Thread(
-        target=flush,
-        args=(
-            handle,
-            1800 if volume > 1073741824 else (
-                300 if volume > 52428800 else 60
-            )
-        )
-    ) # Debounced log thread
-    thread.daemon = True
-    thread.start()
-    # if volume > 1073741824: # 1 Gib
-    #     upload = flush_rare(handle)
-    # elif volume > 52428800: # 50 Mib
-    #     upload = flush_slow(handle)
-    # else:
-    #     upload = flush(handle)
-
 def abort_worker():
     while True:
         for i in range(60):
@@ -117,12 +59,73 @@ thread = threading.Thread(
 thread.daemon = True
 thread.start()
 
-volume = 0
-with tempfile.NamedTemporaryFile('w') as tmp:
-    while True:
-        line = raw_input() # Dumb, but will crash when stdin closes
-        if line.rstrip() == '<<<EOF>>>':
-            sys.exit(0)
-        write(tmp, line)
-        # tmp.write('\n(VOLUME %d)\n' % volume)
-        print(line.rstrip())
+
+class BatchWriter:
+    """
+    Better Log batching system
+    Dispatches a chunk of log text after a set time or if the buffer reaches a set size
+    Both thresholds increase as the total log volume increases
+    """
+
+    def __init__(self):
+        self.batch_start = None
+        self.batch_contents = ''
+        self.log_volume = 0
+        self.lock = threading.Condition()
+        self.thread = threading.Thread(
+            target=self._threadworker,
+            name="Batch writing thread",
+        )
+        self.thread.daemon = True
+        self.thread.start()
+
+    def write(self, text):
+        with self.lock:
+            if self.batch_start is None:
+                self.batch_start = time.time()
+            self.batch_contents += text.rstrip() + '\n'
+            if self.dispatch_time() or self.dispatch_volume():
+                self.lock.notify_all()
+
+    def dispatch_time(self):
+        if self.log_volume > 1073741824:
+            wait_time = 1800
+        elif self.log_volume > 52428800:
+            wait_time = 300
+        else:
+            wait_time = 60
+        return self.batch_start is not None and time.time() - self.batch_start >= wait_time
+
+    def dispatch_volume(self):
+        if self.log_volume > 1073741824:
+            wait_size = 4096
+        elif self.log_volume > 52428800:
+            wait_size = 2048
+        else:
+            wait_size = 1024
+        return len(self.batch_contents) >= wait_size
+
+    def _threadworker(self):
+        with tempfile.NamedTemporaryFile('w') as tmp:
+            while True:
+                with self.lock:
+                    while not (self.dispatch_time() or self.dispatch_volume()):
+                        self.lock.wait(10)
+                    tmp.write(self.batch_contents)
+                    self.log_volume += (
+                        self.log_volume # Yes we want to include this, because the upload re-writes the blob
+                        + len(self.batch_contents)
+                    )
+                    self.batch_contents = ''
+                    self.batch_start = None
+                tmp.flush()
+                subprocess.check_call('gsutil -h "Content-Type:text/plain" cp %s %s' % (tmp.name, sys.argv[1]), shell=True)
+
+writer = BatchWriter()
+while True:
+    line = raw_input() # Dumb, but will crash when stdin closes
+    if line.rstrip() == '<<<EOF>>>':
+        sys.exit(0)
+    writer.write(line)
+    # tmp.write('\n(VOLUME %d)\n' % volume)
+    print(line.rstrip())

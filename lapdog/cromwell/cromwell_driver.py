@@ -139,14 +139,15 @@ class CromwellDriver(object):
         time.sleep(60)
         with open(wdl, 'rb') as wdlReader:
             with open(options, 'rb') as optionReader:
+                opts = json.load(optionReader)
+                opts['google_labels'] = {
+                    'lapdog-submission-id':submission_id,
+                    'lapdog-execution-role':'worker'
+                }
                 data = {
                     'workflowSource': wdlReader.read(),
                     # 'workflowInputs': json.dumps([line for line in reader]),
-                    'workflowOptions': optionReader.read(),
-                    'labels': json.dumps({
-                        'lapdog-submission-id':submission_id,
-                        'lapdog-execution-role':'worker'
-                    }).encode()
+                    'workflowOptions': json.dumps(opts),
                 }
         logging.info("Starting the following configuration: " + json.dumps(data))
         output = []

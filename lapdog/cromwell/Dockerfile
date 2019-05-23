@@ -34,6 +34,13 @@ RUN apt-get remove --yes python-pip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Copy Cromwell and the Cromwell conf template
+RUN mkdir /cromwell
+RUN cd /cromwell && \
+    curl -L -O https://github.com/broadinstitute/cromwell/releases/download/41/cromwell-41.jar
+RUN ln /cromwell/cromwell-41.jar /cromwell/cromwell.jar
+COPY jes_template.tmp.conf /cromwell/
+
 # Copy the wdl_runner python, shell script, and dependencies
 RUN mkdir /wdl_runner
 COPY cromwell_driver.py \
@@ -45,13 +52,6 @@ COPY cromwell_driver.py \
      logger.py \
      /wdl_runner/
 RUN chmod u+x /wdl_runner/wdl_runner.sh
-
-# Copy Cromwell and the Cromwell conf template
-RUN mkdir /cromwell
-RUN cd /cromwell && \
-    curl -L -O https://github.com/broadinstitute/cromwell/releases/download/36.1/cromwell-36.1.jar
-RUN ln /cromwell/cromwell-36.1.jar /cromwell/cromwell.jar
-COPY jes_template.tmp.conf /cromwell/
 
 # Set up the runtime environment
 ENV CROMWELL /cromwell/cromwell.jar

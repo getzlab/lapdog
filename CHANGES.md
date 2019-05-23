@@ -5,6 +5,14 @@
 Bug Fixes:
 * Fixed a bug which sometimes prevented functions from being deployed during a patch
 
+Other Changes:
+* Significantly improved latency of Cromwell log
+* Updated to Cromwell 41. This allows worker VMs to be labeled by their parent submission id
+* Updated Cromwell Tag to `v0.16.5`
+
+### Patch Contents
+* Updated `submit` endpoint to v7
+
 ## 0.16.4 (Beta)
 
 Other Changes:
