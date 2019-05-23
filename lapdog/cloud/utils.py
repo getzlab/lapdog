@@ -18,7 +18,7 @@ import traceback
 
 # TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
-    'submit': 'v7',
+    'submit': 'v6',
     'abort': 'v2',
     'register': 'v3',
     'signature': 'v2',
@@ -36,7 +36,7 @@ __API_VERSION__ = {
 # This function will deploy new cloud functions and run any other arbitrary code
 # Such as updating iam policy bindings or role permissions
 
-__CROMWELL_TAG__ = 'v0.16.5'
+__CROMWELL_TAG__ = 'v0.15.0'
 
 GCP_ZONES = {
     'asia-east1':	('a', 'b', 'c'),
