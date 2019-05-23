@@ -666,27 +666,26 @@ class WorkspaceManager(dog.WorkspaceManager):
                 **{'operation': result}
             }
 
-            if self.hound is not None:
-                self.hound.write_log_entry(
-                    'job',
-                    (
-                        "User started Lapdog Submission {};"
-                        " Job results will be updated in hound when results are uploaded."
-                        " Configuration: {}/{}, Entity: {}/{}, Expression: {},"
-                        " Workflows: {}, Compute Region: {}, Private IP: {}"
-                    ).format(
-                        submission_id,
-                        preflight.config['namespace'],
-                        preflight.config['name'],
-                        preflight.etype,
-                        preflight.entity,
-                        'null' if expression is None else expression,
-                        len(preflight.workflow_entities),
-                        region,
-                        private
-                    ),
-                    entities=[os.path.join(preflight.etype, preflight.entity)]
-                )
+            self.hound.write_log_entry(
+                'job',
+                (
+                    "User started Lapdog Submission {};"
+                    " Job results will be updated in hound when results are uploaded."
+                    " Configuration: {}/{}, Entity: {}/{}, Expression: {},"
+                    " Workflows: {}, Compute Region: {}, Private IP: {}"
+                ).format(
+                    submission_id,
+                    preflight.config['namespace'],
+                    preflight.config['name'],
+                    preflight.etype,
+                    preflight.entity,
+                    'null' if expression is None else expression,
+                    len(preflight.workflow_entities),
+                    region,
+                    private
+                ),
+                entities=[os.path.join(preflight.etype, preflight.entity)]
+            )
 
             if resync:
                 print("Bringing the workspace back online")
@@ -740,9 +739,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 while '%s_%d' %(name, i) in table.index:
                     i += 1
                 name = '%s_%d' %(name, i)
-            with contextlib.ExitStack() as stack:
-                if self.hound is not None:
-                    stack.enter_context(self.hound.with_reason("<Automated> Retrying submission {}".format(submission_id)))
+            with self.hound.with_reason("<Automated> Retrying submission {}".format(submission_id)):
                 self.update_entity_set(workflowEntityType, name, retries)
             return {
                 'name': name,
@@ -779,9 +776,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 while '%s_%d' %(name, i) in table.index:
                     i += 1
                 name = '%s_%d' %(name, i)
-            with contextlib.ExitStack() as stack:
-                if self.hound is not None:
-                    stack.enter_context(self.hound.with_reason("<Automated> Retrying submission {}".format(submission_id)))
+            with self.hound.with_reason("<Automated> Retrying submission {}".format(submission_id)):
                 self.update_entity_set(submission.data['workflowEntityType'], name, retries)
             return {
                 'name': name,
@@ -859,9 +854,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             done = 'done' in status and status['done']
             if done:
                 print("All workflows completed. Uploading results...")
-                with contextlib.ExitStack() as stack:
-                    if self.hound is not None:
-                        stack.enter_context(self.hound.with_reason('Uploading results from submission {}'.format(submission_id)))
+                with self.hound.with_reason('Uploading results from submission {}'.format(submission_id)):
                     self.update_entity_attributes(
                         submission.data['workflowEntityType'],
                         self.submission_output_df(submission_id)
@@ -1077,14 +1070,13 @@ class WorkspaceManager(dog.WorkspaceManager):
             try:
                 with self.timeout(dog.DEFAULT_LONG_TIMEOUT):
                     dog.update_method(namespace, name, synopsis, path, delete_old=delete)
-                    if self.hound is not None:
-                        self.hound.write_log_entry(
-                            'other',
-                            "Uploaded/Updated Method for workspace: {}/{}".format(
-                                namespace,
-                                name
-                            )
+                    self.hound.write_log_entry(
+                        'other',
+                        "Uploaded/Updated Method for workspace: {}/{}".format(
+                            namespace,
+                            name
                         )
+                    )
                 version = self.get_method_version(namespace, name)
                 key = 'wdl:%s/%s.%d' % (namespace, name, version)
                 with open(path) as r:
