@@ -141,7 +141,7 @@ class CromwellDriver(object):
             with open(options, 'rb') as optionReader:
                 opts = json.load(optionReader)
                 opts['google_labels'] = {
-                    'lapdog-submission-id':submission_id,
+                    'lapdog-submission-id':'id-'+submission_id,
                     'lapdog-execution-role':'worker'
                 }
                 data = {
