@@ -7,6 +7,9 @@ Bug Fixes:
 * Fixed a bug in the preflight system which sometimes displayed outdated preflight results
 * Fixed a missing success notification when uploading new method configurations
 
+Other Changes:
+* Updated UI Dependencies
+
 ### Cromwell Changes
 
 These changes have been applied to the global Lapdog Cromwell docker image and
