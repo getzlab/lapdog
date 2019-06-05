@@ -4,6 +4,8 @@
 
 Bug Fixes:
 * Fixed a bug which sometimes prevented functions from being deployed during a patch
+* Fixed a bug in the preflight system which sometimes displayed outdated preflight results
+* Fixed a missing success notification when uploading new method configurations
 
 ### Cromwell Changes
 

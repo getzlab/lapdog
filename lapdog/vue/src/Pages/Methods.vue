@@ -441,6 +441,9 @@ export default {
           window.$('.modal').modal('close');
           // window.$('.modal').modal('close');
           this.init(this.namespace, this.workspace);
+          window.materialize.toast({
+            html: "Upload successful"
+          })
         })
         .catch(error => {
           console.error(error)

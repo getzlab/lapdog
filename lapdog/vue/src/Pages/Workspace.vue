@@ -512,7 +512,8 @@
         private_access: true,
         compute_region: null,
         submission_page: 0,
-        cancel: null
+        cancel: null,
+        preflight_cancel: null
         // entities: null
       }
     },
@@ -622,6 +623,8 @@
         _this.preflight_entities = 0;
         if (_this.submission_config == "" || _this.submission_etype == "" || _this.entity_field == "") return;
         _this.submission_message = "-";
+        if (_this.preflight_cancel)_this.preflight_cancel.cancel('Updated Preflight params');
+        _this.preflight_cancel = axios.CancelToken.source();
         console.log("Executing preflight");
         console.log(_this);
         let query = API_URL+'/api/v1/workspaces/'+_this.namespace+'/'+_this.workspace+"/preflight";
@@ -635,7 +638,7 @@
           query,
           {},
           {
-            cancelToken:_this.cancel.token,
+            cancelToken:_this.preflight_cancel.token,
             params: params
           }
         )
@@ -1072,6 +1075,7 @@
     },
     beforeRouteLeave(to, from, next) {
       if (this.cancel) this.cancel.cancel('Navigating to new route');
+      if (this.preflight_cancel) this.preflight_cancel.cancel('Navigating to new route');
       next();
     }
   }
