@@ -736,7 +736,8 @@ class Gateway(object):
                 'workflow_options': workflow_options if workflow_options is not None else {},
                 'memory': memory*1024,
                 'no_ip': private,
-                'compute_region': region
+                'compute_region': region,
+                'callcache': True
             }
         )
         if response.status_code == 200:

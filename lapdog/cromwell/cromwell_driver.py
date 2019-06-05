@@ -161,16 +161,16 @@ class CromwellDriver(object):
 
                     chunk = []
 
-                    if not first:
-                        logging.info("Restarting cromwell...")
-                        self.cromwell_proc.kill()
-                        self.cromwell_proc = None
-                        time.sleep(10)
-                        self.start(self.mem)
-                        time.sleep(20)
-                        logging.info("Resuming next batch")
-                    else:
-                        first = False
+                    # if not first:
+                    #     logging.info("Restarting cromwell...")
+                    #     self.cromwell_proc.kill()
+                    #     self.cromwell_proc = None
+                    #     time.sleep(10)
+                    #     self.start(self.mem)
+                    #     time.sleep(20)
+                    #     logging.info("Resuming next batch")
+                    # else:
+                    #     first = False
 
                     for group in clump(batch, query_limit):
                         logging.info("Starting a chunk of %d workflows" % query_limit)

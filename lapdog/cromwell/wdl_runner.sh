@@ -36,6 +36,19 @@ sed s/SERVICEACCOUNT/$(gcloud config get-value account)/ < /cromwell/jes_templat
 
 cat /cromwell/jes_template.conf
 
+# Boot SQL and prefil call cache
+chown -R mysql:mysql /var/lib/mysql /var/run/mysqld
+service mysql start
+
+mysql -uroot -pcromwell <<< "CREATE DATABASE cromwell;"
+
+export METAGENERATION=$(gsutil stat $DUMP_PATH || echo "")
+
+if [[ -n "$METAGENERATION" ]]
+then
+  gsutil cat $DUMP_PATH | mysql -uroot -pcromwell cromwell
+fi
+
 # Execute the wdl_runner
 python -u wdl_runner.py \
  --wdl "${INPUT_PATH}"/wf.wdl \
@@ -44,6 +57,16 @@ python -u wdl_runner.py \
  --workflow-options "${INPUT_PATH}"/wf.options.json \
  --output-dir "${OUTPUTS}" \
  $BATCH_ARG 2> stderr.log | python logger.py $LAPDOG_LOG_PATH/pipeline-stdout.log > stdout.log 2> pipeline-stderr.log
+
+if [[ -n "$DUMP_PATH" ]]
+then
+  if [[ "$METAGENERATION" != $(gsutil stat $DUMP_PATH) ]]
+  then
+    echo "Warning: Cromwell Call Cache has changed since this submission started. Changes will be overwritten by this submission" >> stderr.log
+  fi
+
+  gsutil cp <(mysqldump -uroot -pcromwell cromwell) $DUMP_PATH
+fi
 
 gsutil -h "Content-Type:text/plain" cp stdout.log stderr.log pipeline-stderr.log $LAPDOG_LOG_PATH
 

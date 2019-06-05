@@ -210,6 +210,11 @@ def create_submission(request):
                             'SUBMISSION_ZONES': " ".join(
                                 '{}-{}'.format(region, zone)
                                 for zone in GCP_ZONES[region]
+                            ),
+                            'DUMP_PATH': (
+                                ("gs://{bucket}/lapdog-call-cache.sql".format(bucket=data['bucket']))
+                                if 'callcache' in data and data['callcache']
+                                else ""
                             )
                         }
                     }
