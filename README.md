@@ -108,7 +108,6 @@ read the development roadmap.
 
 ##### Cons
 * You pay an additional 5¢/hour fee for each submission to run the Cromwell server
-* There is no call cache in Lapdog yet. This is still in development
 * Submission results must be manually uploaded to Firecloud by clicking the `Upload Results` button in the UI.
 * There are small overhead costs billed to the Lapdog Engine for operation. These costs
 are for calls to the API and for storage of metadata, both of which should be very cheap

@@ -493,7 +493,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             'workspace':self.workspace,
             'namespace':self.namespace,
             'identifier':global_id,
-            'submission_id': submission_id,
+            'submissionId': submission_id,
             'methodConfigurationName':preflight.config['name'],
             'methodConfigurationNamespace':preflight.config['namespace'],
             'status': 'Running',
@@ -505,7 +505,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 'entityName': preflight.entity,
                 'entityType': preflight.etype
             },
-            'submitter': 'lapdog',
+            'submitter': self.hound.author,
             'workflowEntityType': preflight.config['rootEntityType'],
             'workflowExpression': expression if expression is not None else None,
             'runtime': {

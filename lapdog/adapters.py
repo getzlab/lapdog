@@ -77,6 +77,7 @@ fail_pattern = re.compile(r"ERROR - WorkflowManagerActor Workflow ([a-z0-9\-]+) 
 #(long id), (opt: during status), (failure message)
 status_pattern = re.compile(r'PipelinesApiAsyncBackendJobExecutionActor \[UUID\(([a-z0-9\-]+)\)(\w+)\.(\w+):(\w+):(\d+)]: Status change from (.+) to (.+)')
 #(short code), (workflow name), (task name), (? 'NA'), (call id), (old status), (new status)
+cache_pattern = re.compile(r'\[UUID\((\w{8})\)\]: Job results retrieved \(CallCached\)')
 
 instance_name_pattern = re.compile(r'instance(?:Name)?:\s+(.+)')
 
@@ -706,6 +707,12 @@ class SubmissionAdapter(object):
                             old,
                             new
                         )
+                    elif matcher.apply(cache_pattern.search(message)):
+                        if code in self._update_mask:
+                            continue
+                        self._update_mask.add(code)
+                        short = matcher.value.group(1)
+                        self._init_workflow(short).cache_hit = True
         except TimeoutExceeded:
             pass
             # else:
@@ -769,7 +776,7 @@ class SubmissionAdapter(object):
             # For now, use abort key
             result = self.gateway.abort_submission(
                 self.bucket,
-                self.data['submission_id'],
+                self.data['submissionId'],
                 self.data['status'] == 'Aborting' # Hard abort if we're already aborting
             )
             if result is not None:
@@ -859,6 +866,15 @@ class SubmissionAdapter(object):
         if stdout_blob.exists():
             log_text = stdout_blob.download_as_string()
             cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
+            if self.data['status'] != 'Error' and 'done' in status and status['done']:
+                # If we get here, the submission is done, but there were no logs
+                self.data['status'] = 'Error'
+                cache_write(json.dumps(self.data), 'submission-json', self.bucket, self.submission)
+                gs_path = os.path.join(
+                    self.path,
+                    'submission.json'
+                )
+                getblob(gs_path).upload_from_string(json.dumps(self.data).encode())
             return BytesIO(log_text)
         stdout_blob = getblob(os.path.join(
             'gs://'+self.bucket,
@@ -881,15 +897,6 @@ class SubmissionAdapter(object):
             log_text = stdout_blob.download_as_string()
             cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
             return BytesIO(log_text)
-        if self.data['status'] != 'Error' and 'done' in status and status['done']:
-            # If we get here, the submission is done, but there were no logs
-            self.data['status'] = 'Error'
-            cache_write(json.dumps(self.data), 'submission-json', self.bucket, self.submission)
-            gs_path = os.path.join(
-                self.path,
-                'submission.json'
-            )
-            getblob(gs_path).upload_from_string(json.dumps(self.data).encode())
         return BytesIO(b'')
 
 
@@ -950,6 +957,7 @@ class WorkflowAdapter(object):
         self.path = None
         self.parent_path = parent_path
         self.failure = None
+        self.cache_hit = False
 
     @property
     def inputs(self):
@@ -968,7 +976,7 @@ class WorkflowAdapter(object):
             if status == '-':
                 return 'Starting'
             return status
-        return 'Pending'
+        return 'Cache-Hit' if self.cache_hit else 'Pending'
 
     def handle(self, evt, *args, **kwargs):
         if not self.started:
