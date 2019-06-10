@@ -363,6 +363,16 @@ Other: error_outline
       </div>
     </div>
     <div class="workflow-container" v-if="workflows && workflows.length">
+      <div class="row" v-bind:title="completed_workflows.length +'/' + submission.workflows.length">
+        <div class="col s3">
+          Submission Completion <span class="right">{{completed_workflows.length}} / {{submission.workflows.length}}</span>
+        </div>
+        <div class="col s9">
+          <div class="progress">
+            <div class="determinate blue" v-bind:style="'width: '+100*completed_workflows.length/submission.workflows.length+'%'"></div>
+          </div>
+        </div>
+      </div>
       <pagination ref="pagination" v-bind:n_pages="lodash.ceil(workflows.length / 20)" v-bind:page_size="20" v-bind:getter="turn_page"></pagination>
       <table class="highlight">
         <thead>
@@ -440,7 +450,8 @@ export default {
       rerun_set: null,
       rerun_type: null,
       page: 0,
-      cancel: null
+      cancel: null,
+      final_status: new Set(['Success', 'Failed', 'Cancelled'])
     }
   },
   computed: {
@@ -459,6 +470,9 @@ export default {
     },
     visible_workflows() {
       return _.slice(this.workflows, this.page * 20, (this.page + 1) * 20);
+    },
+    completed_workflows() {
+      return _.filter(this.workflows, (wf) => {return this.final_status.has(wf.status)});
     }
   },
   created() {

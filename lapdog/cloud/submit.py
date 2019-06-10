@@ -159,7 +159,7 @@ def create_submission(request):
 
         if 'memory' in data and data['memory'] > 3072:
             mtype = 'custom-%d-%d' % (
-                math.ceil(data['memory']/13312)*2,
+                math.ceil(data['memory']/13312)*2, # Cheapest core:memory ratio
                 data['memory']
             )
         else:
@@ -210,6 +210,11 @@ def create_submission(request):
                             'SUBMISSION_ZONES': " ".join(
                                 '{}-{}'.format(region, zone)
                                 for zone in GCP_ZONES[region]
+                            ),
+                            'DUMP_PATH': (
+                                ("gs://{bucket}/lapdog-call-cache.sql".format(bucket=data['bucket']))
+                                if 'callcache' in data and data['callcache']
+                                else ""
                             )
                         }
                     }
@@ -233,7 +238,9 @@ def create_submission(request):
                                 "https://www.googleapis.com/auth/genomics"
                             ]
                         },
-                        'bootDiskSizeGb': 20,
+                        'bootDiskSizeGb': 20 + (
+                            max(0, data['cache_size'] - 10) if 'cache_size' in data else 0
+                        ),
                         'network': {
                             'name': 'default',
                             'usePrivateAddress': ('no_ip' in data and data['no_ip'])

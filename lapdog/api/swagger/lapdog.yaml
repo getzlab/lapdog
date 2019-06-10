@@ -1091,11 +1091,11 @@ paths:
           default: 250
         -
           in: query
-          name: query
+          name: cache
           required: false
-          type: integer
-          description: Number of jobs to query at once (optional)
-          default: 100
+          type: boolean
+          description: Enables use of the workspace call cache (optional)
+          default: true
         -
           in: query
           name: private

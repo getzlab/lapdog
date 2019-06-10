@@ -441,7 +441,7 @@ def cmd_submissions(args):
     submissions = args.workspace.get_submission_status(filter_active=args.done)
     if args.id:
         submissions=submissions[
-            submissions['submission_id'] == args.id
+            submissions['submissionId'] == args.id
         ]
     if args.config:
         submissions=submissions[

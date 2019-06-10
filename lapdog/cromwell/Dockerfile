@@ -5,6 +5,18 @@
 # https://developers.google.com/open-source/licenses/bsd
 
 FROM java:openjdk-8-jre
+MAINTAINER Aaron Graubert
+
+# Fix apt repositories
+RUN rm /etc/apt/sources.list.d/jessie-backports.list && \
+  printf "deb http://archive.debian.org/debian/ jessie main\ndeb http://security.debian.org jessie/updates main" > /etc/apt/sources.list
+
+
+#Install mysql
+RUN apt-get update && \
+    echo 'mysql-server mysql-server/root_password password cromwell' | debconf-set-selections && \
+    echo 'mysql-server mysql-server/root_password_again password cromwell' | debconf-set-selections && \
+    apt-get install mysql-server -y
 
 # Install python
 RUN apt-get update && \

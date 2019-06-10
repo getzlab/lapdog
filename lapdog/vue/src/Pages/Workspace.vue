@@ -94,6 +94,21 @@
             </div>
             <div class="row">
               <div class="col s3">
+                Call Cache
+              </div>
+              <div class="col s9">
+                <div class="switch">
+                  <label>
+                    Disabled
+                    <input checked type="checkbox" v-model="callcache">
+                    <span class="lever"></span>
+                    Enabled (Recommended)
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col s3">
                 Compute Region
               </div>
               <div class="col s9 input-field" style="margin-top: 0px !important;">
@@ -111,10 +126,10 @@
                 Cromwell Memory
               </div>
               <div class="col s7">
-                <input v-model="cromwell_mem" class="blue-text" type="range" name="cromwell-mem" min="3" max="624" step="1" value="3" v-on:change="batch_size = cromwell_mem == 3 ? 250 : Math.floor(0.75 * cromwell_mem * 250/3)">
+                <input v-model="cromwell_mem" class="blue-text" type="range" name="cromwell-mem" min="3" max="624" step="1" value="3" v-on:change="batch_size = cromwell_mem == 3 ? 1500 : Math.floor(0.75 * cromwell_mem * 500)">
               </div>
               <div class="col s2">
-                {{cromwell_mem}} GB ${{
+                {{cromwell_mem}} GB ~${{
                   //Math.floor((cromwell_mem == 3 ? 0.05 : 0.063222 + (0.004237 * lodash.min([13, cromwell_mem]) ) + (cromwell_mem > 13 ? 0.009550 * (cromwell_mem - 13): 0))*100)/100
                   cromwell_mem == 3 ? 0.05 : Math.floor((
                     (Math.ceil(cromwell_mem/13) * 0.066348) + //core cost
@@ -128,21 +143,10 @@
                 Max Concurrent Workflows
               </div>
               <div class="col s7">
-                <input v-model="batch_size" class="blue-text" type="range" name="cromwell-mem" min="100" v-bind:max="Math.floor(cromwell_mem * 250/3)" step="1" value="250">
+                <input v-model="batch_size" class="blue-text" type="range" name="cromwell-mem" min="100" v-bind:max="Math.floor(cromwell_mem * 500)" step="1" value="1500">
               </div>
               <div class="col s2">
                 {{batch_size}} Jobs
-              </div>
-            </div>
-            <div class="row">
-              <div class="col s3">
-                Workflow Dispatch Rate
-              </div>
-              <div class="col s7">
-                <input v-model="query_size" class="blue-text" type="range" name="cromwell-mem" min="1" v-bind:max="batch_size" step="1" value="250">
-              </div>
-              <div class="col s2">
-                {{query_size}} Jobs/chunk
               </div>
             </div>
           </div>
@@ -359,8 +363,8 @@
                 </td>
                 <td>{{sub.submissionDate}}</td>
                 <td>
-                  <router-link :to="{name: 'submission', params: {namespace:sub.namespace, workspace:sub.workspace, submission_id:sub.submission_id}}">
-                    {{sub.submission_id}}
+                  <router-link :to="{name: 'submission', params: {namespace:sub.namespace, workspace:sub.workspace, submission_id:sub.submission_id || sub.submissionId}}">
+                    {{sub.submission_id || sub.submissionId}}
                   </router-link>
                 </td>
               </tr>
@@ -503,8 +507,8 @@
         preflight_entities: 0,
         show_advanced: false,
         cromwell_mem: 3,
-        batch_size: 250,
-        query_size: 100,
+        batch_size: 1500,
+        callcache: true,
         cached_submissions: true,
         gateway: null,
         pending_ops: 0,
@@ -670,19 +674,15 @@
           entity: this.entity_field,
           memory: this.cromwell_mem,
           batch: this.batch_size,
-          query: this.query_size,
+          cache: this.callcache,
           private: this.private_access,
           region: this.compute_region
         }
         if (this.submission_expression != "") params.expression = this.submission_expression;
         if (this.submission_etype != "") params.etype = this.submission_etype;
 
-        if (this.preflight_entities > 500) window.materialize.toast({
+        window.materialize.toast({
           html: "Preparing job. This may take a while...",
-          displayLength: 10000,
-        })
-        else window.materialize.toast({
-          html: "Preparing job...",
           displayLength: 10000,
         })
         axios.post(
@@ -764,8 +764,8 @@
         this.entities_data = null;
         this.show_advanced = false;
         this.cromwell_mem = 3;
-        this.batch_size = 250;
-        this.query_size = 100;
+        this.batch_size = 1500;
+        this.callcache = true;
         this.cached_submissions = true;
         this.cache_state = true;
         this.syncing = false;
@@ -888,7 +888,7 @@
           () => {window.$('input.autocomplete').autocomplete({
             limit: 6
           })},
-          250
+          1500
         );
       },
       bind_autocomplete_listener() {

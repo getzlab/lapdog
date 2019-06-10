@@ -13,8 +13,6 @@ import traceback
 def abort_submission(request):
     try:
 
-        # https://genomics.googleapis.com/google.genomics.v2alpha1.Pipelines
-
         data = request.get_json()
 
         # 1) Validate the token

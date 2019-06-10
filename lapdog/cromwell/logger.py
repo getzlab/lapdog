@@ -47,7 +47,6 @@ def abort_worker():
     while True:
         for i in range(60):
             time.sleep(2)
-        print("CHECKING ABORT KEY")
         if subprocess.call('gsutil ls %s' % abort_path, shell=True) == 0:
             # abort key located
             print("ABORTING")

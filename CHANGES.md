@@ -1,23 +1,29 @@
 # Changelog
 
-## Unreleased Changes
+## 0.17.0 (Beta)
 
 Bug Fixes:
 * Fixed a bug which sometimes prevented functions from being deployed during a patch
 * Fixed a bug in the preflight system which sometimes displayed outdated preflight results
 * Fixed a missing success notification when uploading new method configurations
 
+New Features:
+* Lapdog now supports an optional per-workspace call-cache
+
 Other Changes:
+* Updated Dalmatian to 0.0.11
 * Updated UI Dependencies
 
-### Cromwell Changes
+### Additional Cromwell Changes
 
-These changes have been applied to the global Lapdog Cromwell docker image and
-will effect all Lapdog clients running >= 0.15.0:
+These additional changes have also been backported to the global Cromwell images used
+by Lapdog versions 0.15.0-0.16.4.
 
 * Significantly improved latency of Cromwell log
 * Updated to Cromwell 41. This allows worker VMs to be labeled by their parent submission id
 
+### Patch Contents:
+* Updated `submit` endpoint to v7 to accommodate call-cache
 
 ## 0.16.4 (Beta)
 
