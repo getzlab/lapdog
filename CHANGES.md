@@ -10,8 +10,9 @@ Bug Fixes:
 New Features:
 * Lapdog now supports an optional per-workspace call-cache
 
-Other changes:
+Other Changes:
 * Updated Dalmatian to 0.0.11
+* Updated UI Dependencies
 
 ### Additional Cromwell Changes
 
