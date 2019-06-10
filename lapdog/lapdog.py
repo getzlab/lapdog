@@ -393,7 +393,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 results.append(submission)
         return results
 
-    def execute(self, config_name, entity, expression=None, etype=None, force=False, memory=3, batch_limit=None, query_limit=None, offline_threshold=100, private=False, region=None):
+    def execute(self, config_name, entity, expression=None, etype=None, force=False, use_cache=True, memory=3, batch_limit=None, query_limit=None, offline_threshold=100, private=False, region=None):
         """
         Validates config parameters then executes a job directly on GCP
         Config name may either be a full slug (config namespace/config name)
@@ -414,6 +414,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         but will count towards IP-address quotas. If set to True, Cromwell and workers can only access
         Google services, but do not count towards IP-address quotas
         """
+        if query_limit is not None:
+            warnings.warn("Changing the Query limit is no longer supported and will be removed soon", DeprecationWarning, stacklevel=2)
 
         preflight = self.preflight(
             config_name,
@@ -489,6 +491,17 @@ class WorkspaceManager(dog.WorkspaceManager):
         elif region not in compute_regions:
             raise NameError("Compute region %s not enabled for this namespace" % region)
 
+        min_memory = 3
+        cache_size = 0
+        if use_cache:
+            cache_blob = getblob('gs://{}/lapdog-call-cache.sql'.format(self.bucket_id))
+            if cache_blob.exists():
+                cache_blob.reload()
+                cache_size = cache_blob.size
+                min_memory = ceil(max(3, cache_size / 976128930)) # slightly less than 1Gib. Gives breathing room while scaling
+                if min_memory > memory:
+                    warnings.warn("Increasing cromwell memory to accomodate large call cache", stacklevel=2)
+
         submission_data = {
             'workspace':self.workspace,
             'namespace':self.namespace,
@@ -509,11 +522,12 @@ class WorkspaceManager(dog.WorkspaceManager):
             'workflowEntityType': preflight.config['rootEntityType'],
             'workflowExpression': expression if expression is not None else None,
             'runtime': {
-                'memory': memory,
-                'batch_limit': (int(250*memory/3) if batch_limit is None else batch_limit),
+                'memory': max(memory, min_memory),
+                'batch_limit': (int(500*memory) if batch_limit is None else batch_limit),
                 'query_limit': 100 if query_limit is None else query_limit,
                 'private_access': private,
-                'region': region
+                'region': region,
+                'callcache': use_cache
             }
         }
 
@@ -653,7 +667,9 @@ class WorkspaceManager(dog.WorkspaceManager):
                 },
                 memory=submission_data['runtime']['memory'],
                 private=private,
-                region=region
+                region=region,
+                use_cache=use_cache,
+                _cache_size=cache_size
             )
 
             if not status:

@@ -674,14 +674,6 @@ class SubmissionAdapter(object):
                             call,
                             operation
                         )
-                    elif matcher.apply(msg_pattern.search(message)):
-                        if code in self._update_mask:
-                            continue
-                        self._update_mask.add(code)
-                        self._init_workflow(matcher.value.group(1)).handle(
-                            'message',
-                            matcher.value.string
-                        )
                     elif matcher.apply(fail_pattern.search(message)):
                         if code in self._update_mask:
                             continue
@@ -713,6 +705,14 @@ class SubmissionAdapter(object):
                         self._update_mask.add(code)
                         short = matcher.value.group(1)
                         self._init_workflow(short).cache_hit = True
+                    elif matcher.apply(msg_pattern.search(message)):
+                        if code in self._update_mask:
+                            continue
+                        self._update_mask.add(code)
+                        self._init_workflow(matcher.value.group(1)).handle(
+                            'message',
+                            matcher.value.string
+                        )
         except TimeoutExceeded:
             pass
             # else:
@@ -856,6 +856,15 @@ class SubmissionAdapter(object):
                 + utc_offset
                 + datetime.timedelta(seconds=120)
             )
+        if self.data['status'] == 'Running' and 'done' in status and status['done']:
+            # If we get here, the submission is done, but there were no logs
+            self.data['status'] = 'Error'
+            cache_write(json.dumps(self.data), 'submission-json', self.bucket, self.submission)
+            gs_path = os.path.join(
+                self.path,
+                'submission.json'
+            )
+            getblob(gs_path).upload_from_string(json.dumps(self.data).encode())
         stdout_blob = getblob(os.path.join(
             'gs://'+self.bucket,
             'lapdog-executions',
@@ -866,15 +875,6 @@ class SubmissionAdapter(object):
         if stdout_blob.exists():
             log_text = stdout_blob.download_as_string()
             cache_write(log_text, 'submission', self.namespace, self.workspace, self.submission, dtype='cromwell', decode=False)
-            if self.data['status'] != 'Error' and 'done' in status and status['done']:
-                # If we get here, the submission is done, but there were no logs
-                self.data['status'] = 'Error'
-                cache_write(json.dumps(self.data), 'submission-json', self.bucket, self.submission)
-                gs_path = os.path.join(
-                    self.path,
-                    'submission.json'
-                )
-                getblob(gs_path).upload_from_string(json.dumps(self.data).encode())
             return BytesIO(log_text)
         stdout_blob = getblob(os.path.join(
             'gs://'+self.bucket,

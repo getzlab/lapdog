@@ -708,7 +708,7 @@ class Gateway(object):
             raise ValueError("Gateway failed to register user")
         return response.text # your account email
 
-    def create_submission(self, workspace, bucket, submission_id, workflow_options=None, memory=3, private=False, region=None):
+    def create_submission(self, workspace, bucket, submission_id, workflow_options=None, use_cache=True, memory=3, private=False, region=None, _cache_size=None):
         """
         Sends a request through the lapdog execution API to start a new submission.
         Takes the local submission ID.
@@ -725,6 +725,11 @@ class Gateway(object):
         download the input files specified in the workflow inputs.
         """
         warnings.warn("[BETA] Gateway Create Submission")
+        if _cache_size is None and use_cache:
+            blob = getblob('gs://{}/lapdog-call-cache.sql'.format(bucket))
+            if blob.exists():
+                blob.reload()
+                _cache_size = blob.size
         response = get_user_session().post(
             self.get_endpoint('submit'),
             headers={'Content-Type': 'application/json'},
@@ -737,7 +742,8 @@ class Gateway(object):
                 'memory': memory*1024,
                 'no_ip': private,
                 'compute_region': region,
-                'callcache': True
+                'callcache': use_cache,
+                'cache_size': _cache_size / 1073741824 # 1gib
             }
         )
         if response.status_code == 200:

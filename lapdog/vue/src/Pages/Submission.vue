@@ -364,10 +364,10 @@ Other: error_outline
     </div>
     <div class="workflow-container" v-if="workflows && workflows.length">
       <div class="row" v-bind:title="completed_workflows.length +'/' + submission.workflows.length">
-        <div class="col s2">
-          Submission progress
+        <div class="col s3">
+          Submission Completion <span class="right">{{completed_workflows.length}} / {{submission.workflows.length}}</span>
         </div>
-        <div class="col s10">
+        <div class="col s9">
           <div class="progress">
             <div class="determinate blue" v-bind:style="'width: '+100*completed_workflows.length/submission.workflows.length+'%'"></div>
           </div>

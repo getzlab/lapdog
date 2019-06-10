@@ -166,7 +166,9 @@ def register(request):
                         {
                             "role": "roles/iam.serviceAccountUser",
                             "members": [
+                                # Allows the gcloud functions account to set this pet account on comwell servers
                                 "serviceAccount:{email}".format(email=os.environ.get("FUNCTION_IDENTITY")),
+                                # Allows the service account to set itself as the compute account on cromwell workers
                                 "serviceAccount:{email}".format(email=account_email)
                             ]
                         }
@@ -222,8 +224,10 @@ def register(request):
 
         # 7) Register with Firecloud
 
-        time.sleep(10)
+        time.sleep(10) # New service account keys take a few seconds before they're usable
 
+        # Register the user's new pet service account w/ Firecloud
+        # We authenticate as the service account by using the newly generated key
         pet_session = AuthorizedSession(
             google.oauth2.service_account.Credentials.from_service_account_info(
                 json.loads(base64.b64decode(response.json()['privateKeyData']).decode())
@@ -268,6 +272,8 @@ def register(request):
             )
 
         # 8) Check ProxyGroup
+        # Either add the new service account to the user's lapdog@firecloud.org group
+        # Or create the group, if it doesn't exist
 
         response = session.get('https://api.firecloud.org/api/groups', headers={'User-Agent': 'FISS/0.16.9'}, timeout=5)
 
