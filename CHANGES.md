@@ -21,6 +21,8 @@ by Lapdog versions 0.15.0-0.16.4.
 * Significantly improved latency of Cromwell log
 * Updated to Cromwell 41. This allows worker VMs to be labeled by their parent submission id
 
+### Patch Contents:
+* Updated `submit` endpoint to v7 to accommodate call-cache
 
 ## 0.16.4 (Beta)
 
