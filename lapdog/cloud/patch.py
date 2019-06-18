@@ -11,7 +11,7 @@ This function may:
 from .utils import ld_project_for_namespace, __API_VERSION__, generate_default_session, ld_meta_bucket_for_project
 from . import _deploy, RESOLUTION_URL
 from .. import __version__
-from ..gateway import get_access_token, resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS, ADMIN_PERMISSIONS
+from ..gateway import resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS, ADMIN_PERMISSIONS
 from ..lapdog import WorkspaceManager
 from dalmatian import getblob
 import sys

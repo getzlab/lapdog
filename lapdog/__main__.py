@@ -587,8 +587,8 @@ def cmd_service_account(args):
             "Namespace does not match"
         )
         sys.exit("%s != %s"  %(namespace, namespace_c))
-    from lapdog.gateway import get_account, get_access_token, get_token_info
-    acct_c = get_account()
+    from lapdog.gateway import get_gcloud_account, get_application_default_account
+    acct_c = get_gcloud_account()
     if acct != acct_c:
         print(
             crayons.red("Error:", bold=True),
@@ -598,13 +598,13 @@ def cmd_service_account(args):
             )
         )
         sys.exit("Please run `gcloud auth login` followed by `gcloud config set account %s`" % acct)
-    info = get_token_info(get_access_token())
-    if info['email'] != acct:
+    acct_default = get_application_default_account()
+    if acct_default != acct:
         print(
             crayons.red("Error:", bold=True),
             "The provided account (%s) does not match the current application-default credentials (%s)" % (
                 acct,
-                info['email']
+                acct_default
             )
         )
         sys.exit("Please run `gcloud auth application-default login`")

@@ -22,7 +22,7 @@ import yaml
 from .. import firecloud_status
 from ..cache import cached, cache_fetch, cache_write, cache_init, cache_path
 from ..adapters import NoSuchSubmission, Gateway, get_operation_status
-from ..gateway import get_account, proxy_group_for_user
+from ..gateway import get_application_default_account, proxy_group_for_user
 import re
 import contextlib
 import pickle
@@ -243,7 +243,7 @@ def register(namespace, name):
 @cached(120)
 @controller
 def service_account():
-    return proxy_group_for_user(get_account())+'@firecloud.org', 200
+    return proxy_group_for_user(get_application_default_account())+'@firecloud.org', 200
 
 @cached(60)
 @controller

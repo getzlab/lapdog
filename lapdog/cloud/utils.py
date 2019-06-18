@@ -137,12 +137,15 @@ def extract_token(headers, data):
         return data['token']
     return None
 
-def get_token_info(token):
+def get_token_info(token_or_session):
     """
-    Gets metadata for a given GCP access token.
+    Gets metadata for a given GCP access token or session
     """
     try:
-        data = requests.get('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token='+token).json()
+        if isinstance(token_or_session, str):
+            data = requests.get('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token='+token_or_session).json()
+        else:
+            data = token_or_session.get("https://www.googleapis.com/oauth2/v1/tokeninfo").json()
         return data
     except:
         return {

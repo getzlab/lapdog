@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased Changes
+
+**Deprecation Warning:** `lapdog.gateway.get_access_token()` is now deprecated and will be removed when Lapdog shifts to full release.
+If you need to authenticate as the current user, use `lapdog.gateway.get_user_session()`, which returns a prebuilt
+`AuthorizedSession` object which can be used to make authenticated requests on behalf of the user. This function only attaches the
+OAuth scopes needed by Lapdog, so if you need additional scopes,
+use `lapdog.cloud.utils.generate_default_session()`, which allows
+requesting arbitrary scopes
+
+**Deprecation Warning:** Changing the _query\_limit_ parameter to `lapdog.WorkspaceManager.execute()`
+is no longer supported and will be removed when Lapdog shifts to full release.
+
+Other Changes:
+* Restricted usage scopes of access tokens
+* Standardized functions for getting current gcloud accounts
+
 ## 0.17.0 (Beta)
 
 Bug Fixes:

@@ -24,7 +24,7 @@ from . import adapters
 from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader, build_input_key
 from .cache import cache_init, cache_path
 from .cloud.utils import proxy_group_for_user
-from .gateway import Gateway, creation_success_pattern
+from .gateway import Gateway, creation_success_pattern, get_gcloud_account, get_application_default_account
 from itertools import repeat
 import pandas as pd
 from socket import gethostname
@@ -224,11 +224,6 @@ def _load_submissions(wm, path):
             traceback.print_exc()
     return path, None
 
-@lru_cache()
-def get_current_user():
-    from .gateway import get_access_token, get_token_info
-    return get_token_info(get_access_token())['email']
-
 class WorkspaceManager(dog.WorkspaceManager):
     """
     Core Lapdog Class. Represents a single FireCloud workspace.
@@ -293,7 +288,7 @@ class WorkspaceManager(dog.WorkspaceManager):
     @property
     def hound(self):
         hound = super().hound
-        hound.author = get_current_user()
+        hound.author = get_gcloud_account()
         return hound
 
     def populate_cache(self):
@@ -328,10 +323,9 @@ class WorkspaceManager(dog.WorkspaceManager):
             def update_acl():
                 time.sleep(30)
                 try:
-                    from .gateway import get_access_token, get_token_info
                     with self.hound.with_reason('<Automated> Auto-add lapdog proxy-group to workspace'):
                         response = self.update_acl({
-                            proxy_group_for_user(get_token_info(get_access_token())['email'])+'@firecloud.org': 'WRITER'
+                            proxy_group_for_user(get_application_default_account())+'@firecloud.org': 'WRITER'
                         })
                 except:
                     traceback.print_exc()
