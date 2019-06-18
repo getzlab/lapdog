@@ -1,5 +1,9 @@
 from setuptools import setup
-from lapdog import __version__
+import os
+import re
+
+with open(os.path.join(os.path.dirname(__file__), 'lapdog', '__init__.py')) as r:
+    version = re.search(r'__version__ = \"(\d+\.\d+\.\d+[-_a-zA-Z0-9]*)\"', r.read()).group(1)
 
 with open('requirements.txt') as r:
     requirements = r.readlines()
@@ -9,7 +13,7 @@ with open('README.md') as r:
 
 setup(
     name = 'lapdog',
-    version = __version__,
+    version = version,
     packages = [
         'lapdog',
         'lapdog.api',
