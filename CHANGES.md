@@ -12,6 +12,9 @@ requesting arbitrary scopes
 **Deprecation Warning:** Changing the _query\_limit_ parameter to `lapdog.WorkspaceManager.execute()`
 is no longer supported and will be removed when Lapdog shifts to full release.
 
+New Features:
+* Added a workaround for Authorized Domain workspaces
+
 Other Changes:
 * Restricted usage scopes of access tokens
 * Standardized functions for getting current gcloud accounts

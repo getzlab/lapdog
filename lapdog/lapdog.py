@@ -2,7 +2,7 @@ import os
 import json
 import dalmatian as dog
 from firecloud import api as fc
-from dalmatian import getblob, copyblob, moveblob, strict_getblob
+from dalmatian import getblob, copyblob, moveblob, strict_getblob, ConfigNotFound, ConfigNotUnique
 from dalmatian.wmanager import _synchronized, _read_from_cache
 import contextlib
 import csv
@@ -44,10 +44,7 @@ lapdog_submission_member_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]
 
 timestamp_format = '%Y-%m-%dT%H:%M:%S.000%Z'
 
-class ConfigNotFound(KeyError):
-    pass
-
-class ConfigNotUnique(KeyError):
+class AuthorizedDomainException(ValueError):
     pass
 
 @contextlib.contextmanager
@@ -387,7 +384,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 results.append(submission)
         return results
 
-    def execute(self, config_name, entity, expression=None, etype=None, force=False, use_cache=True, memory=3, batch_limit=None, query_limit=None, offline_threshold=100, private=False, region=None):
+    def execute(self, config_name, entity, expression=None, etype=None, force=False, use_cache=True, memory=3, batch_limit=None, query_limit=None, offline_threshold=100, private=False, region=None, _authdomain_parent=None):
         """
         Validates config parameters then executes a job directly on GCP
         Config name may either be a full slug (config namespace/config name)
@@ -410,6 +407,15 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         if query_limit is not None:
             warnings.warn("Changing the Query limit is no longer supported and will be removed soon", DeprecationWarning, stacklevel=2)
+
+        metadata = self.firecloud_workspace
+        authdomain = False
+        if 'authorizationDomain' in metadata['workspace'] and len(metadata['workspace']['authorizationDomain']):
+            warnings.warn(
+                "Workspace exists in authorized domain. Enabling workaround",
+                stacklevel=2
+            )
+            authdomain = True
 
         preflight = self.preflight(
             config_name,
@@ -461,7 +467,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
         print("This will launch", len(preflight.workflow_entities), "workflow(s)")
 
-        if not force:
+        if not (force or authdomain):
             print("Ready to launch workflow(s). Press Enter to continue")
             try:
                 input()
@@ -524,6 +530,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                 'callcache': use_cache
             }
         }
+        if _authdomain_parent:
+            submission_data['AUTHORIZED_DOMAIN'] = _authdomain_parent
 
         try:
             config_types = {
@@ -588,6 +596,124 @@ class WorkspaceManager(dog.WorkspaceManager):
                 #     warnings.warn("Coerced single-length ")
             return wf_template
 
+        workflow_inputs = [*status_bar.iter(
+            prepare_workflow(preflight.workflow_entities),
+            len(preflight.workflow_entities),
+            prepend="Preparing Workflows... "
+        )]
+
+        if authdomain:
+            authdomain_child = WorkspaceManager(
+                self.namespace,
+                'ld-auth-{}'.format(self.workspace)
+            )
+            proxy_acct = proxy_group_for_user(get_application_default_account())+'@firecloud.org'
+            while True:
+                try:
+                    authdomain_child.firecloud_workspace
+                    authdomain_child.update_acl({proxy_acct: 'WRITER'})
+                    break
+                except dog.APIException:
+                    # Doesn't exist or don't have access
+                    try:
+                        authdomain_child.live = True
+                        assert authdomain_child.create_workspace()
+                        break
+                    except (dog.APIException, AssertionError):
+                        # Taken
+                        authdomain_child = WorkspaceManager(
+                            self.namespace,
+                            'ld-auth-{}'.format(md5(authdomain_child.workspace.encode()).hexdigest())
+                        )
+            print("This workspace is an authorized domain")
+            print("Lapdog will use bypass workspace:", authdomain_child.workspace)
+            print("Job will run in that workspace, results will be written back here")
+            if not force:
+                print("Press Enter to continue")
+                input()
+            dest_bucket = authdomain_child.bucket_id
+            # 1) copy blobs
+            def copy_to_bypass(cell):
+                if isinstance(cell, str) and cell.startswith('gs://'):
+                    src = getblob(cell)
+                    destpath = 'gs://{}/{}'.format(dest_bucket, src.name)
+                    dest = getblob(destpath)
+                    copyblob(src, dest)
+                    return destpath
+                return cell
+            # 2) upload data
+            column_map = {
+                column: '_'+md5(column.encode()).hexdigest()
+                for row in workflow_inputs
+                for column in row
+            }
+            bypass_data = pd.DataFrame(
+                [
+                    {
+                        column_map[key]:val
+                        for key,val in row.items()
+                    }
+                    for row in workflow_inputs
+                ],
+                index=pd.Index(preflight.workflow_entities, name='{}_id'.format(preflight.config['rootEntityType']))
+            ).applymap(copy_to_bypass)
+            if preflight.config['rootEntityType'] == 'sample' and 'participant' not in bypass_data.columns:
+                bypass_data['participant'] = ['fake_participant'] * len(bypass_data)
+                authdomain_child.upload_participants(['fake_participant'])
+            if preflight.config['rootEntityType'] == 'pair':
+                if 'participant' not in bypass_data.columns:
+                    bypass_data['participant'] = ['fake_participant'] * len(bypass_data)
+                    authdomain_child.upload_participants(['fake_participant'])
+                if 'case_sample' not in bypass_data.columns:
+                    bypass_data['case_sample'] = ['fake_case_sample'] * len(bypass_data)
+                    authdomain_child.upload_samples(pd.DataFrame.from_dict(
+                        {'participant_id': ['fake_participant']},
+                        index=pd.Index(['case_sample'], name='sample_id')
+                    ))
+                if 'control_sample' not in bypass_data.columns:
+                    bypass_data['control_sample'] = ['fake_control_sample'] * len(bypass_data)
+                    authdomain_child.upload_samples(pd.DataFrame.from_dict(
+                        {'participant_id': ['fake_participant']},
+                        index=pd.Index(['control_sample'], name='sample_id')
+                    ))
+
+            with authdomain_child.hound.with_reason('Bypassing authorized domain in {}/{}'.format(self.namespace, self.workspace)):
+                authdomain_child.upload_entities(
+                    preflight.config['rootEntityType'],
+                    bypass_data
+                )
+                set_id = 'tmp_authdomain_{}_{}'.format(
+                    preflight.config['name'],
+                    md5(repr(preflight.workflow_entities).encode()).hexdigest()[:4]
+                )
+                authdomain_child.update_entity_set(
+                    preflight.config['rootEntityType'],
+                    set_id,
+                    preflight.workflow_entities
+                )
+
+            # 3) Remap config
+            self.hound.write_log_entry('job', "Forwarding job to authorized domain bypass: {}/{}".format(self.namespace, authdomain_child.workspace))
+            cfg = {
+                **preflight.config,
+                **{
+                    'inputs': {
+                        key: 'this.{}'.format(column_map[key])
+                        for key in preflight.config['inputs']
+                    }
+                }
+            }
+            authdomain_child.update_config(cfg)
+            global_id, local_id, operation_id = authdomain_child.execute(
+                cfg,
+                set_id,
+                'this.{}s'.format(preflight.config['rootEntityType']),
+                preflight.config['rootEntityType']+'_set',
+                force=force,
+                _authdomain_parent='{}/{}'.format(self.namespace, self.workspace)
+            )
+            return (global_id, None, operation_id)
+
         wdl_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/method.wdl".format(
             bucket_id=self.get_bucket_id(),
             submission_id=submission_id
@@ -599,12 +725,6 @@ class WorkspaceManager(dog.WorkspaceManager):
                 preflight.config['methodRepoMethod']['methodVersion']
             ).encode()
         )
-
-        workflow_inputs = [*status_bar.iter(
-            prepare_workflow(preflight.workflow_entities),
-            len(preflight.workflow_entities),
-            prepend="Preparing Workflows... "
-        )]
 
         config_path = "gs://{bucket_id}/lapdog-executions/{submission_id}/config.tsv".format(
             bucket_id=self.get_bucket_id(),
@@ -860,12 +980,16 @@ class WorkspaceManager(dog.WorkspaceManager):
             return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
             submission = self.get_adapter(submission_id)
+            if 'AUTHORIZED_DOMAIN' in submission.data:
+                upload_target = WorkspaceManager(submission.data['AUTHORIZED_DOMAIN'])
+            else:
+                upload_target = self
             status = submission.status
             done = 'done' in status and status['done']
             if done:
                 print("All workflows completed. Uploading results...")
-                with self.hound.with_reason('Uploading results from submission {}'.format(submission_id)):
-                    self.update_entity_attributes(
+                with upload_target.hound.with_reason('Uploading results from submission {}'.format(submission_id)):
+                    upload_target.update_entity_attributes(
                         submission.data['workflowEntityType'],
                         self.submission_output_df(submission_id)
                     )

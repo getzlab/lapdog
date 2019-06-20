@@ -704,6 +704,31 @@
               })
               window.$('#submission-modal').modal();
               window.$('#submission-modal').modal('close');
+              if (!response.data.local_id) {
+                axios.get(API_URL+'/api/v1/submissions/decode?submission_id='+encodeURIComponent(response.data.global_id))
+                  .then(response => {
+                    console.log("Decoded submission");
+                    this.submission = '';
+                    window.materialize.toast({
+                      html: "Forwarding submission through authorized domain bypass"
+                    })
+                    this.$router.push({
+                      name: 'submission',
+                      params: {
+                        namespace: response.data.namespace,
+                        workspace: response.data.workspace,
+                        submission_id: response.data.id
+                      }
+                    });
+                  })
+                  .catch(response => {
+                    window.materialize.toast({
+                      html: "No such submission: " + response.data.global_id,
+                      displayLength: 5000,
+                    });
+                    console.error(response);
+                  })
+              }
               this.$router.push({
                 name: 'submission',
                 params: {
