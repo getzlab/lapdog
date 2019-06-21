@@ -664,9 +664,9 @@ class WorkspaceManager(dog.WorkspaceManager):
                 bypass_data['participant'] = ['fake_participant'] * len(bypass_data)
                 authdomain_child.upload_participants(['fake_participant'])
             if preflight.config['rootEntityType'] == 'pair':
+                authdomain_child.upload_participants(['fake_participant'])
                 if 'participant' not in bypass_data.columns:
                     bypass_data['participant'] = ['fake_participant'] * len(bypass_data)
-                    authdomain_child.upload_participants(['fake_participant'])
                 if 'case_sample' not in bypass_data.columns:
                     bypass_data['case_sample'] = ['fake_case_sample'] * len(bypass_data)
                     authdomain_child.upload_samples(pd.DataFrame.from_dict(
