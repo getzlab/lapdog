@@ -633,12 +633,15 @@ class WorkspaceManager(dog.WorkspaceManager):
                 input()
             dest_bucket = authdomain_child.bucket_id
             # 1) copy blobs
+            copy_lock = Lock()
             def copy_to_bypass(cell):
                 if isinstance(cell, str) and cell.startswith('gs://'):
                     src = getblob(cell)
                     destpath = 'gs://{}/{}'.format(dest_bucket, src.name)
                     dest = getblob(destpath)
-                    copyblob(src, dest)
+                    with copy_lock:
+                        copyblob(src, dest)
+                    time.sleep(0.5)
                     return destpath
                 return cell
             # 2) upload data
@@ -667,15 +670,13 @@ class WorkspaceManager(dog.WorkspaceManager):
                 if 'case_sample' not in bypass_data.columns:
                     bypass_data['case_sample'] = ['fake_case_sample'] * len(bypass_data)
                     authdomain_child.upload_samples(pd.DataFrame.from_dict(
-                        {'participant_id': ['fake_participant']},
-                        index=pd.Index(['case_sample'], name='sample_id')
-                    ))
+                        {'participant_id': ['fake_participant']}
+                    ).set_index(pd.Index(['case_sample'], name='sample_id')))
                 if 'control_sample' not in bypass_data.columns:
                     bypass_data['control_sample'] = ['fake_control_sample'] * len(bypass_data)
                     authdomain_child.upload_samples(pd.DataFrame.from_dict(
-                        {'participant_id': ['fake_participant']},
-                        index=pd.Index(['control_sample'], name='sample_id')
-                    ))
+                        {'participant_id': ['fake_participant']}
+                    ).set_index(pd.Index(['control_sample'], name='sample_id')))
 
             with authdomain_child.hound.with_reason('Bypassing authorized domain in {}/{}'.format(self.namespace, self.workspace)):
                 authdomain_child.upload_entities(
@@ -710,6 +711,11 @@ class WorkspaceManager(dog.WorkspaceManager):
                 'this.{}s'.format(preflight.config['rootEntityType']),
                 preflight.config['rootEntityType']+'_set',
                 force=force,
+                use_cache=use_cache,
+                memory=memory,
+                batch_limit=batch_limit,
+                private=private,
+                region=region,
                 _authdomain_parent='{}/{}'.format(self.namespace, self.workspace)
             )
             return (global_id, None, operation_id)
@@ -980,18 +986,44 @@ class WorkspaceManager(dog.WorkspaceManager):
             return WorkspaceManager(ns, ws).complete_execution(sid)
         elif lapdog_id_pattern.match(submission_id):
             submission = self.get_adapter(submission_id)
-            if 'AUTHORIZED_DOMAIN' in submission.data:
-                upload_target = WorkspaceManager(submission.data['AUTHORIZED_DOMAIN'])
-            else:
-                upload_target = self
             status = submission.status
             done = 'done' in status and status['done']
             if done:
+                submission_outputs = self.submission_output_df(submission_id)
                 print("All workflows completed. Uploading results...")
+                if 'AUTHORIZED_DOMAIN' in submission.data and not submission.data['AUTHORIZED_DOMAIN'].endswith(self.workspace):
+                    upload_target = WorkspaceManager(submission.data['AUTHORIZED_DOMAIN'])
+                    print("Copying outputs from job to parent workspace")
+                    src_bucket = self.bucket_id
+                    dest_bucket = upload_target.bucket_id
+                    subprocess.check_call(
+                        'gsutil -m cp -r gs://{src_bucket}/lapdog-executions/{submission_id} gs://{dest_bucket}/lapdog-executions/{submission_id}'.format(
+                            src_bucket=src_bucket,
+                            submission_id=submission_id,
+                            dest_bucket=dest_bucket
+                        ),
+                        shell=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    submission_outputs = submission_outputs.applymap(
+                        lambda cell: cell if not (isinstance(cell, str) and cell.startswith('gs://')) else cell.replace(src_bucket, dest_bucket, 1)
+                    )
+                    print("Cleaning bucket")
+                    # bucket = storage.Client().bucket(self.bucket_id)
+                    # bucket.delete_blobs(blob for blob in bucket.list_blobs(fields='items/name,nextPageToken').pages)
+                    subprocess.check_call(
+                        'gsutil -m rm "gs://{}/**"'.format(src_bucket),
+                        shell=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                else:
+                    upload_target = self
                 with upload_target.hound.with_reason('Uploading results from submission {}'.format(submission_id)):
                     upload_target.update_entity_attributes(
                         submission.data['workflowEntityType'],
-                        self.submission_output_df(submission_id)
+                        submission_outputs
                     )
                 return True
             else:

@@ -293,7 +293,7 @@ def get_user_session():
             try:
                 from hound.client import _getblob_bucket
                 for blob in _getblob_bucket(None, 'lapdog-alerts', None).list_blobs():
-                    content = json.loads(blob.download_as_string())
+                    content = json.loads(blob.download_as_string().decode())
                     if content['type'] == 'critical':
                         text = content['text'] if 'text' in content else content['content']
                         print(crayons.red("Critical Alert:"), text)

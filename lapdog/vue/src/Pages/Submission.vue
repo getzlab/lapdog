@@ -226,8 +226,11 @@ Other: error_outline
         <div class="col s2">
           Local Submission ID:
         </div>
-        <div class="col s6">
+        <div class="col 4">
           {{submission_id}}
+        </div>
+        <div v-if="submission && submission.AUTHORIZED_DOMAIN" class="col s6 red-text">
+          Proxied from {{submission.AUTHORIZED_DOMAIN}}
         </div>
       </div>
       <div class="row">

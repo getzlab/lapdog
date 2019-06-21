@@ -727,7 +727,8 @@
                       displayLength: 5000,
                     });
                     console.error(response);
-                  })
+                  });
+                  return;
               }
               this.$router.push({
                 name: 'submission',
