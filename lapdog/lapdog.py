@@ -643,6 +643,11 @@ class WorkspaceManager(dog.WorkspaceManager):
                         copyblob(src, dest)
                     time.sleep(0.5)
                     return destpath
+                elif isinstance(cell, list):
+                    return [
+                        copy_to_bypass(elem)
+                        for elem in cell
+                    ]
                 return cell
             # 2) upload data
             column_map = {
