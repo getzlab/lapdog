@@ -701,6 +701,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     'inputs': {
                         key: 'this.{}'.format(column_map[key])
                         for key in preflight.config['inputs']
+                        if key in column_map
                     }
                 }
             }
