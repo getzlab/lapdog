@@ -23,7 +23,7 @@ from io import StringIO
 from . import adapters
 from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader, build_input_key
 from .cache import cache_init, cache_path
-from .cloud.utils import proxy_group_for_user
+from .cloud.utils import proxy_group_for_user, ld_acct_in_project
 from .gateway import Gateway, creation_success_pattern, get_gcloud_account, get_application_default_account
 from itertools import repeat
 import pandas as pd
