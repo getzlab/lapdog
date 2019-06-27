@@ -607,7 +607,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 self.namespace,
                 'ld-auth-{}'.format(self.workspace)
             )
-            proxy_acct = proxy_group_for_user(get_application_default_account())+'@firecloud.org'
+            proxy_acct = ld_acct_in_project(get_application_default_account(), self.gateway.project)
             while True:
                 try:
                     authdomain_child.firecloud_workspace
@@ -643,11 +643,6 @@ class WorkspaceManager(dog.WorkspaceManager):
                         copyblob(src, dest)
                     time.sleep(0.5)
                     return destpath
-                elif isinstance(cell, list):
-                    return [
-                        copy_to_bypass(elem)
-                        for elem in cell
-                    ]
                 return cell
             # 2) upload data
             column_map = {
@@ -687,6 +682,10 @@ class WorkspaceManager(dog.WorkspaceManager):
                 authdomain_child.upload_entities(
                     preflight.config['rootEntityType'],
                     bypass_data
+                )
+                authdomain_child.update_entity_attributes(
+                    preflight.config['rootEntityType'],
+                    bypass_data[[col for col in bypass_data.columns if col not in {'participant', 'participant_id', 'case_sample', 'control_sample'}]]
                 )
                 set_id = 'tmp_authdomain_{}_{}'.format(
                     preflight.config['name'],
