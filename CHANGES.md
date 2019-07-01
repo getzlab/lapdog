@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.2 (Beta)
+
+Bug Fixes:
+* Fixed a bug with certain expressions not evaluating correctly
+
 ## 0.17.1 (Beta)
 
 **Deprecation Warning:** `lapdog.gateway.get_access_token()` is now deprecated and will be removed when Lapdog shifts to full release.
