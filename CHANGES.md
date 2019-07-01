@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.17.1 (Beta)
 
 **Deprecation Warning:** `lapdog.gateway.get_access_token()` is now deprecated and will be removed when Lapdog shifts to full release.
 If you need to authenticate as the current user, use `lapdog.gateway.get_user_session()`, which returns a prebuilt
