@@ -18,6 +18,10 @@ New Features:
 Other Changes:
 * Restricted usage scopes of access tokens
 * Standardized functions for getting current gcloud accounts
+* From now on, newly deployed Lapdog functions will not support unauthenticated access.
+This will not change lapdog's api, however individuals calling Lapdog engine functions
+outside the client will need to pass an `Authorization` header, or use `lapdog.gateway.get_user_session`,
+which returns a `requests.session` object with your authorization token autofilled
 
 ## 0.17.0 (Beta)
 

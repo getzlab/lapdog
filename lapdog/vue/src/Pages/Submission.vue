@@ -208,7 +208,7 @@ Other: error_outline
       <router-link v-if="submission && submission.AUTHORIZED_DOMAIN" :to="{name: 'workspace', params: {namespace: lodash.split(submission.AUTHORIZED_DOMAIN)[0], workspace: lodash.split(submission.AUTHORIZED_DOMAIN)[1]}}">
         <i class="material-icons tiny">arrow_back</i>  <span class="icon-align-header">{{lodash.split(submission.AUTHORIZED_DOMAIN)[0]}}/{{lodash.split(submission.AUTHORIZED_DOMAIN)[1]}}</span>
       </router-link>
-      <router-link :to="{name: 'workspace', params: {namespace: namespace, workspace: workspace}}">
+      <router-link v-else :to="{name: 'workspace', params: {namespace: namespace, workspace: workspace}}">
         <i class="material-icons tiny">arrow_back</i>  <span class="icon-align-header">{{namespace}}/{{workspace}}</span>
       </router-link>
     </h4>

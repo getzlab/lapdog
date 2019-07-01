@@ -1,12 +1,13 @@
 # This module defines utilities for the cloud function api
 
-from .utils import __API_VERSION__
+from .utils import __API_VERSION__, generate_default_session
 import tempfile
 import shutil
 import subprocess
 import glob
 import os
 import json
+import time
 
 __FUNCTION_MAPPING__ = {
     'create_submission': 'submit.py',
@@ -58,6 +59,38 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
             cmd,
             shell=True,
             executable='/bin/bash'
+        )
+        time.sleep(5) # Give the API a brief chance to catch up to the deployment
+        session = generate_default_session()
+        policy = session.get(
+            'https://cloudfunctions.googleapis.com/v1/projects/{}/locations/us-central1/functions/{}-{}:getIamPolicy'.format(
+                project if project is not None else session._default_project,
+                endpoint,
+                overload_version
+            )
+        ).json()
+        print(policy)
+        found = False
+        for i, binding in enumerate(policy['bindings']):
+            if binding['role'] == 'roles/cloudfunctions.invoker':
+                found = True
+                policy['bindings'][i]['members'].append('allAuthenticatedUsers')
+        if not found:
+            policy['bindings'].append({
+                'role': 'roles/cloudfunctions.invoker',
+                'members': ['allAuthenticatedUsers']
+            })
+        session.post(
+            'https://cloudfunctions.googleapis.com/v1/projects/{}/locations/us-central1/functions/{}-{}:setIamPolicy'.format(
+                project if project is not None else session._default_project,
+                endpoint,
+                overload_version
+            ),
+            headers={'Content-Type': 'application/json'},
+            json={
+                'policy': policy,
+                'updateMask': 'bindings'
+            }
         )
 
 def __generate_alert_internal(title, alert_type, content, text=None):

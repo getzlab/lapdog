@@ -195,7 +195,10 @@ def generate_user_session(token):
     )
 
 def generate_default_session(scopes=None):
-    return AuthorizedSession(google.auth.default(scopes=scopes)[0])
+    credentials, project = google.auth.default(scopes=scopes)
+    session = AuthorizedSession(credentials)
+    session._default_project = project
+    return session
 
 def generate_core_session():
     ld_project = os.environ.get('GCP_PROJECT')
