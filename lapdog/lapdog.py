@@ -640,7 +640,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     destpath = 'gs://{}/{}'.format(dest_bucket, src.name)
                     dest = getblob(destpath)
                     with copy_lock:
-                        copyblob(src, dest)
+                        dest.rewrite(src)
                     time.sleep(0.5)
                     return destpath
                 elif isinstance(cell, list):
