@@ -19,17 +19,21 @@
                 Method:
               </div>
               <div class="col s10">
-                <a v-bind:href="'https://portal.firecloud.org/#methods/'+active_cfg.config.methodRepoMethod.methodNamespace+'/'+active_cfg.config.methodRepoMethod.methodName+'/'+active_cfg.config.methodRepoMethod.methodVersion" target="_blank" rel="noopener">
+                <a v-if="active_cfg.config.methodRepoMethod.methodNamespace" v-bind:href="'https://portal.firecloud.org/#methods/'+active_cfg.config.methodRepoMethod.methodNamespace+'/'+active_cfg.config.methodRepoMethod.methodName+'/'+active_cfg.config.methodRepoMethod.methodVersion" target="_blank" rel="noopener">
                   {{active_cfg.config.methodRepoMethod.methodNamespace}}/{{active_cfg.config.methodRepoMethod.methodName}}:{{active_cfg.config.methodRepoMethod.methodVersion}}
                 </a>
+                <a v-else v-bind:href="'https://dockstore.org/workflows/'+active_cfg.config.methodRepoMethod.methodPath+':'+active_cfg.config.methodRepoMethod.methodVersion">dockstore:{{active_cfg.config.methodRepoMethod.methodPath}}</a>
               </div>
             </div>
             <div class="row">
               <div class="col s2">
                 Entity Type:
               </div>
-              <div class="col s9" v-bind:class="active_cfg.config.rootEntityType.match(etype_pattern)?'':'red-text'">
+              <div v-if="active_cfg.config.rootEntityType" class="col s9" v-bind:class="active_cfg.config.rootEntityType.match(etype_pattern)?'':'red-text'">
                 {{active_cfg.config.rootEntityType}}
+              </div>
+              <div v-else class="col s9 red-text">
+                Not set
               </div>
             </div>
             <div class="row">
@@ -233,8 +237,10 @@
             </a>
 
           </td>
-          <td>{{config.methodRepoMethod.methodNamespace}}/{{config.methodRepoMethod.methodName}} (Snapshot {{config.methodRepoMethod.methodVersion}})</td>
-          <td v-bind:class="config.rootEntityType.match(etype_pattern) ? '' : 'red-text'">{{config.rootEntityType}}</td>
+          <td v-if="config.methodRepoMethod.methodNamespace">{{config.methodRepoMethod.methodNamespace}}/{{config.methodRepoMethod.methodName}} (Snapshot {{config.methodRepoMethod.methodVersion}})</td>
+          <td v-else>dockstore:{{config.methodRepoMethod.methodPath}}</td>
+          <td v-if="config.rootEntityType" v-bind:class="config.rootEntityType.match(etype_pattern) ? '' : 'red-text'">{{config.rootEntityType}}</td>
+          <td v-else class="red-text">Not Set</td>
         </tr>
       </tbody>
     </table>

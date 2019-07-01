@@ -300,11 +300,10 @@ class WorkspaceManager(dog.WorkspaceManager):
         super().populate_cache()
         for config in self.configs:
             try:
-                self.get_wdl(
-                    config['methodRepoMethod']['methodNamespace'],
-                    config['methodRepoMethod']['methodName'],
-                    config['methodRepoMethod']['methodVersion']
-                )
+                if 'methodNamespace' in confg['methodRepoMethod']:
+                    self.get_wdl(
+                        config['methodRepoMethod']
+                    )
             except NameError:
                 # WDL Doesnt exist
                 pass
@@ -316,6 +315,8 @@ class WorkspaceManager(dog.WorkspaceManager):
         You may provide a WorkspaceManager as the parent to clone from
         """
         result = super().create_workspace(parent)
+        if not (self.gateway.project is None or self.gateway.registered):
+            self.gateway.register(self.workspace, self.bucket_id)
         if result:
             def update_acl():
                 time.sleep(30)
@@ -541,11 +542,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 }
                 for param in getattr(fc, '__post')(
                     '/api/inputsOutputs',
-                    data=json.dumps({
-                        'methodNamespace': preflight.config['methodRepoMethod']['methodNamespace'],
-                        'methodName': preflight.config['methodRepoMethod']['methodName'],
-                        'methodVersion': preflight.config['methodRepoMethod']['methodVersion']
-                    }),
+                    data=json.dumps(preflight.config['methodRepoMethod']),
                     timeout=2 # If it takes too long, just give up on typechecking
                 ).json()['inputs']
             }
@@ -736,9 +733,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         )
         getblob(wdl_path).upload_from_string(
             self.get_wdl(
-                preflight.config['methodRepoMethod']['methodNamespace'],
-                preflight.config['methodRepoMethod']['methodName'],
-                preflight.config['methodRepoMethod']['methodVersion']
+                preflight.config['methodRepoMethod']
             ).encode()
         )
 
@@ -1229,7 +1224,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
     @_synchronized
     @_read_from_cache(lambda self, namespace, name, version=None: 'wdl:{}/{}.{}'.format(namespace, name, version if version is not None else self.get_method_version(namespace, name)))
-    def get_wdl(self, namespace, name, version=None):
+    def _get_wdl_internal(self, namespace, name, version=None):
         """
         Returns the WDL Text of the requested method
         """
@@ -1239,6 +1234,34 @@ class WorkspaceManager(dog.WorkspaceManager):
         if response.status_code == 404:
             raise NameError("No such wdl {}/{}@{}".format(namespace, name, version))
         return self.tentative_json(response)['payload']
+
+    def get_wdl(self, reference, name=None, version=None):
+        """
+        Returns the WDL Text of the requested method
+        Accepts following argument types:
+        1) reference = {method config json}
+        2) reference = "method namespace", name = "method name", version (optional) = version (int)
+        """
+        if isinstance(reference, dict):
+            if 'methodRepoMethod' in reference:
+                reference = reference['methodRepoMethod']
+            if 'sourceRepo' in reference and reference['sourceRepo'] == 'dockstore':
+                return requests.get(
+                    "https://dockstore.org/api/api/ga4gh/v2/tools/%23workflow%2F{}/versions/{}/PLAIN_WDL/descriptor".format(
+                        reference['methodPath'].replace('/', '%2F'),
+                        reference['methodVersion']
+                    )
+                ).text
+            else:
+                return self._get_wdl_internal(
+                    reference['methodNamespace'],
+                    reference['methodName'],
+                    reference['methodVersion'] if 'methodVersion' in reference else None
+                )
+        return self._get_wdl_internal(
+            reference,
+            name, version
+        )
 
     @_synchronized
     def upload_wdl(self, namespace, name, synopsis, path, delete=True):

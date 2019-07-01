@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* Added support for Dockstore methods
+
 ## 0.17.2 (Beta)
 
 Bug Fixes:

@@ -801,11 +801,7 @@ def get_config(namespace, name, config_namespace, config_name):
     try:
         data = getattr(fc, '__post')(
             '/api/inputsOutputs',
-            data=json.dumps({
-                'methodNamespace': config['methodRepoMethod']['methodNamespace'],
-                'methodName': config['methodRepoMethod']['methodName'],
-                'methodVersion': config['methodRepoMethod']['methodVersion']
-            })
+            data=json.dumps(config['methodRepoMethod'])
         ).json()
         io_types = {
             'inputs': {
@@ -829,9 +825,7 @@ def get_config(namespace, name, config_namespace, config_name):
         io_types = None
     try:
         wdl_text = ws.get_wdl(
-            config['methodRepoMethod']['methodNamespace'],
-            config['methodRepoMethod']['methodName'],
-            config['methodRepoMethod']['methodVersion']
+            config['methodRepoMethod']
         )
         try:
             with tempfile.NamedTemporaryFile('w', suffix='wdl') as tmpwdl:
