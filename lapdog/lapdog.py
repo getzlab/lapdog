@@ -577,7 +577,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                             wf_template[k] = resolution
                         elif len(resolution) == 1:
                             wf_template[k] = resolution[0]
-                        elif not (config_types[k]['required'] and len(resolution) == 0):
+                        elif config_types[k]['required'] or len(resolution) != 0:
                             raise ValueError("Unable to coerce array value {} to non-array parameter '{}' for entity '{}'".format(repr(resolution), k, workflow_entity))
                     else:
                         # We have no type info for this paramter, likely because the request failed
