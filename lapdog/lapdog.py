@@ -316,6 +316,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
         result = super().create_workspace(parent)
         if not (self.gateway.project is None or self.gateway.registered):
+            print("Not registered with gateway... Pre-registering")
             self.gateway.register(self.workspace, self.bucket_id)
         if result:
             def update_acl():
@@ -635,10 +636,14 @@ class WorkspaceManager(dog.WorkspaceManager):
                 if isinstance(cell, str) and cell.startswith('gs://'):
                     src = getblob(cell)
                     destpath = 'gs://{}/{}'.format(dest_bucket, src.name)
-                    dest = getblob(destpath)
-                    with copy_lock:
-                        dest.rewrite(src)
-                    time.sleep(0.5)
+                    if cell != destpath:
+                        dest = getblob(destpath)
+                        with copy_lock:
+                            # FIXME: Switch to copyblob once this feature is added to dalmatian
+                            token, progress, total = dest.rewrite(src)
+                            while token is not None:
+                                token, progress, total = dest.rewrite(src, token)
+                        time.sleep(0.5)
                     return destpath
                 elif isinstance(cell, list):
                     return [

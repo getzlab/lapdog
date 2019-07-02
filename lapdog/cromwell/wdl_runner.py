@@ -179,12 +179,16 @@ class Runner(object):
                     submission_data = json.load(r)
                 if len(statuses) == 1 and 'Succeeded' in statuses:
                     submission_data['status'] = 'Succeeded'
-                elif 'Failed' in statuses:
-                    submission_data['status'] = 'Failed'
                 elif 'Aborted' in statuses:
                     submission_data['status'] = 'Aborted'
+                elif 'Failed' in statuses:
+                    submission_data['status'] = 'Failed'
                 else:
-                    submission_data['status'] = 'Unknown'
+                    submission_data['status'] = 'Error'
+                    submission_data['error-details'] = {
+                        'message': "Unable to resolve the final status of this submission",
+                        'encountered-statuses': list(statuses)
+                    }
                 with open('submission.json', 'w') as w:
                     json.dump(submission_data, w, indent=2)
                 file_util.gsutil_cp(['submission.json'], os.environ['SUBMISSION_DATA_PATH'])
@@ -195,6 +199,10 @@ class Runner(object):
                 with open('submission.json') as r:
                     submission_data = json.load(r)
                 submission_data['status'] = 'Error'
+                submission_data['error-details'] = {
+                    'message': "Lapdog wrappers encountered an unhandled exception",
+                    'stack-trace': traceback.format_exc()
+                }
                 with open('submission.json', 'w') as w:
                     json.dump(submission_data, w, indent=2)
                 file_util.gsutil_cp(['submission.json'], os.environ['SUBMISSION_DATA_PATH'])

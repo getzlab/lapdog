@@ -1,9 +1,15 @@
 # Changelog
 
-## Unreleased Changes
+## 0.17.3 (Beta)
 
 Bug Fixes:
 * Added support for Dockstore methods
+* Fixed sometimes breaking proxy service accounts during workspace creation
+
+Other Changes:
+* Cromwell logs should now always be uploaded, even if the submission crashes
+* Added a spinner while launching submissions
+* Submission errors now include `error-details` key in submission.json
 
 ## 0.17.2 (Beta)
 

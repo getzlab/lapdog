@@ -859,6 +859,10 @@ class SubmissionAdapter(object):
         if self.data['status'] == 'Running' and 'done' in status and status['done']:
             # If we get here, the submission is done, but there were no logs
             self.data['status'] = 'Error'
+            self.data['error-details'] = {
+                'message': 'Status not updated after cromwell operation completed',
+                'operation': status
+            }
             cache_write(json.dumps(self.data), 'submission-json', self.bucket, self.submission)
             gs_path = os.path.join(
                 self.path,

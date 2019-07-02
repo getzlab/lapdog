@@ -61,6 +61,22 @@
               {{(submit_okay ? "" : "Error: ") + submission_message}}
             </div>
           </div>
+          <div v-if="submitting" class="row">
+            <div class="col s12">
+              <div class="preloader-wrapper small active">
+                <div class="spinner-layer spinner-blue-only">
+                  <div class="circle-clipper left">
+                    <div class="circle"></div>
+                  </div><div class="gap-patch">
+                    <div class="circle"></div>
+                  </div><div class="circle-clipper right">
+                    <div class="circle"></div>
+                  </div>
+                </div>
+              </div>
+              Launching Submission... You will be redirected when the submission starts
+            </div>
+          </div>
           <div class="row" v-if="preflight_entities > batch_size">
             <div class="col s12 orange-text">
               Warning: This submission contains a large number of workflows.
@@ -153,7 +169,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <a class="btn-flat" v-bind:class="submit_okay ? '' : 'disabled'" v-on:click="submit_workflow">Run</a>
+        <a class="btn-flat" v-bind:class="(submit_okay && !submitting) ? '' : 'disabled'" v-on:click="submit_workflow">Run</a>
       </div>
     </div>
     <h4>{{namespace}}/{{workspace}}</h4>
@@ -517,7 +533,8 @@
         compute_region: null,
         submission_page: 0,
         cancel: null,
-        preflight_cancel: null
+        preflight_cancel: null,
+        submitting: false
         // entities: null
       }
     },
@@ -685,6 +702,7 @@
           html: "Preparing job. This may take a while...",
           displayLength: 10000,
         })
+        this.submitting = true;
         axios.post(
           query,
           {},
@@ -694,6 +712,7 @@
           }
         )
           .then(response => {
+            this.submitting = false;
             console.log("Execution returned");
             console.log(response);
             let result = response.data;
@@ -746,6 +765,7 @@
             }
           })
           .catch(response => {
+            this.submitting = false;
             if(axios.isCancel(error)) return;
             console.error("FAILED");
             console.error(response)
@@ -785,6 +805,7 @@
         return this.entity_field == 'h' ? 'valid' : 'invalid';
       },
       getWorkspace(namespace, workspace) {
+        this.submitting = false;
         this.show_attributes = false;
         this.active_entity = null;
         this.entities_data = null;
@@ -1094,6 +1115,7 @@
       this.gateway = null;
       this.pending_ops = 0;
       this.submission_page = 0;
+      this.submitting = false;
       this.getWorkspace(to.params.namespace, to.params.workspace);
       this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();

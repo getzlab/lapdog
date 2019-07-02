@@ -10,6 +10,15 @@ set -o errexit
 set -o nounset
 set -eo pipefail
 
+touch stdout.log stderr.log pipeline-stderr.log
+
+function cleanup {
+  gsutil -h "Content-Type:text/plain" cp stdout.log stderr.log pipeline-stderr.log $LAPDOG_LOG_PATH
+  gsutil rm "${WDL}"
+}
+
+trap cleanup EXIT
+
 readonly INPUT_PATH=/pipeline/input
 
 # WDL, INPUTS, and OPTIONS file contents are all passed into
@@ -67,7 +76,3 @@ then
 
   gsutil cp <(mysqldump -uroot -pcromwell cromwell) $DUMP_PATH
 fi
-
-gsutil -h "Content-Type:text/plain" cp stdout.log stderr.log pipeline-stderr.log $LAPDOG_LOG_PATH
-
-gsutil rm "${WDL}"
