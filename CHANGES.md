@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.5 (Beta)
+
+Other Changes:
+* Updated Dalmatian version
+
 ## 0.17.4 (Beta)
 
 New Features:
