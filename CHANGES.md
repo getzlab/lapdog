@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.4 (Beta)
+
+New Features:
+* Added `Clone Workspace` button to the workspace page in the UI
+
+Other Changes:
+* Improved dockstore method handling
+
 ## 0.17.3 (Beta)
 
 Bug Fixes:

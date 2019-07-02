@@ -205,7 +205,7 @@
           Execution Status:
         </div>
         <div class="col s4">
-          <span v-if="!gateway" class="orange-text text-darken-4">
+          <span v-if="!gateway" class="orange-text text-darken-1">
             Pending...
           </span>
           <span v-else-if="gateway.registered" class="green-text">
@@ -255,13 +255,8 @@
         </div>
       </div>
       <div class="row">
-        <div class="col s3">
-          Active Firecloud Submissions:
-        </div>
-        <div class="col s3">
-          <a v-bind:href="'https://portal.firecloud.org/#workspaces/'+namespace+'/'+workspace+'/monitor'" target="_blank" rel="noopener">
-            {{ws.workspaceSubmissionStats.runningSubmissionsCount}}
-          </a>
+        <div class="col s6">
+          <a class="btn blue" v-on:click.prevent="$emit('on-clone-workspace', namespace, workspace)">Clone Workspace</a>
         </div>
         <div class="col s6 execute-container">
           <a href="#submission-modal" class='btn blue modal-trigger execute-button' v-on:click="activate_autocomplete" v-bind:class="gateway && gateway.registered && ws.entities && ws.entities.length ? '' : 'tooltipped disabled'"
@@ -1029,6 +1024,11 @@
              if(axios.isCancel(error)) return;
              console.error("FAIL")
              console.error(error);
+             this.gateway = {
+               exists: true,
+               registered: false,
+               compute_regions: []
+             }
              window.materialize.toast({
                html: "Failed to register with gateway"
              })

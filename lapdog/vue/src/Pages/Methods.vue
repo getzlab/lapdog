@@ -22,7 +22,7 @@
                 <a v-if="active_cfg.config.methodRepoMethod.methodNamespace" v-bind:href="'https://portal.firecloud.org/#methods/'+active_cfg.config.methodRepoMethod.methodNamespace+'/'+active_cfg.config.methodRepoMethod.methodName+'/'+active_cfg.config.methodRepoMethod.methodVersion" target="_blank" rel="noopener">
                   {{active_cfg.config.methodRepoMethod.methodNamespace}}/{{active_cfg.config.methodRepoMethod.methodName}}:{{active_cfg.config.methodRepoMethod.methodVersion}}
                 </a>
-                <a v-else v-bind:href="'https://dockstore.org/workflows/'+active_cfg.config.methodRepoMethod.methodPath+':'+active_cfg.config.methodRepoMethod.methodVersion">dockstore:{{active_cfg.config.methodRepoMethod.methodPath}}</a>
+                <a v-else v-bind:href="'https://dockstore.org/workflows/'+active_cfg.config.methodRepoMethod.methodPath+':'+active_cfg.config.methodRepoMethod.methodVersion" target="_blank" rel="noopener">dockstore:{{active_cfg.config.methodRepoMethod.methodPath}}</a>
               </div>
             </div>
             <div class="row">

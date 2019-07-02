@@ -124,7 +124,7 @@
             }}
           </div>
         </div>
-        <router-view @on-namespace-update="fetchQuotas"></router-view>
+        <router-view @on-namespace-update="fetchQuotas" @on-clone-workspace="prefillClone"></router-view>
       </div>
     </main>
     <footer class="grey lighten-1">
@@ -341,6 +341,16 @@ export default {
           });
       };
       this.namespace = namespace;
+    },
+    prefillClone(namespace, workspace) {
+      window.materialize.toast({
+        html: "Clone " + namespace + "/" + workspace
+      })
+      this.parent_workspace = namespace + '/' + workspace;
+      window.$('#slide-out').sidenav();
+      window.$('#slide-out').sidenav('open');
+      window.$('#create-workspace-modal').modal();
+      window.$('#create-workspace-modal').modal('open');
     }
   }
 }
