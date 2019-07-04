@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.6 (Beta)
+
+Other Changes:
+* Updated dalmatian to 0.0.14 (bugfixes)
+* Minor UI improvements
+
 ## 0.17.5 (Beta)
 
 Other Changes:

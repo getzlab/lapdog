@@ -8,6 +8,26 @@ Other: error_outline
 -->
 <template lang="html">
   <div id="submission">
+    <div class="modal" id="launch-modal">
+      <div class="modal-content">
+        <div class="row">
+          <div class="col s12">
+            <div class="preloader-wrapper small active">
+              <div class="spinner-layer spinner-blue-only">
+                <div class="circle-clipper left">
+                  <div class="circle"></div>
+                </div><div class="gap-patch">
+                  <div class="circle"></div>
+                </div><div class="circle-clipper right">
+                  <div class="circle"></div>
+                </div>
+              </div>
+            </div>
+            Launching Submission... You will be redirected when the submission starts
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="modal" id="rerun-modal">
       <div class="modal-content">
         Created rerun entity set <span v-if="rerun_set"><code>{{rerun_set.name}}</code></span>
@@ -316,6 +336,14 @@ Other: error_outline
         </div>
         <div class="col s3" v-else>
           Loading...
+        </div>
+      </div>
+      <div v-if="submission && submission['error-details']" class="row">
+        <div class="col s1">
+          Error:
+        </div>
+        <div class="col s11">
+          {{submission['error-details'].message}}
         </div>
       </div>
       <div class="row" v-if="submission">
@@ -776,7 +804,7 @@ export default {
       window.materialize.toast({
         html: "Preparing job...",
         displayLength: 10000,
-      })
+      });
       axios.post(
         query,
         {},
@@ -816,7 +844,9 @@ export default {
           window.materialize.toast({
             html: "Failed to rerun submission. Try manually rerunning "+this.rerun_set.name
           })
-        })
+        });
+      window.$('#launch-modal').modal();
+      window.$('#launch-modal').modal('open');
     }
   },
   beforeRouteUpdate(to, from, next) {

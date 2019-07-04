@@ -122,11 +122,11 @@ export default {
       preview: null
     }
   },
-  computed: {
-    modal_identifier() {
-      return _.toString(this.value)+"-modal"
-    }
-  },
+  // computed: {
+  //   modal_identifier() {
+  //     return _.toString(this.value)+"-modal"
+  //   }
+  // },
   methods: {
     close() {
       window.$('#'+_this.modal_identifier).modal('close');

@@ -212,7 +212,7 @@
             Lapdog Engine Initialized
           </span>
           <span v-else-if="gateway.exists" class="red-text">
-            Not Registered. Insufficient Permissions
+            Load a workspace where you have WRITER permissions to register
           </span>
           <span v-else class="red-text">
             Not Ready. Please see <a rel="noopener" target="_blank" href="https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins">this article</a> for more information
@@ -979,7 +979,7 @@
           .then(response => {
             console.log("RESPONSE");
             console.log(response.data);
-            if (response.data.exists && !response.data.registered) {
+            if (response.data.exists && !response.data.registered && this.ws.accessLevel != "READER") {
               this.set_acl(this.namespace, this.workspace);
             }
             else {

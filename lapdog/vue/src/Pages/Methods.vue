@@ -6,11 +6,11 @@
           <h4>
             {{active_cfg.config.namespace}}/{{active_cfg.config.name}}
             <span class="right">
-              <i v-if="edit_on" v-on:click.prevent="save_config" class="material-icons green-text" title="Save changes">check</i>
-              <i class="material-icons" v-bind:class="edit_on?'orange-text text-darken-3':''" v-on:click.prevent="toggle_edit" v-bind:title="edit_on ? 'Discard changes' : 'Edit configuration'">
+              <i style="cursor: pointer" v-if="edit_on" v-on:click.prevent="save_config" class="material-icons green-text" title="Save changes">check</i>
+              <i style="cursor: pointer" class="material-icons" v-bind:class="edit_on?'orange-text text-darken-3':''" v-on:click.prevent="toggle_edit" v-bind:title="edit_on ? 'Discard changes' : 'Edit configuration'">
                 {{edit_on?"cancel":"edit"}}
               </i>
-              <i class="material-icons red-text" title="Delete this configuration" v-on:click.prevent="prompt_delete">delete</i>
+              <i style="cursor: pointer" class="material-icons red-text" title="Delete this configuration" v-on:click.prevent="prompt_delete">delete</i>
             </span>
           </h4>
           <div style="border-radius: 10px; padding-top: 15px; border: 1px solid grey" class="grey lighten-4">
@@ -199,8 +199,8 @@
       <div class="modal-footer">
         <div class="row">
           <div class="col s6 offset-s3">
-            <a class="red-text left modal-close" v-on:click="reset_uploads">CANCEL</a>
-            <a class="green-text right" v-on:click="upload_config">UPLOAD</a>
+            <a class="red-text left modal-close btn-flat" v-on:click="reset_uploads">CANCEL</a>
+            <a class="green-text right btn-flat" v-on:click="upload_config">UPLOAD</a>
           </div>
         </div>
       </div>
@@ -215,9 +215,14 @@
       <div class="col s3">
         <a href="#" class="btn blue modal-trigger" data-target="upload-modal" v-on:click.prevent="display_upload">Upload new configuration</a>
       </div>
-      <div class="col s5">
+      <div class="col s4">
         <a target="_blank" rel="noopener" href="https://portal.firecloud.org/#methods" class="btn blue">
-          Import existing configuration in Firecloud
+          Import configuration from Firecloud
+        </a>
+      </div>
+      <div class="col s4">
+        <a target="_blank" rel="noopener" href="https://dockstore.org/search?_type=workflow&descriptorType=wdl&searchMode=files" class="btn blue">
+          Import configuration from Dockstore
         </a>
       </div>
     </div>

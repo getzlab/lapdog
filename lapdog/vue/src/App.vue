@@ -343,9 +343,6 @@ export default {
       this.namespace = namespace;
     },
     prefillClone(namespace, workspace) {
-      window.materialize.toast({
-        html: "Clone " + namespace + "/" + workspace
-      })
       this.parent_workspace = namespace + '/' + workspace;
       window.$('#slide-out').sidenav();
       window.$('#slide-out').sidenav('open');

@@ -860,7 +860,7 @@ class SubmissionAdapter(object):
             # If we get here, the submission is done, but there were no logs
             self.data['status'] = 'Error'
             self.data['error-details'] = {
-                'message': 'Status not updated after cromwell operation completed',
+                'message': 'Cromwell not started or halted unexpectedly',
                 'operation': status
             }
             cache_write(json.dumps(self.data), 'submission-json', self.bucket, self.submission)
