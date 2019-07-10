@@ -485,7 +485,7 @@ export default {
       rerun_type: null,
       page: 0,
       cancel: null,
-      final_status: new Set(['Success', 'Failed', 'Cancelled'])
+      final_status: new Set(['Success', 'Failed', 'Cancelled', 'Cache-Hit'])
     }
   },
   computed: {
