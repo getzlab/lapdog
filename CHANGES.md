@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.7 (Beta)
+
+Bug Fixes:
+* Fixed WDLs not being properly cached by `WorkspaceManager.populate_cache()`
+
 ## 0.17.6 (Beta)
 
 Other Changes:

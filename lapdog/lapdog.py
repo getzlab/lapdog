@@ -300,12 +300,12 @@ class WorkspaceManager(dog.WorkspaceManager):
         super().populate_cache()
         for config in self.configs:
             try:
-                if 'methodNamespace' in confg['methodRepoMethod']:
+                if 'methodRepoMethod' in config:
                     self.get_wdl(
                         config['methodRepoMethod']
                     )
             except NameError:
-                # WDL Doesnt exist
+                # wdl not found
                 pass
         self.sync()
 
