@@ -16,7 +16,6 @@ import time
 from functools import lru_cache, wraps
 import traceback
 
-# TODO: Update all endpoints to v1 for release
 __API_VERSION__ = {
     'submit': 'v7',
     'abort': 'v2',
@@ -25,6 +24,7 @@ __API_VERSION__ = {
     'query': 'v2',
     'quotas': 'v4',
     'resolve': 'v4',
+    'update': 'v1',
     'existence': 'frozen'
 }
 # The api version will allow versioning of cloud functions
@@ -58,6 +58,9 @@ GCP_ZONES = {
     'us-west1':	('a', 'b', 'c'),
     'us-west2':	('a', 'b', 'c'),
 }
+
+UPDATE_KEY_PATH = 'projects/broad-cga-aarong-gtex/locations/global/keyRings/lapdog/cryptoKeys/update-signing-key'
+UPDATE_IMAGE_TAG = 'v1'
 
 def cors(*methods):
     """
@@ -272,20 +275,23 @@ def get_crypto_keys(name, credentials):
         reverse=True
     )
 
-def sign_object(data, blob, credentials):
-    blob.upload_from_string(
-        kms.KeyManagementServiceClient(
-            credentials=credentials
-        ).asymmetric_sign(
-            get_crypto_keys('projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(
-                ld_project=os.environ.get('GCP_PROJECT')
-            ), credentials)[0],
-            {'sha256': sha256(data).digest()}
-        ).signature
-    )
+def _get_signature(data, keypath, credentials):
+    return kms.KeyManagementServiceClient(
+        credentials=credentials
+    ).asymmetric_sign(
+        get_crypto_keys(keypath, credentials)[0],
+        {'sha256': sha256(data).digest()}
+    ).signature
 
-def verify_signature(blob, data, _is_blob=True):
-    for key in get_crypto_keys('projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(ld_project=os.environ.get('GCP_PROJECT')), generate_default_session().credentials):
+def sign_object(data, blob, credentials, keypath=None):
+    if keypath is None:
+        keypath = 'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(ld_project=os.environ.get('GCP_PROJECT'))
+    blob.upload_from_string(_get_signature(data, keypath, credentials))
+
+def verify_signature(blob, data, keypath=None, _is_blob=True):
+    if keypath is None:
+        keypath = 'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(ld_project=os.environ.get('GCP_PROJECT'))
+    for key in get_crypto_keys(keypath, generate_default_session().credentials):
         try:
             serialization.load_pem_public_key(
                 kms.KeyManagementServiceClient().get_public_key(key).pem.encode('ascii'),

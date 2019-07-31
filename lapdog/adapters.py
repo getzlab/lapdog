@@ -21,9 +21,8 @@ from hashlib import md5
 import warnings
 from agutil import ActiveTimeout, TimeoutExceeded, context_lock
 import pandas as pd
+import math
 from hound import HoundClient
-
-# Label filter format: labels.(label name)=(label value)
 
 timestamp_formats = (
     '%Y-%m-%dT%H:%M:%SZ',
@@ -60,12 +59,6 @@ def build_input_key(template):
         if template[k] is not None:
             data += str(template[k])
     return md5(data.encode()).hexdigest()
-
-# individual VMs can be tracked viua a combination of labels and workflow meta
-# Workflows are reported by the cromwell_driver output and then VMs can be tracked
-# A combination of the Workflow label and the call- label should be able to uniquely identify tasks
-# Scatter jerbs will have colliding VMs, but can that will have to be handled elsewhere
-# Possibly, the task start pattern will contain multiple operation starts (or maybe shard-ids are given as one of the digit fields)
 
 workflow_dispatch_pattern = re.compile(r'Workflows(( [a-z0-9\-]+,?)+) submitted.')
 workflow_start_pattern = re.compile(r'WorkflowManagerActor Successfully started WorkflowActor-([a-z0-9\-]+)')
@@ -109,13 +102,31 @@ def get_hourly_cost(mtype, preempt=False):
     If `preempt` is True, hourly cost will reflect preemptible price model
     """
     try:
+        preempt = 1 if preempt else 0 # A little more readable than int(preempt)
         if mtype in mtypes:
-            return mtypes[mtype][int(preempt)]
+            return mtypes[mtype][preempt]
         else:
             if mtype.endswith('-ext'):
-                mtype = mtype[:-4]
+                mtype = mtype[:-4] # Drop -ext suffix
             custom, cores, mem = mtype.split('-')
-            return (core_price[int(preempt)]*int(cores)) + (mem_price[int(preempt)]*max(int(mem), int(cores) * 1024 * 6.5)/1024) + max(0, extended_price[int(preempt)]*(int(mem)-(int(cores)*1024*6.5))/1024)
+            cores = int(cores)
+            mem = int(mem)
+            return (
+                # Core price
+                core_price[preempt] * cores
+            ) + (
+                # memory price per gb * non-extended memory amount
+                mem_price[preempt]*max(
+                    mem,
+                    cores * 1024 * 6.5
+                )/1024
+            ) + max(
+                0,
+                # extended memory price per gb * extended memory amount
+                extended_price[preempt]*(
+                    mem-(cores*1024*6.5)
+                )/1024
+            )
     except:
         traceback.print_exc()
         print(mtype, "unknown machine type")
@@ -124,7 +135,10 @@ def get_hourly_cost(mtype, preempt=False):
 def get_cromwell_type(runtime):
     if runtime['memory'] <= 3:
         return 'n1-standard-1'
-    return 'custom-2-%d' % (1024 * runtime['memory'])
+    return 'custom-%d-%d' % (
+        math.ceil(runtime['memory']/13)*2, # Max 7.5Gb/core before hitting extended (more expensive)
+        runtime['memory']*1024
+    )
 
 class NoSuchSubmission(Exception):
     pass
@@ -148,7 +162,6 @@ def do_select(reader, t):
         return [[]]
     else:
         return select.select([reader], [], [], t)
-
 
 class Call(object):
     """
@@ -270,45 +283,6 @@ def get_operation_status(opid, parse=True, fmt='json'):
     if not parse:
         return text
     return data
-
-def abort_operation(opid):
-    return subprocess.run(
-        'yes | gcloud alpha genomics operations cancel %s' % (
-            opid
-        ),
-        shell=True,
-        executable='/bin/bash',
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-
-def kill_machines(instance_name):
-    # subprocess.check_call(
-    #     'gcloud compute instances stop %s --async' % instance_name,
-    #     shell=True
-    # )
-    # machines = subprocess.run(
-    #     'gcloud compute instances list --filter="labels.%s"' % (
-    #         label
-    #     ),
-    #     shell=True,
-    #     executable='/bin/bash',
-    #     stdout=subprocess.PIPE,
-    #     stderr=subprocess.STDOUT,
-    # ).stdout.decode().split('\n')
-    # if len(machines) > 1:
-    #     machines = ' '.join(line.split()[0] for line in machines[1:] if len(line.strip()))
-    # if len(machines):
-    # Use Popen instead of run because deleting instances is a slow, blocking operation
-    return subprocess.Popen(
-        'yes | gcloud compute instances delete %s' % (
-            instance_name
-        ),
-        shell=True,
-        executable='/bin/bash',
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
 
 class CommandReader(object):
     """
@@ -753,7 +727,6 @@ class SubmissionAdapter(object):
             cache_write(config, 'submission-config', self.bucket, self.submission)
         return pd.read_csv(StringIO(config), sep='\t')
 
-
     def abort(self):
         """
         Abort a running workflow.
@@ -810,9 +783,6 @@ class SubmissionAdapter(object):
                     }
                 )
             )
-
-
-
 
     @property
     @cached(5)
@@ -903,24 +873,6 @@ class SubmissionAdapter(object):
             return BytesIO(log_text)
         return BytesIO(b'')
 
-
-    # def get_workflows(self, workflows):
-    #
-    #     #LINK via ordering. we know the order in which workflows were submitted
-    #     #And so we should know the order in which they are returned
-    #     # This, at the very least, informs the adapter how many workflows to expect
-    #     # The workflow_start_pattern will inform cromwell of when each workflow checks in
-    #     # Depending on the data available in the status_json we may or may not be able to
-    #     # Link workflows at this point
-    #     # Alternatively, we can sniff the logs in from the workflow itself
-    #     # Input keys are derived entirely from values, not variable names, so we
-    #     #   might have enough data to link workflows that way
-    #
-    #     # This should start a monitoring thread to watch for patterns in the cromwell logs
-    #     # Then, relevant information is logged to this object or child workflow Adapters
-    #     pass
-
-
 """
 Identifying workflows:
 Workflows tend to be identified by 3 different IDs within lapdog
@@ -968,7 +920,6 @@ class WorkflowAdapter(object):
         return self.parent.input_mapping[
             {v:k for k,v in self.parent.workflow_mapping.items()}[self.long_id]
         ]
-
 
     @property
     def status(self):
@@ -1035,22 +986,6 @@ class WorkflowAdapter(object):
                 return
         # else:
             # print("Discard status", old,'->', new)
-
-    # def abort(self):
-    #     for call in self.calls:
-    #         print("Aborting", call.operation)
-    #         abort_operation(call)
-    #         status = get_operation_status(call.operation, False)
-    #         result = instance_name_pattern.search(status)
-    #         if result:
-    #             kill_machines(result.group(1).strip())
-        # if len(self.calls):
-        #     # print("Aborting", self.calls[-1].operation)
-        #     abort_operation(self.calls[-1].operation)
-        # if self.long_id is not None:
-        #     kill_machines('cromwell-workflow-id=cromwell-'+self.long_id)
-
-
 
 # wf = WFAdapter(input_key, short_id, long_id=None)
 # wf.handle(event)

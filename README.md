@@ -107,7 +107,7 @@ read the development roadmap.
     * Automatic reference uploads. When you call `update_attributes`, any values which refer to local filepaths will be uploaded in the background (just like `prepare_entity_df`). `update_attributes` now returns a dictionary containing the attributes exactly as uploaded
 
 ##### Cons
-* You pay an additional 5¢/hour fee for each submission to run the Cromwell server
+* You pay an additional 5c/hour fee for each submission to run the Cromwell server
 * Submission results must be manually uploaded to Firecloud by clicking the `Upload Results` button in the UI.
 * There are small overhead costs billed to the Lapdog Engine for operation. These costs
 are for calls to the API and for storage of metadata, both of which should be very cheap

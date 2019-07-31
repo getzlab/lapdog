@@ -18,7 +18,7 @@ import os
 import json
 from threading import RLock
 from .cloud import RESOLUTION_URL
-from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, proxy_group_for_user, generate_default_session, update_iam_policy, __API_VERSION__, GCP_ZONES
+from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, proxy_group_for_user, generate_default_session, update_iam_policy, enabled_regions, __API_VERSION__, GCP_ZONES
 from urllib.parse import quote
 from dalmatian import capture
 import google.api_core.exceptions
@@ -314,14 +314,18 @@ class Gateway(object):
         except:
             self.project = None
             traceback.print_exc()
-        if not self.exists:
-            warnings.warn("Gateway does not exist. You will not be able to execute jobs")
-        elif not self.registered:
-            warnings.warn(
-                "Gateway for namespace {} not registered. Please run Gateway.register()".format(
-                    self.namespace
+        try:
+            if not self.exists:
+                warnings.warn("Gateway does not exist. You will not be able to execute jobs")
+            elif not self.registered:
+                warnings.warn(
+                    "Gateway for namespace {} not registered. Please run Gateway.register()".format(
+                        self.namespace
+                    )
                 )
-            )
+        except ValueError:
+            traceback.print_exc()
+            print("Gateway not up to date", file=sys.stderr)
 
     @classmethod
     def initialize_lapdog_for_project(cls, billing_id, project_id, custom_lapdog_project=None):
@@ -637,6 +641,17 @@ class Gateway(object):
         if result.returncode != 0 and b'already exists' not in result.buffer:
             raise ValueError("Unable to create service account")
         functions_account = 'lapdog-functions@{}.iam.gserviceaccount.com'.format(custom_lapdog_project)
+        print("Creating Self-Updater Service Account")
+        cmd = (
+            'gcloud --project {project} iam service-accounts create lapdog-update --display-name lapdog-update'.format(
+                project=custom_lapdog_project
+            )
+        )
+        print(cmd)
+        result = run_cmd(cmd)
+        if result.returncode != 0 and b'already exists' not in result.buffer:
+            raise ValueError("Unable to create service account")
+        update_account = 'lapdog-update@{}.iam.gserviceaccount.com'.format(custom_lapdog_project)
         print("Creating Metadata bucket while service accounts are created")
         cmd = (
             'gsutil mb -c Standard -l us-central1 -p {project} gs://{bucket}'.format(
@@ -651,7 +666,8 @@ class Gateway(object):
         print("Updating project IAM policy while service accounts are created")
         policy = {
             'serviceAccount:'+core_account: 'Core_account',
-            'serviceAccount:'+functions_account: 'Functions_account'
+            'serviceAccount:'+functions_account: 'Functions_account',
+            'serviceAccount:'+update_account: 'Engine_Admin'
         }
         print(policy)
         status, response = update_iam_policy(
@@ -893,16 +909,7 @@ class Gateway(object):
     def compute_regions(self):
         if self.project is None:
             raise ValueError("Unable to check compute regions without a working Engine")
-        blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(self.project)))
-        try:
-            if blob.exists():
-                # Project owner has defined a list of allowed regions
-                return blob.download_as_string().decode().split()
-        except google.api_core.exceptions.Forbidden:
-            # Cannot read file. File should be public, so this means it doesn't exist
-            pass
-        # Otherwise, just use default region
-        return ['us-central1']
+        return enabled_regions(self.project)
 
     @compute_regions.setter
     def compute_regions(self, regions):

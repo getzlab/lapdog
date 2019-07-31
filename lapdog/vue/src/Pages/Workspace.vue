@@ -100,10 +100,10 @@
               <div class="col s9">
                 <div class="switch">
                   <label>
-                    Unrestricted
+                    Full Internet
                     <input checked type="checkbox" v-model="private_access">
                     <span class="lever"></span>
-                    Google Services Only (Recommended)
+                    Google Only (Recommended)
                   </label>
                 </div>
               </div>

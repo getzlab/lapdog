@@ -47,46 +47,6 @@ timestamp_format = '%Y-%m-%dT%H:%M:%S.000%Z'
 class AuthorizedDomainException(ValueError):
     pass
 
-@contextlib.contextmanager
-def dalmatian_api():
-    """
-    Context manager to convert AssertionErrors from dalmatian code into APIExceptions
-    """
-    try:
-        yield
-    except AssertionError as e:
-        raise dog.APIException("The Firecloud API has returned an unknown failure condition") from e
-
-@contextlib.contextmanager
-def open_if_string(obj, mode, *args, **kwargs):
-    if isinstance(obj, str):
-        with open(obj, mode, *args, **kwargs) as f:
-            yield f
-    else:
-        yield obj
-
-@contextlib.contextmanager
-def dump_if_file(obj):
-    if isinstance(obj, str):
-        yield obj
-    else:
-        data = obj.read()
-        mode = 'w' + ('b' if isinstance(data, bytes) else '')
-        with tempfile.NamedTemporaryFile(mode) as tmp:
-            tmp.write(data)
-            tmp.flush()
-            yield tmp.name
-
-def check_api(result):
-    if result.status_code >= 400:
-        raise dog.APIException("The Firecloud API has returned status %d : %s" % (result.status_code, result.text))
-    return result
-
-@lru_cache(1)
-def _gsutil_available():
-    return subprocess.run('which gsutil', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-
-
 def list_potential_submissions(bucket_id):
     """
     Lists submission.json files found in a given bucket
@@ -95,7 +55,6 @@ def list_potential_submissions(bucket_id):
         for blob in page:
             if lapdog_submission_pattern.match(blob.name):
                 yield 'gs://{}/{}'.format(bucket_id, blob.name)
-
 
 @parallelize2(5)
 def upload(bucket, path, source, allow_composite=True):
@@ -121,7 +80,6 @@ def upload(bucket, path, source, allow_composite=True):
         blob.chunk_size = 104857600 # ~100mb
     blob.upload_from_filename(source)
     return blob
-
 
 def purge_cache():
     """
@@ -157,16 +115,6 @@ def prune_cache():
     print("Removed", byteSize(deleted), "of unused cache entries")
     print("Kept", byteSize(kept), "of active cache entries")
     return deleted
-
-
-def alias(func):
-    """
-    Use to define an alias for an existing function.
-    Replaces the decorated function with the provided object
-    """
-    def wrapper(alias_func):
-        return func
-    return wrapper
 
 def complete_execution(submission_id):
     """
@@ -350,12 +298,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             except Exception as e:
                 if lapdog_only:
                     raise NoSuchSubmission(submission_id) from e
-                with dalmatian_api():
-                    return super().get_submission(submission_id)
+                return super().get_submission(submission_id)
         if lapdog_only:
             raise NoSuchSubmission(submission_id)
-        with dalmatian_api():
-            return super().get_submission(submission_id)
+        return super().get_submission(submission_id)
 
     @parallelize(5)
     def _get_multiple_executions(self, execution_path):
@@ -379,8 +325,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             return [*self._submission_cache.values()]
         results = []
         if not lapdog_only:
-            with dalmatian_api():
-                results = super().list_submissions(config)
+            results = super().list_submissions(config)
         for submission in WorkspaceManager._get_multiple_executions(repeat(self), list_potential_submissions(self.bucket_id)):
             if submission is not None:
                 results.append(submission)
