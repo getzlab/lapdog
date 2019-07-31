@@ -95,6 +95,11 @@ ADMIN_PERMISSIONS = [
     "iam.roles.get",
     "iam.roles.list",
     "iam.roles.update",
+    "iam.serviceAccounts.get",
+    "iam.serviceAccounts.list",
+    "iam.serviceAccounts.create",
+    "resourcemanager.projects.setIamPolicy",
+    "resourcemanager.projects.getIamPolicy",
     "storage.objects.setIamPolicy",
     "storage.objects.update",
     "storage.buckets.get",
@@ -652,6 +657,31 @@ class Gateway(object):
         if result.returncode != 0 and b'already exists' not in result.buffer:
             raise ValueError("Unable to create service account")
         update_account = 'lapdog-update@{}.iam.gserviceaccount.com'.format(custom_lapdog_project)
+        iam_url = 'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}:setIamPolicy'.format(
+            project=project,
+            account=update_account
+        )
+        print("POST", iam_url)
+        response = user_session.post(
+            iam_url,
+            headers={'Content-Type': 'application/json'},
+            json={
+                "policy": {
+                    "bindings": [
+                        {
+                            "role": "roles/iam.serviceAccountUser",
+                            "members": [
+                                # Allows the gcloud functions account to set this pet account on comwell servers
+                                "serviceAccount:email".format(email=functions_account),
+                            ]
+                        }
+                    ]
+                },
+                "updateMask": "bindings"
+            }
+        )
+        if response.status_code != 200:
+            raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
         print("Creating Metadata bucket while service accounts are created")
         cmd = (
             'gsutil mb -c Standard -l us-central1 -p {project} gs://{bucket}'.format(

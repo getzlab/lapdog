@@ -142,7 +142,7 @@ def __project_admin_apply_patch(namespace):
         if email not in service_accounts:
             print(crayons.red("Missing account:"), email)
             response = user_session.post(
-                'https://iam.googleapis.com/v1/{}/serviceAccounts'.format(project),
+                'https://iam.googleapis.com/v1/projects/{}/serviceAccounts'.format(project),
                 headers={'Content-Type': 'application/json'},
                 json={
                     'accountId': account,
@@ -158,7 +158,28 @@ def __project_admin_apply_patch(namespace):
                 {'serviceAccount:'+email: perms},
                 project
             )
-
+    response = user_session.post(
+        'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/lapdog-update@{project}.iam.gserviceaccount.com:setIamPolicy'.format(
+            project=project,
+        ),
+        headers={'Content-Type': 'application/json'},
+        json={
+            "policy": {
+                "bindings": [
+                    {
+                        "role": "roles/iam.serviceAccountUser",
+                        "members": [
+                            # Allows the gcloud functions account to set this pet account on comwell servers
+                            "serviceAccount:lapdog-functions@{project}.iam.gserviceaccount.com".format(project=project),
+                        ]
+                    }
+                ]
+            },
+            "updateMask": "bindings"
+        }
+    )
+    if response.status_code != 200:
+        raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
     print(crayons.normal("Phase 4/6:", bold=True), "Checking VPC Configuration")
     blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
     regions = ['us-central1']

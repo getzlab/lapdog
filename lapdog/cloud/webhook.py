@@ -35,7 +35,7 @@ def update(request):
                 400
             )
         result = utils.verify_signature(
-            signature.encode(),
+            bytes.fromhex(signature),
             json.dumps(data).encode(),
             utils.UPDATE_KEY_PATH,
             _is_blob=False
@@ -70,7 +70,7 @@ def update(request):
                                 'bash -c "git clone $LAPDOG_CLONE_URL && '
                                 'cd lapdog && git checkout $LAPDOG_TAG && '
                                 'python3 -m pip install -e . && '
-                                'lapdog apply-patch $LAPDOG_NAMESPACE" > stdout.log 2> stderr.log && '
+                                'lapdog apply-patch $LAPDOG_NAMESPACE" > stdout.log 2> stderr.log; '
                                 'gsutil cp stdout.log stderr.log $LAPDOG_LOG_PATH'
                             )
                         ],
@@ -81,7 +81,11 @@ def update(request):
                                 tag=data['tag']
                             ),
                             'LAPDOG_CLONE_URL': data['url'],
-                            'LAPDOG_NAMESPACE': {},
+                            'LAPDOG_NAMESPACE': utils.getblob(
+                                'gs://{bucket}/resolution'.format(
+                                    bucket=utils.ld_meta_bucket_for_project(os.environ.get('GCP_PROJECT'))
+                                )
+                            ).download_as_string().decode(),
                             'LAPDOG_TAG': data['tag']
                         }
                     }
@@ -94,7 +98,6 @@ def update(request):
                         'preemptible': False,
                         'labels': {
                             'lapdog-execution-role': 'self-update',
-                            'lapdog-update-tag': data['tag']
                         },
                         'serviceAccount': {
                             'email': 'lapdog-update@{}.iam.gserviceaccount.com'.format(os.environ.get('GCP_PROJECT')),
@@ -231,21 +234,37 @@ def webhook(request):
             for page in utils._getblob_client(default_session.credentials).bucket('lapdog-resolutions').list_blobs(fields='items/name,nextPageToken').pages
             for blob in page
         ]
-        success, response = utils.update_iam_policy(
-            default_session,
-            {
-                'serviceAccount:lapdog-functions@{}.iam.gserviceaccount.com'.format(resolution): 'signingKeyVerifier'
-                for resolution in resolutions
+
+        policy = default_session.get(
+            'https://cloudkms.googleapis.com/v1/projects/broad-cga-aarong-gtex/locations/global/keyRings/lapdog:getIamPolicy'
+        )
+        if policy.status_code != 200:
+            return {
+                'error': 'Unable to read IAM policy',
+                'message':response.text
+            }, 500
+        policy = policy.json()
+        for i, binding in enumerate(policy['bindings']):
+            if binding['role'] == 'projects/broad-cga-aarong-gtex/roles/signingKeyVerifier':
+                policy['bindings'][i]['members'] = [
+                    'serviceAccount:lapdog-functions@{}.iam.gserviceaccount.com'.format(resolution)
+                    for resolution in resolutions
+                ]
+        response = default_session.post(
+            'https://cloudkms.googleapis.com/v1/projects/broad-cga-aarong-gtex/locations/global/keyRings/lapdog:setIamPolicy',
+            headers={'Content-Type': 'application/json'},
+            json={
+                "policy": policy,
+                "updateMask": "bindings"
             }
         )
-
-        if not success:
+        if response.status_code != 200:
             return {
                 'error': 'Unable to update IAM policy',
                 'message': "Google rejected the policy update: (%d) : %s" % (response.status_code, response.text)
             }, 500
 
-        # 4) Trigger update for all policies
+        # 4) Trigger update for all resolutions
         status = {
             'results': []
         }
@@ -253,24 +272,33 @@ def webhook(request):
         signature = utils._get_signature(json.dumps(update_payload).encode(), utils.UPDATE_KEY_PATH, default_session.credentials)
         for resolution in resolutions:
             try:
-                response = requests.post(
-                    'https://us-central1-{project}.cloudfunctions.net/update-{version}'.format(
-                        project=resolution,
-                        version=utils.__API_VERSION__['update']
-                    ),
-                    headers={
-                        'Content-Type': 'application/json',
-                        'X-Lapdog-Signature': signature.hex()
-                    },
-                    json=update_payload
+                update_url = 'https://us-central1-{project}.cloudfunctions.net/update-{version}'.format(
+                    project=resolution,
+                    version=utils.__API_VERSION__['update']
                 )
-                failed = max(failed, response.status_code)
-                status['results'].append({
-                    'project': resolution,
-                    'status': 'OK' if response.status_code == 200 else 'Failed',
-                    'message': response.text,
-                    'code': response.status_code
-                })
+                if default_session.options(update_url).status_code == 204:
+                    response = default_session.post(
+                        update_url,
+                        headers={
+                            'Content-Type': 'application/json',
+                            'X-Lapdog-Signature': signature.hex()
+                        },
+                        json=update_payload
+                    )
+                    failed = max(failed, response.status_code)
+                    status['results'].append({
+                        'project': resolution,
+                        'status': 'OK' if response.status_code == 200 else 'Failed',
+                        'message': response.text,
+                        'code': response.status_code
+                    })
+                else:
+                    status['results'].append({
+                        'project': resolution,
+                        'status': 'Error',
+                        'message': "The target endpoint 'update-{}' does not exist".format(utils.__API_VERSION__['update']),
+                        'code': 0
+                    })
             except:
                 failed = max(failed, 500)
                 status['results'].append({
