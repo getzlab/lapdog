@@ -9,6 +9,7 @@ import base64
 import hmac
 import requests
 import json
+import time
 import traceback
 
 @utils.cors("POST")
@@ -68,9 +69,10 @@ def update(request):
                         'commands': ['/update.sh'],
                         'environment': {
                             'LAPDOG_PROJECT': os.environ.get('GCP_PROJECT'),
-                            'LAPDOG_LOG_PATH': "gs://{bucket}/update-logs/{tag}/".format(
+                            'LAPDOG_LOG_PATH': "gs://{bucket}/update-logs/{time}-{tag}/".format(
                                 bucket=utils.ld_meta_bucket_for_project(),
-                                tag=data['tag']
+                                tag=data['tag'],
+                                time=int(time.time())
                             ),
                             'LAPDOG_CLONE_URL': data['url'],
                             'LAPDOG_NAMESPACE': utils.getblob(

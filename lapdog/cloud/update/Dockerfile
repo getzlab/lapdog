@@ -6,6 +6,7 @@ MAINTAINER Aaron Graubert
 RUN apt-get update && apt-get install -y \
   software-properties-common \
   build-essential \
+  python \
   python3 \
   python3-pip \
   git \

@@ -179,7 +179,8 @@ def __project_admin_apply_patch(namespace):
         }
     )
     if response.status_code != 200:
-        raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+        print(crayons.red("Warning:", bold=True), "Unable to update lapdog-update service account permissions. The self-update system may not work")
+        print("({}) : {}".format(response.status_code, response.text), file=sys.stderr)
     print(crayons.normal("Phase 4/6:", bold=True), "Checking VPC Configuration")
     blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
     regions = ['us-central1']

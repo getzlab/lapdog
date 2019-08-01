@@ -98,6 +98,8 @@ ADMIN_PERMISSIONS = [
     "iam.serviceAccounts.get",
     "iam.serviceAccounts.list",
     "iam.serviceAccounts.create",
+    'iam.serviceAccounts.setIamPolicy',
+    'iam.serviceAccounts.getIamPolicy',
     "resourcemanager.projects.setIamPolicy",
     "resourcemanager.projects.getIamPolicy",
     "storage.objects.setIamPolicy",
