@@ -163,68 +163,23 @@ def update(request):
 @utils.cors("POST")
 def webhook(request):
     """
-    This will be deployed to the central project
-    It responds to git webhook updates and triggers the self update mechanism in other projects
-    Remember to set the SECRET environment variable after deployment
-    Deploy to endpoint: webhook
-    If updating the UPDATE endpoint: wait for webhook to trigger updates first,
-    then redeploy webhook
+    Admins: Use this to trigger a self-update to the given reference (commit, tag, or branch)
+    Control who has access to trigger updates with the invoker permissions to the webhook
     """
     # 1) Check that the X-Hub-Signature is valid for the request
     # This ensures that the request is actually coming from our github webhook
     try:
-        if 'X-Hub-Signature' not in request.headers:
-            return {
-                'error': 'Missing Signature',
-                'message': "The required X-Hub-Signature header was not provided"
-            }, 400
-        signature = request.headers['X-Hub-Signature']
-        if signature.startswith('sha1='):
-            signature = signature[5:]
-        try:
-            digest = hmac.digest(os.environ['SECRET'].encode(), request.get_data(), 'sha1').hex()
-        except KeyError:
-            return {
-                'error': 'Missing Secret',
-                'message': 'The secret environment variable was not set'
-            }, 500
-        if signature != digest:
-            return {
-                'error': "Bad Signature",
-                'message': "The provided SHA1 HMAC signature did not match the known secret"
-            }, 401
-
-        # 2) Get required data from payload
         data = request.get_json()
-        if 'zen' in data and 'hook_id' in data:
-            # this is a ping event
-            return "Thanks!", 200
-        if 'ref_type' not in data:
-            return {
-                'error': 'Missing Parameters',
-                'message': "Missing required payload parameter 'ref_type'"
-            }, 400
-        if data['ref_type'] != 'tag':
-            return "Ignored. Updates not triggered for new branches", 200
         if 'ref' not in data:
             return {
-                'error': 'Missing Parameters',
-                'message': "Missing required payload parameter 'ref'"
+                'error': 'Missing parameters',
+                'message': 'Missing required parameter "ref"',
             }, 400
-        if 'repository' not in data:
-            return {
-                'error': 'Missing Parameters',
-                'message': "Missing required payload parameter 'repository'"
-            }, 400
-        if data['repository']['clone_url'] != 'https://github.com/broadinstitute/lapdog.git':
-            return {
-                'error': 'Invalid URL',
-                'message': "The 'clone_url' passed to the webhook has changed. Please redeploy the webhook with the new expected value"
-            }, 409
+
         update_payload = {
             'random': os.urandom(16).hex(),
             'tag': data['ref'],
-            'url': data['repository']['clone_url']
+            'url': 'https://github.com/broadinstitute/lapdog.git'
         }
 
         # 3) Get all resolved namespaces and update the iam policy for the signing key
@@ -315,3 +270,17 @@ def webhook(request):
             'error': 'Unknown error',
             'message': traceback.format_exc()
         }, 500
+
+def trigger_update(ref):
+    """
+    Admins: Use to easily trigger the self-update webhook
+    """
+    return utils.generate_default_session(["https://www.googleapis.com/auth/cloud-platform"]).post(
+        'https://us-central1-broad-cga-aarong-gtex.cloudfunctions.net/webhook-v1',
+        headers={
+            'Content-Type': 'application/json',
+        },
+        json={
+            'ref': ref
+        }
+    )
