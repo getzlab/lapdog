@@ -20,3 +20,7 @@ RUN curl https://sdk.cloud.google.com | bash
 
 # Add the install location explicitly to the path (for non-interactive shells)
 ENV PATH /root/google-cloud-sdk/bin:$PATH
+
+COPY update.sh /
+
+RUN chmod 755 /update.sh

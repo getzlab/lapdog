@@ -65,15 +65,7 @@ def update(request):
                 'actions': [
                     {
                         'imageUri': 'gcr.io/broad-cga-aarong-gtex/self_update:' + utils.UPDATE_IMAGE_TAG,
-                        'commands': [
-                            (
-                                'bash -c "git clone $LAPDOG_CLONE_URL && '
-                                'cd lapdog && git checkout $LAPDOG_TAG && '
-                                'python3 -m pip install -e . && '
-                                'lapdog apply-patch $LAPDOG_NAMESPACE" > stdout.log 2> stderr.log; '
-                                'gsutil cp stdout.log stderr.log $LAPDOG_LOG_PATH'
-                            )
-                        ],
+                        'commands': ['update.sh'],
                         'environment': {
                             'LAPDOG_PROJECT': os.environ.get('GCP_PROJECT'),
                             'LAPDOG_LOG_PATH': "gs://{bucket}/update-logs/{tag}/".format(
@@ -169,6 +161,26 @@ def webhook(request):
     # 1) Check that the X-Hub-Signature is valid for the request
     # This ensures that the request is actually coming from our github webhook
     try:
+        token = utils.extract_token(request.headers, None)
+        if token is None:
+            return {
+                'error': 'No credentials',
+                'message': 'User did not pass identity in Authorization header'
+            }, 400
+        token_data = utils.get_token_info(token)
+        if 'error' in token_data:
+            return (
+                {
+                    'error': 'Invalid Token',
+                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                },
+                401
+            )
+        if token_data['email'] not in os.environ['INVOKERS'].split(','):
+            return {
+                'error': 'Not authorized',
+                'message': 'User "{}" not present in function environment configuration'.format(token_data['email'])
+            }, 403
         data = request.get_json()
         if 'ref' not in data:
             return {
