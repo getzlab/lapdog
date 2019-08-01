@@ -65,7 +65,7 @@ def update(request):
                 'actions': [
                     {
                         'imageUri': 'gcr.io/broad-cga-aarong-gtex/self_update:' + utils.UPDATE_IMAGE_TAG,
-                        'commands': ['update.sh'],
+                        'commands': ['/update.sh'],
                         'environment': {
                             'LAPDOG_PROJECT': os.environ.get('GCP_PROJECT'),
                             'LAPDOG_LOG_PATH': "gs://{bucket}/update-logs/{tag}/".format(
