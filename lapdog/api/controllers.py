@@ -70,7 +70,7 @@ def readvar(obj, *args):
 def get_workspace_object(namespace, name):
     ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
     if ws is None:
-        ws = lapdog.WorkspaceManager(namespace, name, workspace_seed_url=None)
+        ws = lapdog.WorkspaceManager("{}/{}".format(namespace, name), workspace_seed_url=None)
         if readvar(current_app.config, 'storage', 'cache') is None:
             current_app.config['storage']['cache'] = {}
         if readvar(current_app.config, 'storage', 'cache', namespace) is None:
@@ -167,7 +167,7 @@ def list_workspaces():
         if all_workspaces is not None:
             workspace_data = []
             for ns, ws, in all_workspaces:
-                workspace = get_workspace_object(ns, ws).firecloud_workspace
+                workspace = get_workspace_object(ns, ws).get_workspace_metadata()
                 workspace_data.append({
                     'accessLevel': workspace['accessLevel'],
                     'public': False,
@@ -190,7 +190,7 @@ def workspace(namespace, name):
         '__failures__': [],
     }
     try:
-        data.update(ws.firecloud_workspace)
+        data.update(ws.get_workspace_metadata())
         if 'workspace' in data and 'attributes' in data['workspace']:
             data['attributes'] = data['workspace']['attributes']
     except APIException:
@@ -206,7 +206,7 @@ def workspace(namespace, name):
     try:
         data['entities'] = [
             {**v, **{'type':k}}
-            for k,v in ws.entity_types.items()
+            for k,v in ws.get_entity_types().items()
         ]
     except APIException:
         traceback.print_exc()
@@ -234,7 +234,7 @@ def get_namespace_registered(namespace, name):
 def register(namespace, name):
     ws = get_workspace_object(namespace, name)
     if ws.gateway is not None and ws.gateway.exists and not ws.gateway.registered:
-        ws.gateway.register(ws.workspace, ws.bucket_id)
+        ws.gateway.register(ws.workspace, ws.get_bucket_id())
         get_namespace_registered.cache_clear()
     return get_namespace_registered(namespace, name)
 
@@ -420,7 +420,7 @@ def _get_entitites_df(namespace, name, etype):
 @cached(10)
 @controller
 def get_entities(namespace, name, etype, start=0, end=None):
-    # result = get_workspace_object(namespace, name).entity_types
+    # result = get_workspace_object(namespace, name).get_entity_types()
     # return {
     #     'failed': False,
     #     'reason': 'success',
@@ -460,7 +460,7 @@ def sync_cache(namespace, name):
 
 @controller
 def create_workspace(namespace, name, parent):
-    ws = lapdog.WorkspaceManager(namespace, name, workspace_seed_url=None)
+    ws = lapdog.WorkspaceManager("{}/{}".format(namespace,name), workspace_seed_url=None)
     parent = None if '/' not in parent else lapdog.WorkspaceManager(parent, workspace_seed_url=None)
     with lapdog.capture() as (stdout, stderr):
         result = ws.create_workspace(parent)
@@ -522,9 +522,7 @@ def preflight(namespace, name, config, entity, expression="", etype=""):
                 'ok': result.result,
                 'message': 'Okay',
                 'workflows': len(result.workflow_entities),
-                'invalid_inputs': ', '.join(
-                    value for value in result.invalid_inputs
-                )
+                'invalid_inputs': '' # removed
             }, 200
         return {
             'failed': False,
@@ -790,7 +788,7 @@ def quotas(namespace):
 def get_config(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
     try:
-         config = ws.get_config(config_namespace, config_name)
+         config = ws.get_config("{}/{}".format(config_namespace, config_name))
     except:
         ws.sync()
         return (
@@ -825,7 +823,9 @@ def get_config(namespace, name, config_namespace, config_name):
         io_types = None
     try:
         wdl_text = ws.get_wdl(
-            config['methodRepoMethod']
+            config['methodRepoMethod']['methodPath']
+            if 'sourceRepo' in config['methodRepoMethod'] and config['methodRepoMethod']['sourceRepo'] == 'dockstore'
+            else "{}/{}".format(config['methodRepoMethod']['methodNamespace'], config['methodRepoMethod']['methodName'])
         )
         try:
             with tempfile.NamedTemporaryFile('w', suffix='wdl') as tmpwdl:
@@ -867,7 +867,7 @@ def get_config(namespace, name, config_namespace, config_name):
 @controller
 def update_config(namespace, name, config):
     ws = get_workspace_object(namespace, name)
-    ws.update_configuration(config)
+    ws.update_config(config)
     get_config.cache_clear()
     get_configs.cache_clear()
     return ("OK", 200)
@@ -875,7 +875,7 @@ def update_config(namespace, name, config):
 @controller
 def delete_config(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
-    ws.delete_config(config_namespace, config_name)
+    ws.delete_config("{}/{}".format(config_namespace, config_name))
     get_config.cache_clear()
     get_configs.cache_clear()
     return ("OK", 200)
@@ -893,7 +893,7 @@ def upload_config(namespace, name, config_filepath, method_filepath=None):
     try:
         ws = get_workspace_object(namespace, name)
         live = ws.live
-        result = ws.update_configuration(
+        result = ws.update_config(
             config,
             method_filepath, # Either it's a file-object or None
         )
@@ -934,10 +934,10 @@ def rerun_submission(namespace, name, id):
 @controller
 def config_autocomplete(namespace, name, config_namespace, config_name):
     ws = get_workspace_object(namespace, name)
-    entityTypeMetadata = ws.entity_types[ws.get_config(config_namespace, config_name)['rootEntityType']]
+    entityTypeMetadata = ws.get_entity_types()[ws.get_config("{}/{}".format(config_namespace, config_name))['rootEntityType']]
     return (
         [
-            'workspace.'+attribute for attribute in ws.attributes
+            'workspace.'+attribute for attribute in ws.get_attributes()
         ] + [
         'this.'+attribute for attribute in entityTypeMetadata['attributeNames']
         ] + ['this.name', 'this.'+entityTypeMetadata['idName']]
@@ -972,7 +972,7 @@ def get_autocomplete_entries(namespace, name, entity):
     get_autocomplete_cache(namespace, name).add(entity)
     return [
         eid
-        for etype in ws.entity_types
+        for etype in ws.get_entity_types()
         for eid in ws._get_entities_internal(etype).index
         if entity in eid
     ]

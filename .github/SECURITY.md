@@ -12,7 +12,7 @@ If you think you have found a vulnerability which effects the security or integr
 1. **DO NOT** open an issue on GitHub or otherwise publicly post about the vulnerability
     * Reporting any security vulnerability should follow the principles of
     [Responsible Disclosure](https://en.wikipedia.org/wiki/Responsible_disclosure).
-2. Please send an email to `aarong@broadinstitute.org` and CC `francois@broadinstitute.org` and `birger@broadinstitute.org`
+2. Please send an email to `aarong@broadinstitute.org` and CC `francois@broadinstitute.org` and `dheiman@broadinstitute.org`
     * Describe the problem in as much detail as possible
     * Someone will get back to you ASAP
 
@@ -27,7 +27,7 @@ permissions to access or modify directly. Particularly:
     * Ability to access the core signing account's access key
     * Ability to utilize any compute resource besides resources provisioned through normal job execution
     * Ability to modify the configuration of any compute networks or subnetworks
-    * Ability to create, list, or cancel and genomics operations (all users have `GET` access to operations)
+    * Ability to create, list, or cancel any genomics operations (all users have `GET` access to operations)
     * Ability to authenticate as any service account in the project
 * Allows users to run arbitrary code outside the context of the docker container for a workflow
 * Allows users to modify or falsify a Lapdog Resolution (which ties a Firecloud Namespace to a particular project)

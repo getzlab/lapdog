@@ -23,35 +23,14 @@ from agutil import ActiveTimeout, TimeoutExceeded, context_lock
 import pandas as pd
 import math
 from hound import HoundClient
+from iso8601 import parse_date as parse_time
 
-timestamp_formats = (
-    '%Y-%m-%dT%H:%M:%SZ',
-    '%Y-%m-%dT%H:%MZ'
-)
 utc_offset = datetime.datetime.fromtimestamp(time.time()) - datetime.datetime.utcfromtimestamp(time.time())
 
 def sleep_until(dt):
     sleep_time = (dt - datetime.datetime.now()).total_seconds()
     if sleep_time > 0:
         time.sleep(sleep_time)
-
-def parse_time(timestamp):
-    """
-    Returns a datetime.datetime object from a given UTC timestamp.
-    Parses timestamps in multiple known GCP timestamp formats
-    """
-    #2019-02-04T21:27Z
-    # no seconds?
-    err = None
-    for timestamp_format in timestamp_formats:
-        try:
-            return datetime.datetime.strptime(
-                (timestamp.split('.')[0]+'Z').replace('ZZ', 'Z'),
-                timestamp_format
-            )
-        except ValueError as e:
-            err = e
-    raise err
 
 def build_input_key(template):
     data = ''
@@ -332,14 +311,6 @@ class CommandReader(object):
     def __del__(self):
         self.close()
 
-## TODO:
-## 1) Controller:
-##      Cache a cromwell reader and text from the most recent submission
-##      On submission change, close the reader and reset text
-##      On fetch: use select to check for input (50ms timeout) then read all
-##      Optional line_offset input returns that line and all after
-## 2) Adapter:
-
 class SubmissionAdapter(object):
     """
     Represents a single Lapdog Submission.
@@ -589,10 +560,10 @@ class SubmissionAdapter(object):
                 while len(do_select(reader, 1)[0]):
                     message = reader.readline().decode().strip()
                     code = md5(message.encode()).digest()
+                    if code in self._update_mask:
+                        continue
                     matcher = Recall()
                     if matcher.apply(workflow_dispatch_pattern.search(message)):
-                        if code in self._update_mask:
-                            continue
                         self._update_mask.add(code)
                         # This event helps establish the order of workflows
                         # The message is posted with the exact order of workflow-ids
@@ -612,8 +583,6 @@ class SubmissionAdapter(object):
                             )
                             self.workflow_mapping[data['workflowOutputKey']] = long_id
                     if matcher.apply(workflow_start_pattern.search(message)):
-                        if code in self._update_mask:
-                            continue
                         self._update_mask.add(code)
                         # This event captures a start message for a workflow which somehow
                         # was not captured by the above dispatch event
@@ -631,8 +600,6 @@ class SubmissionAdapter(object):
                             self.workflow_mapping[data['workflowOutputKey']] = long_id
 
                     elif matcher.apply(task_start_pattern.search(message)):
-                        if code in self._update_mask:
-                            continue
                         self._update_mask.add(code)
                         short = matcher.value.group(1)
                         wf = matcher.value.group(2)
@@ -649,8 +616,6 @@ class SubmissionAdapter(object):
                             operation
                         )
                     elif matcher.apply(fail_pattern.search(message)):
-                        if code in self._update_mask:
-                            continue
                         self._update_mask.add(code)
                         long_id = matcher.value.group(1)
                         self._init_workflow(long_id[:8]).handle(
@@ -658,8 +623,6 @@ class SubmissionAdapter(object):
                             matcher.groups()[-1]
                         )
                     elif matcher.apply(status_pattern.search(message)):
-                        if code in self._update_mask:
-                            continue
                         self._update_mask.add(code)
                         short = matcher.value.group(1)
                         task = matcher.value.group(3)
@@ -674,14 +637,10 @@ class SubmissionAdapter(object):
                             new
                         )
                     elif matcher.apply(cache_pattern.search(message)):
-                        if code in self._update_mask:
-                            continue
                         self._update_mask.add(code)
                         short = matcher.value.group(1)
                         self._init_workflow(short).cache_hit = True
                     elif matcher.apply(msg_pattern.search(message)):
-                        if code in self._update_mask:
-                            continue
                         self._update_mask.add(code)
                         self._init_workflow(matcher.value.group(1)).handle(
                             'message',
@@ -704,8 +663,6 @@ class SubmissionAdapter(object):
                 'submission.json'
             )
             self.data = json.loads(strict_getblob(gs_path).download_as_string().decode())
-            if 'operation' not in self.data:
-                print("<GATEWAY DEV> Delete submission", submission)
             self.workspace = self.data['workspace']
             self.namespace = self.data['namespace']
             self.identifier = self.data['identifier']
@@ -740,8 +697,6 @@ class SubmissionAdapter(object):
         Forcefully set status to "Aborted".
         """
         # self.update()
-        # FIXME: Once everything else works, see if cromwell labels work
-        # At that point, we can add an abort here to kill everything with the id
         status = self.status
         if 'done' in status and status['done']:
             return

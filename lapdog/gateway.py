@@ -13,6 +13,7 @@ from hashlib import md5, sha512
 from .cache import cached, cache_fetch, cache_write
 import time
 import warnings
+import contextlib
 import crayons
 import os
 import json
@@ -20,7 +21,6 @@ from threading import RLock
 from .cloud import RESOLUTION_URL
 from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, proxy_group_for_user, generate_default_session, update_iam_policy, enabled_regions, __API_VERSION__, GCP_ZONES
 from urllib.parse import quote
-from dalmatian import capture
 import google.api_core.exceptions
 import sys
 import tempfile
@@ -215,6 +215,26 @@ def get_token_expired(token):
             return True
     return int(expiry) < time.time()
 
+@contextlib.contextmanager
+def capture(display=True):
+    """
+    Context manager to redirect stdout and err
+    """
+    try:
+        stdout_buff = io.StringIO()
+        stderr_buff = io.StringIO()
+        with contextlib.redirect_stdout(stdout_buff):
+            with contextlib.redirect_stderr(stderr_buff):
+                yield (stdout_buff, stderr_buff)
+    finally:
+        stdout_buff.seek(0,0)
+        stderr_buff.seek(0,0)
+        if display:
+            print(stderr_buff.read(), end='', file=sys.stderr)
+            stderr_buff.seek(0,0)
+            print(stdout_buff.read(), end='')
+            stdout_buff.seek(0,0)
+
 def _generate_core_key_internal(ld_project, worker_account, session=None):
     """
     Issues a new core service account access key for a given lapdog engine project.
@@ -390,7 +410,7 @@ class Gateway(object):
             }
         )
         if response.status_code != 200:
-            raise ValueError("Unexpected response from Google API: %d" % response.status_code)
+            raise ValueError("Unexpected response from Google API: ({}): {}".format(response.status_code, response.text))
         permissions = response.json()
         if 'permissions' not in permissions:
             raise ValueError("Unexpected response from Google API: %s" % response.text)
@@ -444,6 +464,11 @@ class Gateway(object):
                     print("Aborted")
                     return
         cmd = 'gcloud --project {project} services enable cloudbilling.googleapis.com'.format(
+            project=custom_lapdog_project,
+        )
+        print(cmd)
+        subprocess.check_call(cmd, shell=True)
+        cmd = 'gcloud --project {project} services enable serviceusage.googleapis.com'.format(
             project=custom_lapdog_project,
         )
         print(cmd)
@@ -745,6 +770,7 @@ class Gateway(object):
             raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
         print("Deploying Cloud Functions")
         from .cloud import _deploy
+        _deploy('update', 'update', functions_account, custom_lapdog_project)
         _deploy('create_submission', 'submit', functions_account, custom_lapdog_project)
         _deploy('abort_submission', 'abort', functions_account, custom_lapdog_project)
         _deploy('check_abort', 'signature', functions_account, custom_lapdog_project)

@@ -160,9 +160,8 @@ def webhook(request):
     Admins: Use this to trigger a self-update to the given reference (commit, tag, or branch)
     Control who has access to trigger updates with the invoker permissions to the webhook
     """
-    # 1) Check that the X-Hub-Signature is valid for the request
-    # This ensures that the request is actually coming from our github webhook
     try:
+        # 1) Check token details to ensure user in whitelist
         token = utils.extract_token(request.headers, None)
         if token is None:
             return {
@@ -196,7 +195,7 @@ def webhook(request):
             'url': 'https://github.com/broadinstitute/lapdog.git'
         }
 
-        # 3) Get all resolved namespaces and update the iam policy for the signing key
+        # 2) Get all resolved namespaces and update the iam policy for the signing key
         default_session = utils.generate_default_session()
         resolutions = [
             blob.download_as_string().decode()
@@ -233,7 +232,7 @@ def webhook(request):
                 'message': "Google rejected the policy update: (%d) : %s" % (response.status_code, response.text)
             }, 500
 
-        # 4) Trigger update for all resolutions
+        # 3) Trigger update for all resolutions
         status = {
             'results': []
         }
