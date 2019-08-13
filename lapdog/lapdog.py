@@ -15,6 +15,7 @@ import tempfile
 import time
 import subprocess
 import requests
+import fnmatch
 from collections import namedtuple
 from hashlib import md5
 import base64
@@ -1308,6 +1309,167 @@ class WorkspaceManager(dog.WorkspaceManager):
             self.sync()
         return result
 
+    def copy_data(self):
+        """
+        Copies all data files referenced by workspace or entity attributes into
+        this workspace's bucket.
+
+        This is only useful if this workspace references files from other buckets,
+        such as if it was cloned or uses external references.
+        """
+
+        bucket_id = self.get_bucket_id()
+
+        def copy_to_workspace(value):
+            if isinstance(value, str) and value.startswith('gs://'):
+                src = getblob(value)
+                destpath = 'gs://{}/{}'.format(bucket_id, src.name)
+                if src.bucket.name != bucket_id:
+                    copyblob(src, destpath)
+                    return destpath
+            return value
+
+        with self.hound.with_reason("<AUTOMATED>: Migrating files into workspace bucket"):
+            attributes = self.get_attributes()
+            updated_attributes = {
+                key:copy_to_workspace(value) for key,value in attributes.items()
+            }
+            # To save avoid redundant updates, only post updated attributes
+            self.update_attributes({
+                key:value for key,value in updated_attributes.items()
+                if value != attributes[key]
+            })
+
+            for etype in self.get_entity_types():
+                entity_df = self._get_entities_internal(etype).dropna(axis='columns', how='all')
+                updated_df = entity_df.copy().applymap(copy_to_workspace)
+                update_mask = (entity_df == updated_df).all()
+                # Here's some crazy pandas operations, but ultimately, it just
+                # grabs columns with at least one changed entity
+                self.update_entity_attributes(etype, updated_df[update_mask[~update_mask].index])
+
+    def mop(self, dry_run=False, quiet=False, delete_patterns=None, retain_patterns=None):
+        """
+        Cleans the workspace bucket of any unused files. By default, mop() retains
+        the following file types:
+        * Any file referenced by a workspace or entity attribute
+        * Lapdog submission files: lapdog-executions/*/{submission.json,signature,config.tsv,results/workflows.json,abort-key}
+        * Log files: {*.log,rc,*rc.txt,stdout,stderr}
+        * Workflow scripts: {script,exec.sh}
+        * Hound files: hound/**
+        * Call Cache: lapdog-call-cache.sql
+        * Workspace Signature: DO_NOT_DELETE_LAPDOG_WORKSPACE_SIGNATURE
+
+        You can include additional files to delete with delete_patterns = [list of globs].
+        You can include additional files to keep with retain_patterns = [list of globs].
+        NOTE: All patterns are first checked against the full blob path.
+        Patterns without a / will also be checked just against the blob's basename
+        """
+        reserved_patterns = [
+            'lapdog-executions/*/submission.json',
+            'lapdog-executions/*/signature',
+            'lapdog-executions/*/config.tsv',
+            'lapdog-executions/*/results/workflows.json',
+            'lapdog-executions/*/abort-key',
+            'lapdog-executions/*/method.wdl',
+            '*.log',
+            'rc',
+            '*rc.txt',
+            'stdout',
+            'stderr',
+            'script',
+            'output',
+            'exec.sh',
+            'hound/**',
+            'lapdog-call-cache.sql',
+            'DO_NOT_DELETE_LAPDOG_WORKSPACE_SIGNATURE'
+        ]
+        if delete_patterns is None:
+            delete_patterns = []
+        if retain_patterns is None:
+            retain_patterns = []
+        bucket_prefix = "gs://{}/".format(self.get_bucket_id())
+        if not quiet:
+            print("Loading list of referenced file paths...")
+        referenced_files = {
+            os.path.relpath(value, bucket_prefix) for value in self.get_attributes().values()
+            if isinstance(value, str) and value.startswith(bucket_prefix)
+        }
+
+        def scan_entity_cell(value):
+            if isinstance(value, str) and value.startswith(bucket_prefix):
+                referenced_files.add(os.path.relpath(value, bucket_prefix))
+
+        for etype in self.get_entity_types():
+            self._get_entities_internal(etype).applymap(scan_entity_cell)
+
+        deleted_count = 0
+        deleted_size = 0
+        deleted_files = []
+        retained_count = 0
+        retained_size = 0
+
+        if not quiet:
+            print("Scanning objects in bucket...")
+
+        try:
+            for page in dog.core._getblob_client(None).bucket(self.get_bucket_id()).list_blobs(fields='items/name,items/size,nextPageToken').pages:
+                for blob in page:
+                    do_continue = False
+                    for pattern in reserved_patterns:
+                        if fnmatch.fnmatch(blob.name, pattern) or ('/' not in pattern and fnmatch.fnmatch(os.path.basename(blob.name), pattern)):
+                            retained_count += 1
+                            retained_size += blob.size
+                            do_continue = True
+                            break
+                    if do_continue:
+                        continue
+                    for pattern in delete_patterns:
+                        if fnmatch.fnmatch(blob.name, pattern) or ('/' not in pattern and fnmatch.fnmatch(os.path.basename(blob.name), pattern)):
+                            deleted_count += 1
+                            deleted_size += blob.size
+                            if not dry_run:
+                                blob.delete()
+                                deleted_files.append(blob.name)
+                            if not quiet:
+                                print("Delete", blob.name)
+                            do_continue = True
+                            break
+                    if do_continue:
+                        continue
+                    for pattern in retain_patterns:
+                        if fnmatch.fnmatch(blob.name, pattern) or ('/' not in pattern and fnmatch.fnmatch(os.path.basename(blob.name), pattern)):
+                            retained_count += 1
+                            retained_size += blob.size
+                            do_continue = True
+                            break
+                    if not (do_continue or blob.name in referenced_files):
+                        deleted_count += 1
+                        deleted_size += blob.size
+                        if not dry_run:
+                            blob.delete()
+                            deleted_files.append(blob.name)
+                        if not quiet:
+                            print("Delete", blob.name)
+        except KeyboardInterrupt:
+            print("Aborted operation")
+        if not quiet:
+            print("Deleted", deleted_count, "files (", byteSize(deleted_size), ")")
+            print("Retained", retained_count, "files (", byteSize(retained_size), ")")
+        if not dry_run:
+            self.hound.write_log_entry(
+                'other',
+                'Mopped the workspace bucket. Deleted {} files ({}) : {}'.format(
+                    deleted_count,
+                    byteSize(deleted_size),
+                    deleted_files
+                )
+            )
+        return deleted_count, deleted_size, retained_count, retained_size
+
+
+
+
     # ===================================
     # Submission Management and Internals
     # ===================================
@@ -1662,9 +1824,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             # Bypass Step 2) Copy all the parsed input data to the bypass workspace
             def copy_to_bypass(cell):
                 if isinstance(cell, str) and cell.startswith('gs://'):
+                    src = getblob(cell)
                     destpath = 'gs://{}/{}'.format(dest_bucket, src.name)
                     if cell != destpath:
-                        copyblob(cell, destpath)
+                        copyblob(src, destpath)
                         time.sleep(0.5)
                     return destpath
                 elif isinstance(cell, list):

@@ -535,7 +535,7 @@
     },
     created() {
       this.getWorkspace(this.namespace, this.workspace);
-      this.get_acl(this.namespace, this.workspace);
+      // this.get_acl(this.namespace, this.workspace);
       // window.$('.modal').modal();
       // this.get_configs();
       // this.get_entities(this.namespace, this.workspace);
@@ -837,6 +837,7 @@
                 html: "Failed to get: "+_.join(response.data.__failures__, ', ')
               })
             };
+            this.get_acl(namespace, workspace);
             window.$('.modal').modal();
             setTimeout(() => {
               window.$('.tooltipped').tooltip();
@@ -1117,7 +1118,7 @@
       this.submission_page = 0;
       this.submitting = false;
       this.getWorkspace(to.params.namespace, to.params.workspace);
-      this.get_acl(to.params.namespace, to.params.workspace);
+      // this.get_acl(to.params.namespace, to.params.workspace);
       // this.get_configs();
       next();
     },

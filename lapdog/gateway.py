@@ -16,6 +16,7 @@ import warnings
 import contextlib
 import crayons
 import os
+import io
 import json
 from threading import RLock
 from .cloud import RESOLUTION_URL
@@ -413,7 +414,7 @@ class Gateway(object):
             raise ValueError("Unexpected response from Google API: ({}): {}".format(response.status_code, response.text))
         permissions = response.json()
         if 'permissions' not in permissions:
-            raise ValueError("Unexpected response from Google API: %s" % response.text)
+            raise ValueError("Unexpected response from Google API: %s. You may not have appropriate permissions for the billing account" % response.text)
         permissions = permissions['permissions']
         if "billing.accounts.get" not in permissions or "billing.accounts.getIamPolicy" not in permissions or "billing.resourceAssociations.create" not in permissions:
             raise ValueError("Insufficient permissions to use this billing account")
@@ -685,7 +686,7 @@ class Gateway(object):
             raise ValueError("Unable to create service account")
         update_account = 'lapdog-update@{}.iam.gserviceaccount.com'.format(custom_lapdog_project)
         iam_url = 'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}:setIamPolicy'.format(
-            project=project,
+            project=custom_lapdog_project,
             account=update_account
         )
         print("POST", iam_url)
@@ -699,7 +700,7 @@ class Gateway(object):
                             "role": "roles/iam.serviceAccountUser",
                             "members": [
                                 # Allows the gcloud functions account to set this pet account on comwell servers
-                                "serviceAccount:email".format(email=functions_account),
+                                "serviceAccount:{email}".format(email=functions_account),
                             ]
                         }
                     ]
