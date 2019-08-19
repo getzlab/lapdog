@@ -28,7 +28,7 @@ from iso8601 import parse_date as parse_time
 utc_offset = datetime.datetime.fromtimestamp(time.time()) - datetime.datetime.utcfromtimestamp(time.time())
 
 def sleep_until(dt):
-    sleep_time = (dt - datetime.datetime.now()).total_seconds()
+    sleep_time = (dt - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
     if sleep_time > 0:
         time.sleep(sleep_time)
 

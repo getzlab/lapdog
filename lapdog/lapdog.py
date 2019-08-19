@@ -815,6 +815,10 @@ class WorkspaceManager(dog.WorkspaceManager):
         if key not in self.cache or self.cache[key] is None:
             self.cache[key] = attrs
         else:
+            if isinstance(attrs, pd.Series):
+                df = pd.DataFrame(attrs).T
+            else:
+                df = attrs.copy()
             # 1) Outer join using new columns only. This will add new rows and columns
             self.cache[key] = self.cache[key].join(
                 df[[col for col in df.columns if col not in self.cache[key].columns]],
@@ -885,11 +889,11 @@ class WorkspaceManager(dog.WorkspaceManager):
         else:
             # 1) Outer join using new columns only. This will add new rows and columns
             self.cache[key] = self.cache[key].join(
-                df[[col for col in df.columns if col not in self.cache[key].columns]],
+                updates[[col for col in updates.columns if col not in self.cache[key].columns]],
                 how='outer'
             )
             # 2) Update. This will overrwrite existing columns that have new values
-            self.cache[key].update(df)
+            self.cache[key].update(updates)
         self.dirty.add(key)
         if 'entity_types' not in self.cache:
             self.cache['entity_types'] = {}
@@ -1721,7 +1725,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     'type': param['inputType'],
                     'required': not param['optional']
                 }
-                for param in getattr(fc, '__post')(
+                for param in getattr(firecloud.api, '__post')(
                     '/api/inputsOutputs',
                     data=json.dumps(preflight.config['methodRepoMethod']),
                     timeout=2 # If it takes too long, just give up on typechecking
@@ -1822,13 +1826,17 @@ class WorkspaceManager(dog.WorkspaceManager):
                 input()
             dest_bucket = authdomain_child.get_bucket_id()
             # Bypass Step 2) Copy all the parsed input data to the bypass workspace
+            copied = set()
+            copy_lock = Lock()
             def copy_to_bypass(cell):
                 if isinstance(cell, str) and cell.startswith('gs://'):
                     src = getblob(cell)
                     destpath = 'gs://{}/{}'.format(dest_bucket, src.name)
-                    if cell != destpath:
+                    if not (cell == destpath or destpath in copied):
                         copyblob(src, destpath)
                         time.sleep(0.5)
+                        with copy_lock:
+                            copied.add(destpath)
                     return destpath
                 elif isinstance(cell, list):
                     return [
