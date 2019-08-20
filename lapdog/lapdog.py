@@ -1925,7 +1925,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             authdomain_child.update_config(cfg)
             # Bypass Step 4) Final: Launch submission in new workspace
             global_id, local_id, operation_id = authdomain_child.execute(
-                cfg,
+                "{}/{}".format(cfg['namespace'], cfg['name']),
                 set_id,
                 'this.{}s'.format(preflight.config['rootEntityType']),
                 preflight.config['rootEntityType']+'_set',
