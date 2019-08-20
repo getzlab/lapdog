@@ -1789,8 +1789,10 @@ class WorkspaceManager(dog.WorkspaceManager):
             while True:
                 # Just keep trying until we land on a workspace we can use
                 authdomain_child = WorkspaceManager(
-                    self.namespace,
-                    'ld-auth-{}'.format(md5(authdomain_child.workspace.encode()).hexdigest())
+                    '{}/ld-auth-{}'.format(
+                        self.namespace,
+                        md5(authdomain_child.workspace.encode()).hexdigest()
+                    )
                 )
                 try:
                     authdomain_child.get_workspace_metadata()

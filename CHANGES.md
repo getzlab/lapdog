@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* Fixed inability to create authorized domain bypass workspaces
+
 ## 0.18.1 (Beta)
 
 Bug Fixes:
