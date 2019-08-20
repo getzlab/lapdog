@@ -96,6 +96,11 @@ def _default_type(*args, **kwargs):
 def _operation_type(operation_id, dtype, ext):
     return 'operations.%s' % operation_id.replace('operations/', '')
 
+@cache_type('proxy-acct')
+@path_eval
+def _proxy_type(email, dtype, ext):
+    return "service-proxy-{}".format(md5(email.encode()).hexdigest())
+
 @cache_type('submission-json')
 @path_eval
 def _json_type(bucket_id, submission_id, dtype, ext):

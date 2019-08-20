@@ -132,8 +132,10 @@
         <div class="col s2 offset-s2">
           Powered by <a href="https://github.com/broadinstitute/dalmatian">Dalmatian</a>
         </div>
-        <div v-if="acct" class="col s5">
-          Your Lapdog service account: {{acct}}
+        <div class="col s5">
+          Your Lapdog service account:
+          <span v-if="acct">{{acct}}</span>
+          <span v-else>&lt;Checking account status...&gt;</span>
         </div>
         <div v-if="cache_size" class="col s2">
           Offline Cache Size: {{cache_size}}

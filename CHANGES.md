@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.1 (Beta)
+
+Bug Fixes:
+* Fixed cost estimation sometimes crashing with UTC errors
+* Reduced probability of broken proxy account emails
+
 ## 0.18.0 (Beta)
 
 Breaking Changes:

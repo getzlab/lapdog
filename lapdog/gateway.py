@@ -146,6 +146,20 @@ def get_gcloud_account():
         stdout=subprocess.PIPE
     ).stdout.decode().strip()
 
+def get_proxy_account(user_acct=None):
+    if user_acct is None:
+        user_acct = get_application_default_account()
+    email = cache_fetch('proxy-acct', user_acct)
+    if email is not None:
+        return email
+    acct = proxy_group_for_user(user_acct)
+    response = fc.__get('/api/groups/{}'.format(acct))
+    if response.status_code == 200:
+        email = response.json()['groupEmail']
+        if email == acct + '@firecloud.org':
+            cache_write(email, 'proxy-acct', user_acct)
+            return email
+
 @lru_cache()
 def get_application_default_account():
     """

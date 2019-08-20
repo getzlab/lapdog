@@ -26,8 +26,8 @@ from io import StringIO
 from . import adapters
 from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader, build_input_key
 from .cache import cache_init, cache_path
-from .cloud.utils import proxy_group_for_user, ld_acct_in_project
-from .gateway import Gateway, creation_success_pattern, get_gcloud_account, get_application_default_account, capture
+from .cloud.utils import ld_acct_in_project
+from .gateway import Gateway, creation_success_pattern, get_gcloud_account, get_application_default_account, capture, get_proxy_account
 from itertools import repeat
 import pandas as pd
 from socket import gethostname
@@ -1303,7 +1303,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 try:
                     with self.hound.with_reason('<Automated> Auto-add lapdog proxy-group to workspace'):
                         response = self.update_acl({
-                            proxy_group_for_user(get_application_default_account())+'@firecloud.org': 'WRITER'
+                            get_proxy_account(): 'WRITER'
                         })
                 except:
                     traceback.print_exc()
