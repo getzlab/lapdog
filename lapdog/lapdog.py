@@ -1323,13 +1323,15 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
 
         bucket_id = self.get_bucket_id()
+        seen = set()
 
         def copy_to_workspace(value):
             if isinstance(value, str) and value.startswith('gs://'):
                 src = getblob(value)
                 destpath = 'gs://{}/{}'.format(bucket_id, src.name)
-                if src.bucket.name != bucket_id:
+                if not (src.bucket.name == bucket_id or destpath in seen):
                     copyblob(src, destpath)
+                    seen.add(destpath)
                     return destpath
             return value
 
@@ -1797,14 +1799,14 @@ class WorkspaceManager(dog.WorkspaceManager):
                 try:
                     authdomain_child.get_workspace_metadata()
                 except dog.APIException as e:
-                    if e.status_code == 404:
+                    if e.response.status_code == 404:
                         # Does not exist or we just don't have permissions to see it
                         try:
                             authdomain_child.live = True
                             authdomain_child.create_workspace() # create_workspace will automatically update ACL
                             break
                         except dog.APIException as e:
-                            if e.status_code == 409:
+                            if e.response.status_code == 409:
                                 # Already exists, we just can't see it, so try again with a new name
                                 continue
                             raise
@@ -1814,7 +1816,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                         authdomain_child.update_acl({proxy_acct: 'WRITER'})
                         break
                     except dog.APIException as e:
-                        if e.status_code not in {401, 403}:
+                        if e.response.status_code not in {401, 403}:
                             # Some other non-permissions status
                             raise
                         # Dont' have permissions to modify ACL

@@ -4,6 +4,7 @@
 
 Bug Fixes:
 * Fixed inability to create authorized domain bypass workspaces
+* Fixed `copy_to_workspace` crashing if files are copied to the same location
 
 ## 0.18.1 (Beta)
 
