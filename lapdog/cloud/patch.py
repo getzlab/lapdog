@@ -188,6 +188,9 @@ def __project_admin_apply_patch(namespace):
     try:
         if blob.exists():
             regions = blob.download_as_string().decode().split()
+            acl = blob.acl
+            acl.all_authenticated().grant_read()
+            acl.save()
     except:
         pass
     for region in regions:

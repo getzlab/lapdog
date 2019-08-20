@@ -1880,12 +1880,12 @@ class WorkspaceManager(dog.WorkspaceManager):
                     bypass_data['case_sample'] = ['fake_case_sample'] * len(bypass_data)
                     authdomain_child.upload_samples(pd.DataFrame.from_dict(
                         {'participant_id': ['fake_participant']}
-                    ).set_index(pd.Index(['case_sample'], name='sample_id')))
+                    ).set_index(pd.Index(['fake_case_sample'], name='sample_id')))
                 if 'control_sample' not in bypass_data.columns:
                     bypass_data['control_sample'] = ['fake_control_sample'] * len(bypass_data)
                     authdomain_child.upload_samples(pd.DataFrame.from_dict(
                         {'participant_id': ['fake_participant']}
-                    ).set_index(pd.Index(['control_sample'], name='sample_id')))
+                    ).set_index(pd.Index(['fake_control_sample'], name='sample_id')))
             # Now actually upload
             with authdomain_child.hound.with_reason('Bypassing authorized domain in {}/{}'.format(self.namespace, self.workspace)):
                 authdomain_child.upload_entities(
