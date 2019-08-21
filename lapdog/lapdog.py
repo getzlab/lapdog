@@ -45,6 +45,8 @@ import pickle
 # ==============================================================================
 
 # Shim copyblob: adds random backoff to rewrite
+import random
+
 def copyblob(src, dest, credentials=None, user_project=None, max_backoff_time=5):
     """
     Copy blob from src -> dest
