@@ -40,6 +40,38 @@ import numpy as np
 import requests
 import pickle
 
+# ==============================================================================
+# Dalmatian Shims: Temporary overloads to avoid over-frequent dalmatian updates
+# ==============================================================================
+
+# Shim copyblob: adds random backoff to rewrite
+def copyblob(src, dest, credentials=None, user_project=None, max_backoff_time=5):
+    """
+    Copy blob from src -> dest
+    src and dest may either be a gs:// path or a premade blob object
+    """
+    if isinstance(src, str):
+        src = getblob(src, credentials, user_project)
+    if isinstance(dest, str):
+        dest = getblob(dest, credentials, user_project)
+    token, progress, total = dest.rewrite(src)
+    n = 0
+    while token is not None:
+        try:
+            token, progress, total = dest.rewrite(src, token)
+            if n > 0:
+                # After a successful block, if we encountered failures, sleep 1 second
+                time.sleep(1)
+        except (storage.blob.exceptions.InternalServerError, storage.blob.exceptions.TooManyRequests):
+            backoff = (2**n) + random.random()
+            if backoff <= max_backoff_time:
+                time.sleep(backoff)
+                n += 1
+            else:
+                raise
+    return dest.exists()
+# ==============================================================================
+
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
 lapdog_submission_pattern = re.compile(r'.*?/?lapdog-executions/([0-9a-f]{32})/submission.json')
@@ -1833,7 +1865,6 @@ class WorkspaceManager(dog.WorkspaceManager):
             dest_bucket = authdomain_child.get_bucket_id()
             # Bypass Step 2) Copy all the parsed input data to the bypass workspace
             copied = set()
-            copy_lock = Lock()
             def copy_to_bypass(cell):
                 if isinstance(cell, str) and cell.startswith('gs://'):
                     src = getblob(cell)
@@ -1841,8 +1872,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     if not (cell == destpath or destpath in copied):
                         copyblob(src, destpath)
                         time.sleep(0.5)
-                        with copy_lock:
-                            copied.add(destpath)
+                        copied.add(destpath)
                     return destpath
                 elif isinstance(cell, list):
                     return [

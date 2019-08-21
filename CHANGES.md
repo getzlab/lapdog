@@ -1,5 +1,13 @@
 # Changelog
 
+# 0.18.3 (Beta)
+
+Bug Fixes:
+* Fixed 5XX errors during authorized domain bypass
+
+Other Changes:
+* Improved UI feedback when creating new workspaces
+
 ## 0.18.2 (Beta)
 
 Bug Fixes:

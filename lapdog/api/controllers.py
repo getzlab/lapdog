@@ -465,24 +465,31 @@ def sync_cache(namespace, name):
 def create_workspace(namespace, name, parent):
     ws = lapdog.WorkspaceManager("{}/{}".format(namespace,name), workspace_seed_url=None)
     parent = None if '/' not in parent else lapdog.WorkspaceManager(parent, workspace_seed_url=None)
-    with lapdog.capture() as (stdout, stderr):
-        result = ws.create_workspace(parent)
-        stdout.seek(0,0)
-        stderr.seek(0,0)
-        text = stdout.read() + stderr.read()
     try:
-        text = json.loads(text.strip())['message']
-    except:
-        pass
-    if not result:
+        ws.create_workspace(parent)
+        return {
+            'failed': False,
+            'reason': 'success'
+        }, 200
+    except APIException as e:
+        try:
+            reason = e.response.json()
+            if 'message' in reason:
+                reason = reason['message']
+            return {
+                'failed': True,
+                'reason': reason
+            }, 200
+        except:
+            pass
         return {
             'failed': True,
-            'reason': text
+            'reason': traceback.print_exc()
         }, 200
     return {
-        'failed': False,
-        'reason': 'success'
-    }
+        'failed': True,
+        'reason': "Unknown"
+    }, 200
 
 @cached(60)
 @controller

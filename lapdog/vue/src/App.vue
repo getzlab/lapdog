@@ -29,10 +29,26 @@
               <strong>{{create_failed}}</strong>
             </div>
           </div>
+          <div v-if="creating" class="row">
+            <div class="col s12">
+              <div class="preloader-wrapper small active">
+                <div class="spinner-layer spinner-blue-only">
+                  <div class="circle-clipper left">
+                    <div class="circle"></div>
+                  </div><div class="gap-patch">
+                    <div class="circle"></div>
+                  </div><div class="circle-clipper right">
+                    <div class="circle"></div>
+                  </div>
+                </div>
+              </div>
+              Creating Workspace... You will be redirected shortly
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
-        <a class="btn-flat" v-on:click="create_new_workspace">Create Workspace</a>
+        <a class="btn-flat" v-bind:class="creating? 'disabled' : ''" v-on:click="create_new_workspace">Create Workspace</a>
       </div>
     </div>
     <header>
@@ -179,6 +195,7 @@ export default {
       create_failed: null,
       cache_size: null,
       quotas: null,
+      creating: false,
       namespace: null,
       global_alerts: []
     }
@@ -241,6 +258,7 @@ export default {
       });
       axios.post(url)
         .then(response => {
+          this.creating = false;
           if (response.data.failed) {
             this.create_failed = response.data.reason
           }
@@ -267,7 +285,9 @@ export default {
           window.materialize.toast({
             html: "Failed to create workspace"
           })
-        })
+        });
+      this.creating = true;
+      this.create_failed = null;
     },
 
     getWorkspaces() {
