@@ -1,12 +1,13 @@
 # Changelog
 
-## Unreleased Changes
+## 0.18.2 (Beta)
 
 Bug Fixes:
 * Fixed inability to create authorized domain bypass workspaces
 * Fixed creation of fake data model samples in bypass workspaces
 * Fixed bad reference type when executing bypass jobs
 * Fixed `copy_to_workspace` crashing if files are copied to the same location
+* Fixed cache population not working
 
 ## 0.18.1 (Beta)
 

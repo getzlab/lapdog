@@ -479,7 +479,9 @@ class WorkspaceManager(dog.WorkspaceManager):
         for etype in self.get_entity_types():
             self._get_entities_internal(etype)
         for config in self.list_configs():
-            self.get_config(config)
+            self.get_config(
+                "{}/{}".format(config['namespace'], config['name'])
+            )
             try:
                 if 'methodRepoMethod' in config:
                     self.get_wdl(
