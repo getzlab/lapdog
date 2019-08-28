@@ -1,5 +1,10 @@
 # Changelog
 
+# 0.18.4 (Beta)
+
+Bug Fixes:
+* Fixed a bug preventing cache population
+
 # 0.18.3 (Beta)
 
 Bug Fixes:

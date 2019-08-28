@@ -519,7 +519,9 @@ class WorkspaceManager(dog.WorkspaceManager):
             try:
                 if 'methodRepoMethod' in config:
                     self.get_wdl(
-                        config['methodRepoMethod']
+                        config['methodRepoMethod']['methodPath']
+                        if 'sourceRepo' in config['methodRepoMethod'] and config['methodRepoMethod']['sourceRepo'] == 'dockstore'
+                        else "{}/{}".format(config['methodRepoMethod']['methodNamespace'], config['methodRepoMethod']['methodName'])
                     )
             except NameError:
                 # wdl not found
