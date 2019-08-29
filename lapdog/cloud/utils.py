@@ -186,6 +186,9 @@ def proxy_group_for_user(account):
     """
     Gets a firecloud proxy group name for a given account
     """
+    # ick!
+    if account == 'jcha@broadinstitute.org':
+        return 'jcha-lapdog'
     info = account.split('@')
     return info[0]+'-'+info[1].split('.')[0]+'-lapdog'
 

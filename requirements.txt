@@ -1,5 +1,6 @@
 firecloud>=0.16.9
-firecloud-dalmatian>=0.0.14
+firecloud-dalmatian>=0.0.17
+hound>=0.2.0
 google-cloud-storage>=1.13.2
 PyYAML>=5.1
 agutil>=4.0.2
@@ -16,3 +17,4 @@ cryptography>=2.3.0
 pyOpenSSL>=19.0.0
 protobuf>=3.6.0
 iso8601>=0.1.12
+pandas>=0.20.0

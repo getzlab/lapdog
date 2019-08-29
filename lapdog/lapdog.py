@@ -26,8 +26,8 @@ from io import StringIO
 from . import adapters
 from .adapters import get_operation_status, mtypes, NoSuchSubmission, CommandReader, build_input_key
 from .cache import cache_init, cache_path
-from .cloud.utils import proxy_group_for_user, ld_acct_in_project
-from .gateway import Gateway, creation_success_pattern, get_gcloud_account, get_application_default_account, capture
+from .cloud.utils import ld_acct_in_project
+from .gateway import Gateway, creation_success_pattern, get_gcloud_account, get_application_default_account, capture, get_proxy_account
 from itertools import repeat
 import pandas as pd
 from socket import gethostname
@@ -39,6 +39,40 @@ import shutil
 import numpy as np
 import requests
 import pickle
+
+# ==============================================================================
+# Dalmatian Shims: Temporary overloads to avoid over-frequent dalmatian updates
+# ==============================================================================
+
+# Shim copyblob: adds random backoff to rewrite
+import random
+
+def copyblob(src, dest, credentials=None, user_project=None, max_backoff_time=5):
+    """
+    Copy blob from src -> dest
+    src and dest may either be a gs:// path or a premade blob object
+    """
+    if isinstance(src, str):
+        src = getblob(src, credentials, user_project)
+    if isinstance(dest, str):
+        dest = getblob(dest, credentials, user_project)
+    token, progress, total = dest.rewrite(src)
+    n = 0
+    while token is not None:
+        try:
+            token, progress, total = dest.rewrite(src, token)
+            if n > 0:
+                # After a successful block, if we encountered failures, sleep 1 second
+                time.sleep(1)
+        except (storage.blob.exceptions.InternalServerError, storage.blob.exceptions.TooManyRequests):
+            backoff = (2**n) + random.random()
+            if backoff <= max_backoff_time:
+                time.sleep(backoff)
+                n += 1
+            else:
+                raise
+    return dest.exists()
+# ==============================================================================
 
 lapdog_id_pattern = re.compile(r'[0-9a-f]{32}')
 global_id_pattern = re.compile(r'lapdog/(.+)')
@@ -479,11 +513,15 @@ class WorkspaceManager(dog.WorkspaceManager):
         for etype in self.get_entity_types():
             self._get_entities_internal(etype)
         for config in self.list_configs():
-            self.get_config(config)
+            self.get_config(
+                "{}/{}".format(config['namespace'], config['name'])
+            )
             try:
                 if 'methodRepoMethod' in config:
                     self.get_wdl(
-                        config['methodRepoMethod']
+                        config['methodRepoMethod']['methodPath']
+                        if 'sourceRepo' in config['methodRepoMethod'] and config['methodRepoMethod']['sourceRepo'] == 'dockstore'
+                        else "{}/{}".format(config['methodRepoMethod']['methodNamespace'], config['methodRepoMethod']['methodName'])
                     )
             except NameError:
                 # wdl not found
@@ -815,6 +853,10 @@ class WorkspaceManager(dog.WorkspaceManager):
         if key not in self.cache or self.cache[key] is None:
             self.cache[key] = attrs
         else:
+            if isinstance(attrs, pd.Series):
+                df = pd.DataFrame(attrs).T
+            else:
+                df = attrs.copy()
             # 1) Outer join using new columns only. This will add new rows and columns
             self.cache[key] = self.cache[key].join(
                 df[[col for col in df.columns if col not in self.cache[key].columns]],
@@ -885,11 +927,11 @@ class WorkspaceManager(dog.WorkspaceManager):
         else:
             # 1) Outer join using new columns only. This will add new rows and columns
             self.cache[key] = self.cache[key].join(
-                df[[col for col in df.columns if col not in self.cache[key].columns]],
+                updates[[col for col in updates.columns if col not in self.cache[key].columns]],
                 how='outer'
             )
             # 2) Update. This will overrwrite existing columns that have new values
-            self.cache[key].update(df)
+            self.cache[key].update(updates)
         self.dirty.add(key)
         if 'entity_types' not in self.cache:
             self.cache['entity_types'] = {}
@@ -1299,7 +1341,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                 try:
                     with self.hound.with_reason('<Automated> Auto-add lapdog proxy-group to workspace'):
                         response = self.update_acl({
-                            proxy_group_for_user(get_application_default_account())+'@firecloud.org': 'WRITER'
+                            get_proxy_account(): 'WRITER'
                         })
                 except:
                     traceback.print_exc()
@@ -1319,13 +1361,15 @@ class WorkspaceManager(dog.WorkspaceManager):
         """
 
         bucket_id = self.get_bucket_id()
+        seen = set()
 
         def copy_to_workspace(value):
             if isinstance(value, str) and value.startswith('gs://'):
                 src = getblob(value)
                 destpath = 'gs://{}/{}'.format(bucket_id, src.name)
-                if src.bucket.name != bucket_id:
+                if not (src.bucket.name == bucket_id or destpath in seen):
                     copyblob(src, destpath)
+                    seen.add(destpath)
                     return destpath
             return value
 
@@ -1721,7 +1765,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                     'type': param['inputType'],
                     'required': not param['optional']
                 }
-                for param in getattr(fc, '__post')(
+                for param in getattr(firecloud.api, '__post')(
                     '/api/inputsOutputs',
                     data=json.dumps(preflight.config['methodRepoMethod']),
                     timeout=2 # If it takes too long, just give up on typechecking
@@ -1785,20 +1829,22 @@ class WorkspaceManager(dog.WorkspaceManager):
             while True:
                 # Just keep trying until we land on a workspace we can use
                 authdomain_child = WorkspaceManager(
-                    self.namespace,
-                    'ld-auth-{}'.format(md5(authdomain_child.workspace.encode()).hexdigest())
+                    '{}/ld-auth-{}'.format(
+                        self.namespace,
+                        md5(authdomain_child.workspace.encode()).hexdigest()
+                    )
                 )
                 try:
                     authdomain_child.get_workspace_metadata()
                 except dog.APIException as e:
-                    if e.status_code == 404:
+                    if e.response.status_code == 404:
                         # Does not exist or we just don't have permissions to see it
                         try:
                             authdomain_child.live = True
                             authdomain_child.create_workspace() # create_workspace will automatically update ACL
                             break
                         except dog.APIException as e:
-                            if e.status_code == 409:
+                            if e.response.status_code == 409:
                                 # Already exists, we just can't see it, so try again with a new name
                                 continue
                             raise
@@ -1808,7 +1854,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                         authdomain_child.update_acl({proxy_acct: 'WRITER'})
                         break
                     except dog.APIException as e:
-                        if e.status_code not in {401, 403}:
+                        if e.response.status_code not in {401, 403}:
                             # Some other non-permissions status
                             raise
                         # Dont' have permissions to modify ACL
@@ -1822,13 +1868,15 @@ class WorkspaceManager(dog.WorkspaceManager):
                 input()
             dest_bucket = authdomain_child.get_bucket_id()
             # Bypass Step 2) Copy all the parsed input data to the bypass workspace
+            copied = set()
             def copy_to_bypass(cell):
                 if isinstance(cell, str) and cell.startswith('gs://'):
                     src = getblob(cell)
                     destpath = 'gs://{}/{}'.format(dest_bucket, src.name)
-                    if cell != destpath:
+                    if not (cell == destpath or destpath in copied):
                         copyblob(src, destpath)
                         time.sleep(0.5)
+                        copied.add(destpath)
                     return destpath
                 elif isinstance(cell, list):
                     return [
@@ -1868,12 +1916,12 @@ class WorkspaceManager(dog.WorkspaceManager):
                     bypass_data['case_sample'] = ['fake_case_sample'] * len(bypass_data)
                     authdomain_child.upload_samples(pd.DataFrame.from_dict(
                         {'participant_id': ['fake_participant']}
-                    ).set_index(pd.Index(['case_sample'], name='sample_id')))
+                    ).set_index(pd.Index(['fake_case_sample'], name='sample_id')))
                 if 'control_sample' not in bypass_data.columns:
                     bypass_data['control_sample'] = ['fake_control_sample'] * len(bypass_data)
                     authdomain_child.upload_samples(pd.DataFrame.from_dict(
                         {'participant_id': ['fake_participant']}
-                    ).set_index(pd.Index(['control_sample'], name='sample_id')))
+                    ).set_index(pd.Index(['fake_control_sample'], name='sample_id')))
             # Now actually upload
             with authdomain_child.hound.with_reason('Bypassing authorized domain in {}/{}'.format(self.namespace, self.workspace)):
                 authdomain_child.upload_entities(
@@ -1913,7 +1961,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             authdomain_child.update_config(cfg)
             # Bypass Step 4) Final: Launch submission in new workspace
             global_id, local_id, operation_id = authdomain_child.execute(
-                cfg,
+                "{}/{}".format(cfg['namespace'], cfg['name']),
                 set_id,
                 'this.{}s'.format(preflight.config['rootEntityType']),
                 preflight.config['rootEntityType']+'_set',

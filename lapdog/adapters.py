@@ -28,7 +28,7 @@ from iso8601 import parse_date as parse_time
 utc_offset = datetime.datetime.fromtimestamp(time.time()) - datetime.datetime.utcfromtimestamp(time.time())
 
 def sleep_until(dt):
-    sleep_time = (dt - datetime.datetime.now()).total_seconds()
+    sleep_time = (dt - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
     if sleep_time > 0:
         time.sleep(sleep_time)
 
@@ -182,7 +182,7 @@ class Call(object):
             delta = (
                 parse_time(data['metadata']['endTime'])
                 if 'endTime' in data['metadata']
-                else datetime.datetime.utcnow()
+                else datetime.datetime.now(datetime.timezone.utc)
             ) - parse_time(data['metadata']['startTime'])
             return delta.total_seconds() / 3600
         except:
@@ -410,7 +410,7 @@ class SubmissionAdapter(object):
                     if 'metadata' in status and 'startTime' in status['metadata']:
                         maxTime = (
                             parse_time(status['metadata']['endTime']) if 'endTime' in status['metadata']
-                            else datetime.datetime.utcnow()
+                            else datetime.datetime.now(datetime.timezone.utc)
                         ) - parse_time(status['metadata']['startTime'])
                         maxTime = maxTime.total_seconds() / 3600
                     for wf in workflow_metadata:
@@ -477,7 +477,7 @@ class SubmissionAdapter(object):
                                 delta = (
                                     parse_time(call['metadata']['endTime'])
                                     if 'endTime' in call['metadata']
-                                    else datetime.datetime.utcnow()
+                                    else datetime.datetime.now(datetime.timezone.utc)
                                 ) - parse_time(call['metadata']['startTime'])
                                 delta = delta.total_seconds() / 3600
                                 # if delta > maxTime:
@@ -499,7 +499,7 @@ class SubmissionAdapter(object):
             if 'metadata' in status and 'startTime' in status['metadata']:
                 maxTime = (
                     parse_time(status['metadata']['endTime']) if 'endTime' in status['metadata']
-                    else datetime.datetime.utcnow()
+                    else datetime.datetime.now(datetime.timezone.utc)
                 ) - parse_time(status['metadata']['startTime'])
                 maxTime = maxTime.total_seconds() / 3600
             cost += maxTime * get_hourly_cost(

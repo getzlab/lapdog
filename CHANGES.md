@@ -3,7 +3,73 @@
 ## Unreleased Changes
 
 Other Changes:
+* Updated ui dependencies. Please run `lapdog ui --install` to reinstall the UI
+after updating to this version of lapdog
 * Updated some python dependencies
+
+## 0.18.4 (Beta)
+
+Bug Fixes:
+* Fixed a bug preventing cache population
+
+## 0.18.3 (Beta)
+
+Bug Fixes:
+* Fixed 5XX errors during authorized domain bypass
+
+Other Changes:
+* Improved UI feedback when creating new workspaces
+
+## 0.18.2 (Beta)
+
+Bug Fixes:
+* Fixed inability to create authorized domain bypass workspaces
+* Fixed creation of fake data model samples in bypass workspaces
+* Fixed bad reference type when executing bypass jobs
+* Fixed `copy_to_workspace` crashing if files are copied to the same location
+* Fixed cache population not working
+
+## 0.18.1 (Beta)
+
+Bug Fixes:
+* Fixed cost estimation sometimes crashing with UTC errors
+* Reduced probability of broken proxy account emails
+
+## 0.18.0 (Beta)
+
+Breaking Changes:
+* Switched to only accept "standardized references" for all functions:
+    * Workspaces are always referenced as a single namespace/workspace string. Ie: `lapdog.WorkspaceManager('namespace/workspace')`
+    * Method Configurations are always referenced as a single namespace/name string. Ie: `WorkspaceManager.get_config('namespace/name')`
+      * Incomplete `name` allowed if unique
+    * Methods are always referenced as a single namespace/method/version string. Ie: `WorkspaceManager.get_wdl('namespace/method/version')`
+      * Incomplete `namespace/method` references the latest version
+      * Incomplete `method` only allowed if unique
+      * Dockstore methods allowed in form `dockstore.org/repo/method` or `dockstore.org/repo/method/version`
+* WorkspaceManager properties removed (`.samples`, `.attributes`, etc). Use `.get_samples()`, `.get_attributes()`, etc
+* `WorkspaceManager.firecloud_workspace` renamed to `WorkspaceManager.get_workspace_metadata()`
+* `WorkspaceManager.entity_types` renamed to `WorkspaceManager.get_entity_types()`
+
+Bug Fixes:
+* Fixed cache switching to offline mode unnecessarily. Cache now only switches offline
+on failed writes
+
+New Features:
+* Automatic Engine updates enabled
+* Added `WorkspaceManager.copy_data()` to copy all files referenced in the workspace's
+data model into the workspace bucket
+
+Other Changes:
+* Improved code readability for all 0 who read the code
+* Improved performance of adapter.update()
+* Dalmatian Cache layer migrated back into lapdog
+* Improved `WorkspaceManager.mop()`
+* Updated dalmatian to 0.0.17
+
+### Patch Contents
+This patch introduces automatic updates. After you have patched your namespace to
+0.18.0, your namespace will receive automatic updates. Hopefully, you will not have
+to apply manual updates any more. Also updates role definition for Engine Admin
 
 ## 0.17.7 (Beta)
 

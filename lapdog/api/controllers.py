@@ -22,7 +22,7 @@ import yaml
 from .. import firecloud_status
 from ..cache import cached, cache_fetch, cache_write, cache_init, cache_path
 from ..adapters import NoSuchSubmission, Gateway, get_operation_status
-from ..gateway import get_application_default_account, proxy_group_for_user
+from ..gateway import get_application_default_account, get_proxy_account
 import re
 import contextlib
 import pickle
@@ -240,10 +240,13 @@ def register(namespace, name):
 
 
 
-@cached(120)
+@cached(60)
 @controller
 def service_account():
-    return proxy_group_for_user(get_application_default_account())+'@firecloud.org', 200
+    acct = get_proxy_account(get_application_default_account())
+    if acct:
+        return acct, 200
+    return '<Not yet initialized. Register with any Lapdog Engine first>', 200
 
 @cached(60)
 @controller
@@ -462,24 +465,31 @@ def sync_cache(namespace, name):
 def create_workspace(namespace, name, parent):
     ws = lapdog.WorkspaceManager("{}/{}".format(namespace,name), workspace_seed_url=None)
     parent = None if '/' not in parent else lapdog.WorkspaceManager(parent, workspace_seed_url=None)
-    with lapdog.capture() as (stdout, stderr):
-        result = ws.create_workspace(parent)
-        stdout.seek(0,0)
-        stderr.seek(0,0)
-        text = stdout.read() + stderr.read()
     try:
-        text = json.loads(text.strip())['message']
-    except:
-        pass
-    if not result:
+        ws.create_workspace(parent)
+        return {
+            'failed': False,
+            'reason': 'success'
+        }, 200
+    except APIException as e:
+        try:
+            reason = e.response.json()
+            if 'message' in reason:
+                reason = reason['message']
+            return {
+                'failed': True,
+                'reason': reason
+            }, 200
+        except:
+            pass
         return {
             'failed': True,
-            'reason': text
+            'reason': traceback.print_exc()
         }, 200
     return {
-        'failed': False,
-        'reason': 'success'
-    }
+        'failed': True,
+        'reason': "Unknown"
+    }, 200
 
 @cached(60)
 @controller
