@@ -288,10 +288,12 @@ def sign_object(data, blob, credentials, keypath=None):
         keypath = 'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(ld_project=os.environ.get('GCP_PROJECT'))
     blob.upload_from_string(_get_signature(data, keypath, credentials))
 
-def verify_signature(blob, data, keypath=None, _is_blob=True):
+def verify_signature(blob, data, keypath=None, credentials=None, _is_blob=True):
     if keypath is None:
         keypath = 'projects/{ld_project}/locations/us/keyRings/lapdog/cryptoKeys/lapdog-sign'.format(ld_project=os.environ.get('GCP_PROJECT'))
-    for key in get_crypto_keys(keypath, generate_default_session().credentials):
+    if credentials is None:
+        credentials = generate_default_session().credentials
+    for key in get_crypto_keys(keypath, credentials):
         try:
             serialization.load_pem_public_key(
                 kms.KeyManagementServiceClient().get_public_key(key).pem.encode('ascii'),

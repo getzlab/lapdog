@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Other Changes:
+* Updated some python dependencies
+
 ## 0.17.7 (Beta)
 
 Bug Fixes:
