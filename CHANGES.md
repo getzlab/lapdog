@@ -5,6 +5,7 @@
 Other Changes:
 * Updated ui dependencies. Please run `lapdog ui --install` to reinstall the UI
 after updating to this version of lapdog
+* Updated some python dependencies
 
 ## 0.18.4 (Beta)
 
