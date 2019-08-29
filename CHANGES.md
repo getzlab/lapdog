@@ -1,11 +1,17 @@
 # Changelog
 
-# 0.18.4 (Beta)
+## Unreleased Changes
+
+Other Changes:
+* Updated ui dependencies. Please run `lapdog ui --install` to reinstall the UI
+after updating to this version of lapdog
+
+## 0.18.4 (Beta)
 
 Bug Fixes:
 * Fixed a bug preventing cache population
 
-# 0.18.3 (Beta)
+## 0.18.3 (Beta)
 
 Bug Fixes:
 * Fixed 5XX errors during authorized domain bypass
