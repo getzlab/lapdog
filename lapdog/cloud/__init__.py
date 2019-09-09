@@ -32,8 +32,8 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
         with open(os.path.join(tempdir, 'requirements.txt'), 'w') as w:
             w.write('google-auth==1.6.3\n')
             w.write('google-cloud-storage==1.14.0\n')
-            w.write('google-cloud-kms==1.0.0\n')
-            w.write('cryptography==2.3\n')
+            w.write('google-cloud-kms==1.2.1\n')
+            w.write('cryptography==2.7\n')
         shutil.copyfile(
             os.path.join(
                 os.path.dirname(__file__),
