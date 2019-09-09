@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.18.5 (Beta)
 
 Other Changes:
 * Updated ui dependencies. Please run `lapdog ui --install` to reinstall the UI
