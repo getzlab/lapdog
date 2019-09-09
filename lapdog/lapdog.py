@@ -1584,7 +1584,16 @@ class WorkspaceManager(dog.WorkspaceManager):
         * (.workflow_entities): The list of entities for each workflow (from evaluating the expression, if provided)
         """
         config = self.get_config(config_name)
-        if (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
+        if 'rootEntityType' not in config:
+            if etype is None:
+                return PreflightFailure(False, "No entity type for this configuration")
+            if expression is None:
+                expression = 'this'
+            config = {
+                **config,
+                **{'rootEntityType': etype}
+            }
+        elif (expression is not None) ^ (etype is not None and etype != config['rootEntityType']):
             return PreflightFailure(False, "expression and etype must BOTH be None or a string value")
         if etype is None:
             etype = config['rootEntityType']
@@ -1601,7 +1610,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         workflow_entities = self.get_evaluator(self.live)(
             etype,
             entity,
-            (expression if expression is not None else 'this')+'.%s_id' % config['rootEntityType']
+            (expression if expression is not None else 'this')+'.%s_id' % etype
         )
         if isinstance(workflow_entities, dict) and 'statusCode' in workflow_entities and workflow_entities['statusCode'] >= 400:
             return PreflightFailure(False, workflow_entities['message'] if 'message' in workflow_entities else repr(workflow_entities))

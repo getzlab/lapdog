@@ -5,6 +5,8 @@
 Other Changes:
 * Updated ui dependencies. Please run `lapdog ui --install` to reinstall the UI
 after updating to this version of lapdog
+* Lapdog can now run method configurations which do not reference the entity data model.
+Simply provide a dummy entity and type to run the submission
 
 ## 0.18.4 (Beta)
 
