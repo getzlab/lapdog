@@ -17,7 +17,7 @@ def insert_resolution(request):
     It is deployed once into my personal project which serves as a centralized
     database.
     """
-    print(request.headers)
+    logger = utils.CloudLogger().log_request(request)
     try:
         data = request.get_json()
 
@@ -139,6 +139,13 @@ def insert_resolution(request):
                             },
                             409
                         )
+                    logger.log(
+                        "Adding new resolution",
+                        namespace=data['namespace'],
+                        project_id=data['project'],
+                        admin=token_data['email'],
+                        severity='NOTICE'
+                    )
                     blob.upload_from_string(
                         data['project'].encode()
                     )
@@ -155,6 +162,7 @@ def insert_resolution(request):
         )
 
     except:
+        logger.log_exception()
         return (
             {
                 'error': "Unknown Error",

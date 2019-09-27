@@ -17,6 +17,7 @@ import time
 
 @utils.cors("POST")
 def register(request):
+    logger = utils.CloudLogger().log_request(request)
     try:
         data = request.get_json()
 
@@ -115,6 +116,12 @@ def register(request):
         response = utils.query_service_account(default_session, account_email)
         if response.status_code == 404:
             account_name = account_email.split('@')[0]
+            logger.log(
+                'Issuing new pet service account',
+                user=token_data['email'],
+                service_account=account_email,
+                severity='DEBUG'
+            )
             response = default_session.post(
                 'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts'.format(
                     project=os.environ.get('GCP_PROJECT')
@@ -154,6 +161,15 @@ def register(request):
 
         # 4) Update worker bindings
 
+        logger.log(
+            "Updating service account bindings",
+            account=account_email,
+            bindings={
+                os.environ.get("FUNCTION_IDENTITY"): 'roles/iam.serviceAccountUser',
+                account_email: 'roles/iam.serviceAccountUser'
+            }
+        )
+
         response = default_session.post(
             'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{account}:setIamPolicy'.format(
                 project=os.environ.get('GCP_PROJECT'),
@@ -188,6 +204,15 @@ def register(request):
 
         # 5) Update project bindings
 
+        logger.log(
+            "Updating project-wide iam roles",
+            bindings={
+                account_email: 'Pet_account',
+                token_data['email']: 'Lapdog_user'
+            },
+            severity="INFO"
+        )
+
         status, response = utils.update_iam_policy(
             default_session,
             {
@@ -206,6 +231,11 @@ def register(request):
             )
 
         # 6) Generate Key
+
+        logger.log(
+            'Issuing new service account key',
+            service_account=account_email
+        )
 
         response = default_session.post(
             'https://iam.googleapis.com/v1/projects/{project}/serviceAccounts/{email}/keys'.format(
@@ -261,6 +291,7 @@ def register(request):
                 )
                 break
             except google.auth.exceptions.RefreshError:
+                logger.log_exception("Service account key not ready")
                 time.sleep(10) # need more time for key to propagate
         if response.status_code != 200:
             return (
@@ -355,6 +386,7 @@ def register(request):
                 200
             )
     except requests.ReadTimeout:
+        logger.log_exception('Firecloud timeout')
         return (
             {
                 'error': 'timeout to firecloud',
@@ -363,7 +395,7 @@ def register(request):
             400
         )
     except:
-        traceback.print_exc()
+        logger.log_exception()
         return (
             {
                 'error': 'Unknown Error',

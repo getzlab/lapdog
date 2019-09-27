@@ -17,6 +17,7 @@ def update(request):
     """
     Handles update request from the master update webhook
     """
+    logger = utils.CloudLogger().log_request(request)
     try:
         # 1) Validate the request
         if 'X-Lapdog-Signature' not in request.headers:
@@ -114,7 +115,11 @@ def update(request):
 
         # 3) Launch pipeline
 
-        print(pipeline)
+        logger.log(
+            "Launching PAPIv2 pipeline",
+            pipeline=pipeline['pipeline'],
+            severity='NOTICE'
+        )
         response = utils.generate_default_session(
             [
                 "https://www.googleapis.com/auth/cloud-platform",
@@ -139,7 +144,7 @@ def update(request):
                 400
             )
         except:
-            traceback.print_exc()
+            logger.log_exception("PAPIv2 request failed")
             return (
                 {
                     'error': 'Unable to start update',
@@ -148,7 +153,7 @@ def update(request):
                 500
             )
     except:
-        traceback.print_exc()
+        logger.log_exception()
         return {
             'error': 'Unknown error',
             'message': traceback.format_exc()
@@ -160,6 +165,7 @@ def webhook(request):
     Admins: Use this to trigger a self-update to the given reference (commit, tag, or branch)
     Control who has access to trigger updates with the invoker permissions to the webhook
     """
+    logger = utils.CloudLogger().log_request(request)
     try:
         # 1) Check token details to ensure user in whitelist
         token = utils.extract_token(request.headers, None)
@@ -218,6 +224,14 @@ def webhook(request):
                     'serviceAccount:lapdog-functions@{}.iam.gserviceaccount.com'.format(resolution)
                     for resolution in resolutions
                 ]
+        logger.log(
+            "Updating project-wide IAM roles",
+            bindings={
+                'lapdog-functions@{}.iam.gserviceaccount.com'.format(resolution): 'projects/broad-cga-aarong-gtex/roles/signingKeyVerifier'
+                for resolution in resolutions
+            },
+            severity='INFO'
+        )
         response = default_session.post(
             'https://cloudkms.googleapis.com/v1/projects/broad-cga-aarong-gtex/locations/global/keyRings/lapdog:setIamPolicy',
             headers={'Content-Type': 'application/json'},
@@ -237,6 +251,10 @@ def webhook(request):
             'results': []
         }
         failed = 200
+        logger.log(
+            'Generating new signature',
+            data=json.dumps(update_payload)
+        )
         signature = utils._get_signature(json.dumps(update_payload).encode(), utils.UPDATE_KEY_PATH, default_session.credentials)
         for resolution in resolutions:
             try:
@@ -245,6 +263,10 @@ def webhook(request):
                     version=utils.__API_VERSION__['update']
                 )
                 if default_session.options(update_url).status_code == 204:
+                    logger.log(
+                        "Triggering update",
+                        project=resolution
+                    )
                     response = default_session.post(
                         update_url,
                         headers={
@@ -268,6 +290,7 @@ def webhook(request):
                         'code': 0
                     })
             except:
+                logger.log_exception("Failed to update project", project=resolution)
                 failed = max(failed, 500)
                 status['results'].append({
                     'project': resolution,
@@ -278,7 +301,7 @@ def webhook(request):
 
         return status, failed
     except:
-        traceback.print_exc()
+        logger.log_exception()
         return {
             'error': 'Unknown error',
             'message': traceback.format_exc()

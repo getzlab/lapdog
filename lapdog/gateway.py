@@ -72,7 +72,8 @@ FUNCTIONS_PERMISSIONS = [
     "resourcemanager.projects.setIamPolicy",
     "compute.projects.get",
     "compute.regions.get",
-    "compute.subnetworks.setPrivateIpGoogleAccess"
+    "compute.subnetworks.setPrivateIpGoogleAccess",
+    "logging.logEntries.create"
 ]
 
 ADMIN_PERMISSIONS = [
@@ -803,7 +804,6 @@ class Gateway(object):
         """
         response = get_user_session().post(
             self.get_endpoint('query'),
-            headers={'Content-Type': 'application/json'},
         )
         return response.status_code == 200
 
@@ -971,7 +971,6 @@ class Gateway(object):
         warnings.warn("[BETA] Gateway Quotas")
         response = get_user_session().post(
             self.get_endpoint('quotas'),
-            headers={'Content-Type': 'application/json'},
         )
         if response.status_code == 200:
             return response.json()

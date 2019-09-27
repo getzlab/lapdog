@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased CHanges
+
+Other Changes:
+* Added stackdriver logs to all endpoints. These logs will contain information about
+the request (IP, physical location, etc), any exceptions, as well as other details
+regarding function operation. All endpoint versions have been increased
+
+### Patch Contents
+All cloud endpoint versions were increased to incorporate the new logs
+
 ## 0.18.5 (Beta)
 
 Other Changes:

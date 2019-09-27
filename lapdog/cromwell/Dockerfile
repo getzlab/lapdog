@@ -36,10 +36,10 @@ RUN apt-get update && \
     apt-get install python-pip --yes
 
 # Install Python "requests" (for cromwell_driver.py) package
-RUN pip install requests simplejson cryptography==0.6.1
+RUN pip install requests==2.4.3 simplejson==3.16.0 cryptography==0.6.1
 
 # Install Google Python client (for file_util.py) package
-RUN pip install --upgrade google-api-python-client oauth2client
+RUN pip install google-api-python-client==1.7.9 oauth2client==4.1.3
 
 # Remove pip
 RUN apt-get remove --yes python-pip && \

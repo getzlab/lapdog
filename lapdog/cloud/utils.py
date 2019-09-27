@@ -1,5 +1,6 @@
-from google.cloud import kms_v1 as kms, storage
+from google.cloud import kms_v1 as kms, storage, logging
 import google.auth
+from google.cloud.logging.resource import Resource as LogResource
 from google.auth.transport.requests import AuthorizedSession
 import google.oauth2.service_account
 import google.oauth2.credentials
@@ -17,16 +18,17 @@ from functools import lru_cache, wraps
 import traceback
 
 __API_VERSION__ = {
-    'submit': 'v7',
-    'abort': 'v2',
-    'register': 'v3',
-    'signature': 'v2',
-    'query': 'v2',
-    'quotas': 'v4',
+    'submit': 'v8',
+    'abort': 'v3',
+    'register': 'v4',
+    'signature': 'v3',
+    'query': 'v3',
+    'quotas': 'v5',
     'resolve': 'v4',
-    'update': 'v1',
+    'update': 'v2',
     'existence': 'frozen'
 }
+
 # The api version will allow versioning of cloud functions
 # The patching system will be as follows:
 # End users who update their lapdog will encounter errors because the cloud endpoints do not exist
@@ -436,3 +438,92 @@ def enabled_regions(project=None):
     except:
         traceback.print_exc()
     return ['us-central1']
+
+class CloudLogger(object):
+    def __init__(self, function_name=None, function_region=None, function_project=None):
+        self.logger = logging.Client(function_project).logger('lapdog-api-logging%2Fcloud-functions')
+        self.resource = LogResource(
+            type='cloud_function',
+            labels={
+                'function_name': os.environ.get("FUNCTION_NAME") if function_name is None else function_name,
+                'project_id': os.environ.get("GCP_PROJECT") if function_project is None else function_project,
+                'region': os.environ.get("FUNCTION_REGION") if function_region is None else function_region
+            }
+        )
+
+    def log_request(self, request):
+        headers = request.headers
+        payload = request.get_json()
+        self.log(
+            json={
+                'message': "Initialized logging with request ({})".format(
+                    self.resource.labels['function_name']
+                ),
+                'request': {
+                    'url': str(request.url),
+                    'origin': headers['X-Forwarded-For'] if 'X-Forwarded-For' in headers else request.remote_addr,
+                    'payload_size': request.content_length,
+                    'content_type': request.content_type,
+                    'headers': {
+                        k:headers.getlist(k) if k != 'Authorization' else ['****************']
+                        for k,v in headers
+                    },
+                    'payload': {
+                        k:v if k != 'token' else '****************'
+                        for k,v in payload.items()
+                    } if isinstance(payload, dict) else None
+                }
+            },
+            severity='DEBUG'
+        )
+        return self
+
+    def log_exception(self, message='Unhandled Exception'):
+        self.log(
+            message=message,
+            traceback=traceback.format_exc(),
+            severity='WARNING'
+        )
+
+    def log(self, text=None, json=None, severity='DEFAULT', **kwargs):
+        if isinstance(severity, str):
+            severity = {
+                'DEFAULT': 0,
+                'DEBUG': 100,
+                'INFO': 200,
+                'NOTICE': 300,
+                'WARNING': 400,
+                'WARN': 400,
+                'ERROR': 500,
+                'ERR': 500,
+                'CRITICAL': 600,
+                'ALERT': 700,
+                'EMERGENCY': 800
+            }[severity]
+        if len(kwargs):
+            if json is not None:
+                json = {**json, **kwargs}
+            else:
+                json = kwargs
+        # Mask user tokens
+        if isinstance(json, dict) and 'token' in json:
+            json['token'] = '****************'
+        if text is None:
+            if json is None:
+                raise ValueError("No input provided")
+            self.logger.log_struct(json, resource=self.resource, severity=severity)
+        elif json is not None:
+            self.logger.log_struct(
+                {
+                    'message': text,
+                    'json': json
+                },
+                resource=self.resource,
+                severity=severity
+            )
+        else:
+            self.logger.log_text(
+                text,
+                resource=self.resource,
+                severity=severity
+            )

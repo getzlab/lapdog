@@ -272,7 +272,6 @@ def __project_admin_apply_patch(namespace):
         endpoint, version = redaction.split('-')
         _deploy('redacted', endpoint, functions_account, project, version)
 
-
 def patch_role(session, url, title, permissions):
     url = "{}/{}".format(url, title)
     response = session.get(

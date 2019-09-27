@@ -11,6 +11,7 @@ import traceback
 
 @utils.cors('DELETE')
 def abort_submission(request):
+    logger = utils.CloudLogger().log_request(request)
     try:
 
         data = request.get_json()
@@ -153,6 +154,11 @@ def abort_submission(request):
 
         # 5) Generate abort key
 
+        logger.log(
+            "Generating new signature",
+            data=data['submission_id']
+        )
+
         utils.sign_object(
             data['submission_id'].encode(),
             utils.getblob(
@@ -167,6 +173,12 @@ def abort_submission(request):
 
         if 'hard' in data and data['hard']:
             # 6) Abort operation
+            logger.log(
+                "Hard-aborting submission",
+                submission_id=data['submission_id'],
+                operation_id=submission['operation'],
+                severity='NOTICE'
+            )
             response = core_session.post(
                 "https://genomics.googleapis.com/v2alpha1/{operation}:cancel".format(
                     operation=quote(submission['operation']) # Do not quote slashes here
@@ -183,7 +195,7 @@ def abort_submission(request):
             200
         )
     except:
-        traceback.print_exc()
+        logger.log_exception()
         return (
             {
                 'error': 'Unknown Error',

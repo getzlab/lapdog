@@ -1610,7 +1610,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         workflow_entities = self.get_evaluator(self.live)(
             etype,
             entity,
-            (expression if expression is not None else 'this')+'.%s_id' % etype
+            (expression if expression is not None else 'this')+'.%s_id' % config['rootEntityType']
         )
         if isinstance(workflow_entities, dict) and 'statusCode' in workflow_entities and workflow_entities['statusCode'] >= 400:
             return PreflightFailure(False, workflow_entities['message'] if 'message' in workflow_entities else repr(workflow_entities))

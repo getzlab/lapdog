@@ -13,6 +13,7 @@ import traceback
 
 @utils.cors('POST')
 def create_submission(request):
+    logger = utils.CloudLogger().log_request(request)
     try:
         data = request.get_json()
 
@@ -141,6 +142,11 @@ def create_submission(request):
                 400
             )
 
+        logger.log(
+            "Submission data",
+            json=json.loads(submission.download_as_string())
+        )
+
         # 4) Submit pipelines request
 
         region = 'us-central1'
@@ -249,7 +255,11 @@ def create_submission(request):
                 },
             }
         }
-        print(pipeline)
+        logger.log(
+            "Launching PAPIv2 pipeline",
+            pipeline=pipeline['pipeline'],
+            severity='NOTICE'
+        )
         response = utils.generate_default_session(
             [
                 "https://www.googleapis.com/auth/cloud-platform",
@@ -269,6 +279,11 @@ def create_submission(request):
 
                 # 5) Sign the operation
 
+                logger.log(
+                    "Generating new signature",
+                    data=(data['submission_id'] + operation)
+                )
+
                 utils.sign_object(
                     (data['submission_id'] + operation).encode(),
                     utils.getblob(
@@ -283,7 +298,7 @@ def create_submission(request):
 
                 return operation, 200
         except:
-            traceback.print_exc()
+            logger.log_exception('PAPIv2 request failed')
             return (
                 {
                     'error': 'Unable to start submission',
@@ -299,7 +314,7 @@ def create_submission(request):
             400
         )
     except:
-        traceback.print_exc()
+        logger.log_exception()
         return (
             {
                 'error': 'Unknown Error',

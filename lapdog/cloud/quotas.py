@@ -9,6 +9,8 @@ import traceback
 
 @utils.cors('POST')
 def quotas(request):
+
+    logger = utils.CloudLogger().log_request(request)
     try:
 
         # 1) Validate the token
@@ -117,7 +119,7 @@ def quotas(request):
             200
         )
     except:
-        traceback.print_exc()
+        logger.log_exception()
         return (
             {
                 'error': 'Unknown Error',
