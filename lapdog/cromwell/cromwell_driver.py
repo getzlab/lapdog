@@ -18,8 +18,9 @@ import os
 import subprocess
 import time
 import json
-from simplejson import JSONDecodeError
 import csv
+from google.cloud import logging as stackdriver
+from google.cloud.logging.resource import Resource as LogResource
 
 import requests
 
@@ -29,6 +30,15 @@ import atexit
 import traceback
 import itertools
 import shlex
+
+def gce_get_metadata(path):
+    """Queries the GCE metadata server the specified value."""
+    return requests.get(
+        'http://metadata/computeMetadata/v1/{}'.format(path),
+        headers={
+            'Metadata-Flavor': 'Google'
+        }
+    ).text
 
 def clump(seq, length):
     getter = iter(seq)
@@ -76,6 +86,7 @@ class CromwellDriver(object):
         self.cromwell_proc = None
 
         self.batch_submission = False
+        self.logger = CloudLogger().log_instance()
 
     def start(self, memory=3):
         """Start the Cromwell service."""
@@ -93,6 +104,10 @@ class CromwellDriver(object):
         self.mem = memory
 
         logging.info("Started Cromwell")
+        self.logger.log(
+            'Launching cromwell process',
+            memory=memory
+        )
 
     def check_cromwell(self):
         status = self.cromwell_proc.poll()
@@ -130,15 +145,21 @@ class CromwellDriver(object):
         return r.json()
 
     def abort(self, workflow_id):
+        self.logger.log("Aborting Workflow", workflow_id=workflow_id)
         return requests.post(
             'http://localhost:8000/api/workflows/v1/{0}/abort'.format(workflow_id)
         ).json()
 
     def batch(self, submission_id, wdl, inputs, options, batch_limit, query_limit):
         logging.info("Starting batch request. Waiting for cromwell to start...")
+        self.logger.log(
+            "Beginning batch request",
+            batch_limit=batch_limit,
+            query_limit=query_limit,
+        )
         time.sleep(60)
-        with open(wdl, 'rb') as wdlReader:
-            with open(options, 'rb') as optionReader:
+        with open(wdl, 'r') as wdlReader:
+            with open(options, 'r') as optionReader:
                 opts = json.load(optionReader)
                 opts['google_labels'] = {
                     'lapdog-submission-id':'id-'+submission_id,
@@ -152,7 +173,7 @@ class CromwellDriver(object):
         logging.info("Starting the following configuration: " + json.dumps(data))
         output = []
         first = True
-        with open(inputs, 'rb') as inputReader:
+        with open(inputs, 'r') as inputReader:
             reader = csv.DictReader(inputReader, delimiter='\t', lineterminator='\n')
             with requests.Session() as session:
                 for batch in clump(reader, batch_limit):
@@ -180,6 +201,10 @@ class CromwellDriver(object):
                         for attempt in range(10):
                             try:
                                 data['workflowInputs'] = json.dumps([unpack(line) for line in group])
+                                self.logger.log(
+                                    'Launching workflow batch',
+                                    json=data
+                                )
                                 response = session.post(
                                     'http://localhost:8000/api/workflows/v1/batch',
                                     files=data
@@ -188,12 +213,17 @@ class CromwellDriver(object):
                                 logging.info("Submitted jobs. Begin polling")
                                 break
                             except requests.exceptions.ConnectionError as e:
+                                self.logger.log_exception()
                                 traceback.print_exc()
                                 self.check_cromwell()
                                 logging.info("Failed to connect to Cromwell (attempt %d): %s",
                                     attempt + 1, e)
                                 time.sleep(30)
-                            except JSONDecodeError:
+                            except ValueError:
+                                self.logger.log_exception(
+                                    "JSON Decode error",
+                                    response=response.text if response is not None else None,
+                                )
                                 traceback.print_exc()
                                 self.check_cromwell()
                                 logging.error("Unexpected response from Cromwell: (%d) : %s" % (response.status_code, response.text))
@@ -201,6 +231,10 @@ class CromwellDriver(object):
 
                         if not response:
                             self.check_cromwell()
+                            self.logging.log(
+                                "Cromwell timeout",
+                                severity="WARNING"
+                            )
                             sys_util.exit_with_error(
                                     "Failed to connect to Cromwell after {0} seconds".format(
                                             300))
@@ -211,6 +245,12 @@ class CromwellDriver(object):
                             if job['status'] != 'Submitted' and job['status'] != 'Running':
                                 for job in response:
                                     self.abort(job['id'])
+                                self.logging.log(
+                                    'Unexpected job status',
+                                    status=job['status'],
+                                    jobs=response,
+                                    severity='ERROR'
+                                )
                                 sys_util.exit_with_error(
                                         "Job {} status from Cromwell was not 'Submitted', instead '{}'".format(
                                                 job['id'], job['status']))
@@ -250,12 +290,18 @@ class CromwellDriver(object):
                             ]
                             attempt = 0
                         except requests.exceptions.ConnectionError as e:
+                            self.logger.log_exception()
                             attempt += 1
                             logging.info("Error polling Cromwell job status (attempt %d): %s",
                                 attempt, e)
                             self.check_cromwell()
 
                             if attempt >= max_failed_attempts:
+                                self.logger.log(
+                                    'Cromwell crash with active workflows',
+                                    jobs=chunk,
+                                    severity='WARNING'
+                                )
                                 sys_util.exit_with_error(
                                     "Cromwell did not respond for %d consecutive requests" % attempt)
 
@@ -277,10 +323,14 @@ class CromwellDriver(object):
                             known_failures |= {job['id'] for job in new_failures}
                         if not len(statuses - {'Succeeded', 'Failed', 'Aborted'}):
                             logging.info("All workflows in terminal states")
+                            self.logger.log(
+                                'Batch complete',
+                                json=status_json,
+                            )
                             break
 
                     self.batch_submission = False
-                    logging.info("<SUBMISSION COMPLETE. FINALIZING DATA>")
+
 
                     output += [
                         {
@@ -296,8 +346,17 @@ class CromwellDriver(object):
 
                     if 'Aborted' in statuses:
                         # Quit now. No reason to start a new batch to get aborted
+                        self.logger.log(
+                            'Submission aborted',
+                            json=output
+                        )
                         sys.stderr.write("There were aborted workflows. Aborting submission now.")
                         return output
+        logging.info("<SUBMISSION COMPLETE. FINALIZING DATA>")
+        self.logger.log(
+            'Submission complete. Finalizing data',
+            json=output
+        )
         return output
 
 
@@ -306,9 +365,9 @@ class CromwellDriver(object):
         """Post new job to the server and poll for completion."""
 
         # Add required input files
-        with open(wdl, 'rb') as f:
+        with open(wdl, 'r') as f:
             wdl_source = f.read()
-        with open(workflow_inputs, 'rb') as f:
+        with open(workflow_inputs, 'r') as f:
             wf_inputs = f.read()
 
         files = {
@@ -318,7 +377,7 @@ class CromwellDriver(object):
 
         # Add workflow options if specified
         if workflow_options:
-            with open(workflow_options, 'rb') as f:
+            with open(workflow_options, 'r') as f:
                 wf_options = f.read()
                 files['workflowOptions'] = wf_options
 
@@ -393,6 +452,82 @@ class CromwellDriver(object):
         metadata = self.fetch(session, wf_id=cromwell_id, method='metadata')
 
         return outputs, metadata
+
+
+class CloudLogger(object):
+    def __init__(self, project=None, submission_id=None):
+        self.logger = stackdriver.Client(project).logger('lapdog-api-logging%2Fcromwell')
+        self.labels = {
+            'lapdog-entity-type': 'cromell',
+            'lapdog-submission-id': submission_id if submission_id is not None else os.environ['LAPDOG_SUBMISSION_ID'],
+            'lapdog-engine-project': project if project is not None else os.environ['LAPDOG_PROJECT']
+        }
+
+    def log_instance(self):
+        self.log(
+            'Cromwell Logging started',
+            json={
+                'instance-type': gce_get_metadata('instance/machine-type'),
+                'instance-name': gce_get_metadata('instance/name'),
+                'instance-zone': gce_get_metadata('instance/zone'),
+                'submission-id': self.labels['lapdog-submission-id'],
+                'project': self.labels['lapdog-engine-project']
+            },
+            severity='DEBUG'
+        )
+        return self
+
+    def log_exception(self, message='Unhandled Exception', **kwargs):
+        self.log(
+            message=message,
+            traceback=traceback.format_exc(),
+            severity='WARNING',
+            **kwargs
+        )
+
+    def log(self, text=None, json=None, severity='DEFAULT', **kwargs):
+        if isinstance(severity, str):
+            severity = {
+                'DEFAULT': 0,
+                'DEBUG': 100,
+                'INFO': 200,
+                'NOTICE': 300,
+                'WARNING': 400,
+                'WARN': 400,
+                'ERROR': 500,
+                'ERR': 500,
+                'CRITICAL': 600,
+                'ALERT': 700,
+                'EMERGENCY': 800
+            }[severity]
+        if len(kwargs):
+            if json is not None:
+                json = {k:v for k,v in json.items()}
+                json.update(kwargs)
+            else:
+                json = kwargs
+        # Mask user tokens
+        if isinstance(json, dict) and 'token' in json:
+            json['token'] = '****************'
+        if text is None:
+            if json is None:
+                raise ValueError("No input provided")
+            self.logger.log_struct(json, labels=self.labels, severity=severity)
+        elif json is not None:
+            self.logger.log_struct(
+                {
+                    'message': text,
+                    'json': json
+                },
+                labels=self.labels,
+                severity=severity
+            )
+        else:
+            self.logger.log_text(
+                text,
+                labels=self.labels,
+                severity=severity
+            )
 
 
 if __name__ == '__main__':

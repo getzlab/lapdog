@@ -1,4 +1,3 @@
-from __future__ import print_function
 import sys
 import subprocess
 import time
@@ -122,7 +121,7 @@ class BatchWriter:
 
 writer = BatchWriter()
 while True:
-    line = raw_input() # Dumb, but will crash when stdin closes
+    line = input() # Dumb, but will crash when stdin closes
     if line.rstrip() == '<<<EOF>>>':
         sys.exit(0)
     writer.write(line)

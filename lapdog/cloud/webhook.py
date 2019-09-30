@@ -256,46 +256,53 @@ def webhook(request):
             data=json.dumps(update_payload)
         )
         signature = utils._get_signature(json.dumps(update_payload).encode(), utils.UPDATE_KEY_PATH, default_session.credentials)
+        max_version = int(utils.__API_VERSION__['update'][1:])
         for resolution in resolutions:
-            try:
-                update_url = 'https://us-central1-{project}.cloudfunctions.net/update-{version}'.format(
-                    project=resolution,
-                    version=utils.__API_VERSION__['update']
-                )
-                if default_session.options(update_url).status_code == 204:
-                    logger.log(
-                        "Triggering update",
-                        project=resolution
+            updated = False
+            for version in range(max_version, 0, -1):
+                try:
+                    update_url = 'https://us-central1-{project}.cloudfunctions.net/update-{version}'.format(
+                        project=resolution,
+                        version=
                     )
-                    response = default_session.post(
-                        update_url,
-                        headers={
-                            'Content-Type': 'application/json',
-                            'X-Lapdog-Signature': signature.hex()
-                        },
-                        json=update_payload
-                    )
-                    failed = max(failed, response.status_code)
-                    status['results'].append({
-                        'project': resolution,
-                        'status': 'OK' if response.status_code == 200 else 'Failed',
-                        'message': response.text,
-                        'code': response.status_code
-                    })
-                else:
+                    if default_session.options(update_url).status_code == 204:
+                        logger.log(
+                            "Triggering update",
+                            project=resolution
+                        )
+                        response = default_session.post(
+                            update_url,
+                            headers={
+                                'Content-Type': 'application/json',
+                                'X-Lapdog-Signature': signature.hex()
+                            },
+                            json=update_payload
+                        )
+                        failed = max(failed, response.status_code)
+                        status['results'].append({
+                            'project': resolution,
+                            'status': 'OK' if response.status_code == 200 else 'Failed',
+                            'message': response.text,
+                            'code': response.status_code
+                        })
+                        updated = True
+                        break
+                except:
+                    logger.log_exception("Failed to update project", project=resolution)
+                    failed = max(failed, 500)
                     status['results'].append({
                         'project': resolution,
                         'status': 'Error',
-                        'message': "The target endpoint 'update-{}' does not exist".format(utils.__API_VERSION__['update']),
+                        'message': traceback.format_exc(),
                         'code': 0
                     })
-            except:
-                logger.log_exception("Failed to update project", project=resolution)
-                failed = max(failed, 500)
+                    updated = True
+                    break
+            if not updated:
                 status['results'].append({
                     'project': resolution,
                     'status': 'Error',
-                    'message': traceback.format_exc(),
+                    'message': "The target endpoint does not support and self-update endpoint versions",
                     'code': 0
                 })
 

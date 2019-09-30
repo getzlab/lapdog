@@ -38,7 +38,7 @@ __API_VERSION__ = {
 # This function will deploy new cloud functions and run any other arbitrary code
 # Such as updating iam policy bindings or role permissions
 
-__CROMWELL_TAG__ = 'v0.17.0'
+__CROMWELL_TAG__ = 'v0.17.0dev'
 
 GCP_ZONES = {
     'asia-east1':	('a', 'b', 'c'),

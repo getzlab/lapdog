@@ -1,11 +1,23 @@
 # Changelog
 
-## Unreleased CHanges
+## Unreleased Changes
+
+Bug Fixes:
+* Fixed a bug preventing certain entity expressions always evaluating to an empty list
 
 Other Changes:
 * Added stackdriver logs to all endpoints. These logs will contain information about
 the request (IP, physical location, etc), any exceptions, as well as other details
 regarding function operation. All endpoint versions have been increased
+
+### Additional Cromwell Changes
+These additional changes have been applied to Lapdog's Cromwell images. These changes
+have been applied to the Cromwell images used by Lapdog versions 0.17.0 - present
+
+* Updated to python3
+* Removed some unnecessary code
+* Updated to Cromwell 46 (improves PAPI error handling)
+* Added stackdriver logging
 
 ### Patch Contents
 All cloud endpoint versions were increased to incorporate the new logs

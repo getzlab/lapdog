@@ -59,13 +59,13 @@ then
 fi
 
 # Execute the wdl_runner
-python -u wdl_runner.py \
+python3 -u wdl_runner.py \
  --wdl "${INPUT_PATH}"/wf.wdl \
  --workflow-inputs "${INPUT_PATH}"/wf.inputs.json \
  --working-dir "${WORKSPACE}" \
  --workflow-options "${INPUT_PATH}"/wf.options.json \
  --output-dir "${OUTPUTS}" \
- $BATCH_ARG 2> stderr.log | python logger.py $LAPDOG_LOG_PATH/pipeline-stdout.log > stdout.log 2> pipeline-stderr.log
+ $BATCH_ARG 2> stderr.log | python3 logger.py $LAPDOG_LOG_PATH/pipeline-stdout.log > stdout.log 2> pipeline-stderr.log
 
 if [[ -n "$DUMP_PATH" ]]
 then

@@ -20,7 +20,7 @@ RUN apt-get update && \
 
 # Install python
 RUN apt-get update && \
-    apt-get install python --yes && \
+    apt-get install python python3 python3-pip --yes && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -31,26 +31,21 @@ RUN curl https://sdk.cloud.google.com | bash
 # Add the install location explicitly to the path (for non-interactive shells)
 ENV PATH /root/google-cloud-sdk/bin:$PATH
 
-# Install pip for the next two steps...
-RUN apt-get update && \
-    apt-get install python-pip --yes
+COPY requirements.txt /
 
-# Install Python "requests" (for cromwell_driver.py) package
-RUN pip install requests==2.4.3 simplejson==3.16.0 cryptography==0.6.1
+# Install Python requirements
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    python3 -m pip install -r requirements.txt
 
-# Install Google Python client (for file_util.py) package
-RUN pip install google-api-python-client==1.7.9 oauth2client==4.1.3
-
-# Remove pip
-RUN apt-get remove --yes python-pip && \
-    apt-get clean && \
+# Apt cleanup
+RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy Cromwell and the Cromwell conf template
 RUN mkdir /cromwell
 RUN cd /cromwell && \
-    curl -L -O https://github.com/broadinstitute/cromwell/releases/download/41/cromwell-41.jar
-RUN ln /cromwell/cromwell-41.jar /cromwell/cromwell.jar
+    curl -L -O https://github.com/broadinstitute/cromwell/releases/download/46/cromwell-46.jar
+RUN ln /cromwell/cromwell-46.jar /cromwell/cromwell.jar
 COPY jes_template.tmp.conf /cromwell/
 
 # Copy the wdl_runner python, shell script, and dependencies
@@ -58,7 +53,6 @@ RUN mkdir /wdl_runner
 COPY cromwell_driver.py \
      file_util.py \
      sys_util.py \
-     wdl_outputs_util.py \
      wdl_runner.py \
      wdl_runner.sh \
      logger.py \

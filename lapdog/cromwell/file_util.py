@@ -9,7 +9,7 @@
 # file_util.py
 
 import logging
-import simplejson
+import json
 import string
 import subprocess
 
@@ -23,7 +23,7 @@ import sys_util
 def file_safe_substitute(file_name, mapping):
   """Performs placeholder replacement on a file, saving contents in place."""
 
-  with open(file_name, 'rb') as f:
+  with open(file_name, 'r') as f:
     file_contents = f.read()
     return string.Template(file_contents).safe_substitute(mapping)
 
@@ -85,7 +85,7 @@ def verify_gcs_dir_empty_or_missing(path):
     try:
       response = request.execute()
     except HttpError as err:
-      error = simplejson.loads(err.content)
+      error = json.loads(err.content)
       error = error['error']
 
       sys_util.exit_with_error(

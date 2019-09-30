@@ -116,6 +116,17 @@ ADMIN_PERMISSIONS = [
     "serviceusage.quotas.update"
 ]
 
+PET_PERMISSIONS = [
+    "cloudkms.cryptoKeyVersions.viewPublicKey",
+    "resourcemanager.projects.get",
+    "genomics.operations.cancel",
+    "genomics.operations.create",
+    "genomics.operations.get",
+    "genomics.operations.list",
+    "serviceusage.services.use", # for requester pays
+    "logging.logEntries.create"
+]
+
 _ACL_LOCK = RLock()
 
 creation_success_pattern = re.compile(r'Workspace (.+)/(.+) successfully')
@@ -576,15 +587,7 @@ class Gateway(object):
                 "roleId": "Pet_account",
                 "role": {
                     "title": "Pet_account",
-                    "includedPermissions": [
-                        "cloudkms.cryptoKeyVersions.viewPublicKey",
-                        "resourcemanager.projects.get",
-                        "genomics.operations.cancel",
-                        "genomics.operations.create",
-                        "genomics.operations.get",
-                        "genomics.operations.list",
-                        "serviceusage.services.use" # for requester pays
-                    ],
+                    "includedPermissions": PET_PERMISSIONS,
                     "stage": "GA"
                 }
             }

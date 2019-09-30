@@ -33,25 +33,16 @@ import argparse
 import json
 import logging
 import os
-import urllib2
+import requests
 import traceback
 
 import cromwell_driver
+from cromwell_driver import gce_get_metadata
 import file_util
 import sys_util
-import wdl_outputs_util
 import tempfile
 
 WDL_RUN_METADATA_FILE = 'wdl_run_metadata.json'
-
-
-def gce_get_metadata(path):
-    """Queries the GCE metadata server the specified value."""
-    req = urllib2.Request(
-            'http://metadata/computeMetadata/v1/%s' % path,
-            None, {'Metadata-Flavor': 'Google'})
-
-    return urllib2.urlopen(req).read()
 
 
 class Runner(object):
@@ -87,7 +78,7 @@ class Runner(object):
                 logging.warning("Overridding project ID %s with %s",
                                                 project, project_id)
 
-        except urllib2.URLError as e:
+        except requests.ConnectionError as e:
             logging.warning(
                     "URLError trying to fetch project ID from Compute Engine metdata")
             logging.warning(e)
@@ -100,18 +91,8 @@ class Runner(object):
                 'working_dir': working_dir
                 })
 
-        with open(cromwell_conf, 'wb') as f:
+        with open(cromwell_conf, 'w') as f:
             f.write(new_conf_data)
-
-    def copy_workflow_output(self, result):
-        output_files = wdl_outputs_util.get_workflow_output(
-                result['outputs'], self.args.working_dir)
-
-        # Copy final output files (if any)
-        logging.info("Workflow output files = %s", output_files)
-
-        if output_files:
-            file_util.gsutil_cp(output_files, "%s/" % self.args.output_dir)
 
     def copy_workflow_metadata(self, metadata, metadata_filename):
 
@@ -189,11 +170,22 @@ class Runner(object):
                         'message': "Unable to resolve the final status of this submission",
                         'encountered-statuses': list(statuses)
                     }
+                    self.driver.log(
+                        'Unknown job exit status',
+                        json=job_data,
+                        severity='WARNING'
+                    )
                 with open('submission.json', 'w') as w:
                     json.dump(submission_data, w, indent=2)
                 file_util.gsutil_cp(['submission.json'], os.environ['SUBMISSION_DATA_PATH'])
+                self.driver.logger.log(
+                    'Cromwell complete. Flushing logs',
+                    json=submission_data,
+                    severity='DEBUG'
+                )
                 return
             except:
+                self.driver.logger.log_exception()
                 logging.error("Batch submission failed: " + traceback.format_exc())
                 file_util.gsutil_cp([os.environ['SUBMISSION_DATA_PATH']], 'submission.json')
                 with open('submission.json') as r:
@@ -219,7 +211,6 @@ class Runner(object):
 
         # Copy run metadata and output files to the output directory
         self.copy_workflow_metadata(metadata, WDL_RUN_METADATA_FILE)
-        self.copy_workflow_output(result)
 
         logging.info("run complete")
 
