@@ -20,7 +20,7 @@ have been applied to the Cromwell images used by Lapdog versions 0.17.0 - presen
 * Added stackdriver logging
 
 ### Patch Contents
-All cloud endpoint versions were increased to incorporate the new logs
+All cloud endpoint versions were updated to incorporate the new logs
 
 ## 0.18.5 (Beta)
 
