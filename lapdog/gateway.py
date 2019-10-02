@@ -86,6 +86,8 @@ ADMIN_PERMISSIONS = [
     "cloudfunctions.functions.update",
     "cloudfunctions.operations.get",
     "cloudfunctions.operations.list",
+    "cloudfunctions.functions.getIamPolicy",
+    "cloudfunctions.functions.setIamPolicy",
     "compute.networks.get",
     "compute.networks.list",
     "compute.networks.use",
