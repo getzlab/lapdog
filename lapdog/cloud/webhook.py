@@ -285,6 +285,14 @@ def webhook(request):
                             'message': response.text,
                             'code': response.status_code
                         })
+                        logger.log(
+                            "Update triggered",
+                            project=resolution,
+                            version=version,
+                            status=response.status_code,
+                            message=response.text,
+                            severity='INFO'
+                        )
                         updated = True
                         break
                 except:
