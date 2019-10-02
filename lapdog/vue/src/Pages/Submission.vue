@@ -253,7 +253,7 @@ Other: error_outline
           {{submission_id}}
         </div>
         <div v-if="submission && submission.AUTHORIZED_DOMAIN" class="col s6 red-text">
-          Proxied from {{submission.AUTHORIZED_DOMAIN}}
+          Proxied via {{workspace}}
         </div>
       </div>
       <div class="row">

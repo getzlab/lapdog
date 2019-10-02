@@ -1621,7 +1621,7 @@ class WorkspaceManager(dog.WorkspaceManager):
 
 
 
-    def execute(self, config_name, entity, expression=None, etype=None, force=False, use_cache=True, memory=3, batch_limit=None, offline_threshold=100, private=False, region=None, _authdomain_parent=None):
+    def execute(self, config_name, entity, expression=None, etype=None, force=False, use_cache=True, memory=3, batch_limit=None, offline_threshold=100, private=False, region=None, _authdomain_parent=None, _authdomain_bypass=None):
         """
         Validates config parameters then executes a job directly on GCP
         Config name may either be a full slug (config namespace/config name)
@@ -1765,6 +1765,7 @@ class WorkspaceManager(dog.WorkspaceManager):
         if _authdomain_parent:
             # If this is an authorized domain bypass, store that in the submission data
             submission_data['AUTHORIZED_DOMAIN'] = _authdomain_parent
+            submission_data['BYPASS_DIRECTORY'] = _authdomain_bypass
 
         try:
             # Try to get the data-types for the configuration
@@ -1878,10 +1879,11 @@ class WorkspaceManager(dog.WorkspaceManager):
             dest_bucket = authdomain_child.get_bucket_id()
             # Bypass Step 2) Copy all the parsed input data to the bypass workspace
             copied = set()
+            print("DBG: Copying data")
             def copy_to_bypass(cell):
                 if isinstance(cell, str) and cell.startswith('gs://'):
                     src = getblob(cell)
-                    destpath = 'gs://{}/{}'.format(dest_bucket, src.name)
+                    destpath = 'gs://{}/bypass-{}/{}'.format(dest_bucket, submission_id, src.name)
                     if not (cell == destpath or destpath in copied):
                         copyblob(src, destpath)
                         time.sleep(0.5)
@@ -1896,7 +1898,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             # Now Fudge a datamodel using input names as column names
             # md5encoding is not user-readable, but easier than writing a safe_name() function for firecloud
             column_map = { # Mapping of workflow inputs -> column names
-                column: '_'+md5(column.encode()).hexdigest()
+                column: '_'+md5((column + submission_id).encode()).hexdigest()
                 for row in workflow_inputs
                 for column in row
             }
@@ -1911,6 +1913,8 @@ class WorkspaceManager(dog.WorkspaceManager):
                 ],
                 index=pd.Index(preflight.workflow_entities, name='{}_id'.format(preflight.config['rootEntityType']))
             ).applymap(copy_to_bypass)
+
+            print("DBG: Adding pseudo-entities")
 
             # Some fixups we need to do before uploading
             # Mostly making sure that we're meeting data model requirements
@@ -1932,6 +1936,7 @@ class WorkspaceManager(dog.WorkspaceManager):
                         {'participant_id': ['fake_participant']}
                     ).set_index(pd.Index(['fake_control_sample'], name='sample_id')))
             # Now actually upload
+            print("DBG: Uploading metadata")
             with authdomain_child.hound.with_reason('Bypassing authorized domain in {}/{}'.format(self.namespace, self.workspace)):
                 authdomain_child.upload_entities(
                     preflight.config['rootEntityType'],
@@ -1956,6 +1961,7 @@ class WorkspaceManager(dog.WorkspaceManager):
             # input name <-> column name mapping. This avoids having to reconstruct
             # a complicated data model with multi level expressions in the config
             # (ie: this.get_samples().bam_file becomes this.41741d8d082b848b8aaf9a8787f8b812)
+            print("DBG: Uploading config")
             self.hound.write_log_entry('job', "Forwarding job to authorized domain bypass: {}/{}".format(self.namespace, authdomain_child.workspace))
             cfg = {
                 **preflight.config,
@@ -1964,23 +1970,48 @@ class WorkspaceManager(dog.WorkspaceManager):
                         key: 'this.{}'.format(column_map[key])
                         for key in preflight.config['inputs']
                         if key in column_map
-                    }
+                    },
+                    'name': '_{}'.format(submission_id)
                 }
             }
             authdomain_child.update_config(cfg)
             # Bypass Step 4) Final: Launch submission in new workspace
+            print("DBG: Submitting bypass job")
+            self.hound.write_log_entry(
+                'job',
+                (
+                    "User started Lapdog Submission {};"
+                    " Job results will be updated in hound when results are uploaded."
+                    " Running job through Authorized Domain bypass workspace {}."
+                    " Configuration: {}/{}, Entity: {}/{}, Expression: {},"
+                    " Workflows: {}, Compute Region: {}, Private IP: {}"
+                ).format(
+                    submission_id,
+                    authdomain_child.workspace,
+                    preflight.config['namespace'],
+                    preflight.config['name'],
+                    preflight.etype,
+                    preflight.entity,
+                    'null' if expression is None else expression,
+                    len(preflight.workflow_entities),
+                    region,
+                    private
+                ),
+                entities=[os.path.join(preflight.etype, preflight.entity)]
+            )
             global_id, local_id, operation_id = authdomain_child.execute(
                 "{}/{}".format(cfg['namespace'], cfg['name']),
                 set_id,
                 'this.{}s'.format(preflight.config['rootEntityType']),
                 preflight.config['rootEntityType']+'_set',
                 force=force,
-                use_cache=use_cache,
+                use_cache=False,
                 memory=memory,
                 batch_limit=batch_limit,
                 private=private,
                 region=region,
-                _authdomain_parent='{}/{}'.format(self.namespace, self.workspace)
+                _authdomain_parent='{}/{}'.format(self.namespace, self.workspace),
+                _authdomain_bypass=submission_id
             )
             # Don't return the local_id here because it's useless in the context of the parent workspace
             return (global_id, None, operation_id)
@@ -2277,10 +2308,11 @@ class WorkspaceManager(dog.WorkspaceManager):
                     src_bucket = self.get_bucket_id()
                     dest_bucket = upload_target.get_bucket_id()
                     subprocess.check_call(
-                        'gsutil -m cp -r gs://{src_bucket}/lapdog-executions/{submission_id} gs://{dest_bucket}/lapdog-executions/{submission_id}'.format(
+                        'gsutil -m cp -r gs://{src_bucket}/lapdog-executions/{submission_id} gs://{dest_bucket}/lapdog-executions/{bypass_dir}'.format(
                             src_bucket=src_bucket,
                             submission_id=submission_id,
-                            dest_bucket=dest_bucket
+                            dest_bucket=dest_bucket,
+                            bypass_dir=submission.data['BYPASS_DIRECTORY']
                         ),
                         shell=True,
                         stdout=subprocess.DEVNULL,
@@ -2293,7 +2325,13 @@ class WorkspaceManager(dog.WorkspaceManager):
                     # bucket = storage.Client().bucket(self.get_bucket_id())
                     # bucket.delete_blobs(blob for blob in bucket.list_blobs(fields='items/name,nextPageToken').pages)
                     subprocess.check_call(
-                        'gsutil -m rm "gs://{}/**"'.format(src_bucket),
+                        'gsutil -m rm "gs://{}/lapdog-executions/{}/**"'.format(src_bucket, submission_id),
+                        shell=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    subprocess.check_call(
+                        'gsutil -m rm "gs://{}/bypass-{}/**"'.format(src_bucket, submission.data['BYPASS_DIRECTORY']),
                         shell=True,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL

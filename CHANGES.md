@@ -4,6 +4,8 @@
 
 Bug Fixes:
 * Fixed a bug preventing certain entity expressions always evaluating to an empty list
+* Fixed a bug preventing multiple submissions within the same authorized domain workspace.
+There are no longer any concurrency limits within authorized domains
 
 Other Changes:
 * Added stackdriver logs to all endpoints. These logs will contain information about
