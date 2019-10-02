@@ -261,9 +261,9 @@ def webhook(request):
             updated = False
             for version in range(max_version, 0, -1):
                 try:
-                    update_url = 'https://us-central1-{project}.cloudfunctions.net/update-{version}'.format(
+                    update_url = 'https://us-central1-{project}.cloudfunctions.net/update-v{version}'.format(
                         project=resolution,
-                        version=
+                        version=version
                     )
                     if default_session.options(update_url).status_code == 204:
                         logger.log(
