@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.18.6 (Beta)
 
 Bug Fixes:
 * Fixed a bug preventing certain entity expressions always evaluating to an empty list
