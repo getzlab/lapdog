@@ -25,6 +25,7 @@ __API_VERSION__ = {
     'query': 'v3',
     'quotas': 'v5',
     'resolve': 'v4',
+    'oauth': 'v1',
     'update': 'v2',
     'existence': 'frozen'
 }
@@ -63,6 +64,9 @@ GCP_ZONES = {
 
 UPDATE_KEY_PATH = 'projects/broad-cga-aarong-gtex/locations/global/keyRings/lapdog/cryptoKeys/update-signing-key'
 UPDATE_IMAGE_TAG = 'v1'
+
+OAUTH_CLIENT_ID = '1057449931000-0mn07vdb6u3nhrvjkvr80qqbri0pvq7o.apps.googleusercontent.com'
+AUTHENTICATION_URL = 'https://us-central1-broad-cga-aarong-gtex.cloudfunctions.net/oauth-{}'.format(__API_VERSION__['oauth'])
 
 def cors(*methods):
     """

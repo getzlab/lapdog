@@ -21,6 +21,7 @@ import json
 from threading import RLock
 from .cloud import RESOLUTION_URL
 from .cloud.utils import get_token_info, ld_project_for_namespace, ld_meta_bucket_for_project, proxy_group_for_user, generate_default_session, update_iam_policy, enabled_regions, __API_VERSION__, GCP_ZONES
+from .auth import get_gcloud_account, LapdogToken, BadDomain
 from urllib.parse import quote
 import google.api_core.exceptions
 import sys
@@ -146,20 +147,6 @@ credentials_file = os.path.join(
     'application_default_credentials.json'
 )
 
-@cached(60, 1)
-def get_gcloud_account():
-    """
-    Gets the currently logged in gcloud account.
-    This checks main credentials (gcloud auth login)
-    Not application default credentials used by lapdog (gcloud auth application-default login)
-    60 second cache (because user can change sign-in)
-    """
-    return subprocess.run(
-        'gcloud config get-value account',
-        shell=True,
-        stdout=subprocess.PIPE
-    ).stdout.decode().strip()
-
 def get_proxy_account(user_acct=None):
     if user_acct is None:
         user_acct = get_application_default_account()
@@ -184,65 +171,36 @@ def get_application_default_account():
     """
     return get_token_info(get_user_session())['email']
 
-def get_access_token(account=None):
-    """
-    Gets an access token to authenticate the Lapdog Gateway as the given account.
-    The `account` argument is deprecated and should be left as None.
-    The most recent access token for a given account is stored in the offline cache.
-    A new token is generated when the cached token expired (~1hr after generation).
-    """
-    with _ACL_LOCK:
-        warnings.warn(
-            "lapdog.gateway.get_access_token is deprecated for security reasons and will be removed soon."
-            " Please transition to use lapdog.gateway.get_user_session() (or lapdog.cloud.utils.generate_default_session() if"
-            " you need control over OAuth scopes)",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        if account is None:
-            account = get_application_default_account()
-        token = cache_fetch('token', 'access-token', md5(account.encode()).hexdigest(), google='credentials')
-        if token and get_token_expired(token):
-            token = None
-        if token is None:
-            if not os.path.isfile(credentials_file):
-                raise FileNotFoundError("Application Default Credentials not found. Please run `gcloud auth application-default login`")
-            with open(credentials_file) as r:
-                credentials = json.load(r)
-            response = requests.post(
-                'https://www.googleapis.com/oauth2/v4/token',
-                data={
-                    'client_id': credentials['client_id'],
-                    'client_secret': credentials['client_secret'],
-                    'refresh_token': credentials['refresh_token'],
-                    'grant_type': 'refresh_token'
-                }
-            )
-            if response.status_code == 200:
-                data = response.json()
-                token = data['access_token']
-                expiry = int(time.time() + int(data['expires_in']))
-                cache_write(token, 'token', 'access-token', md5(account.encode()).hexdigest(), google='credentials')
-                cache_write(str(expiry), 'token', 'expiry', token=md5(token.encode()).hexdigest())
-            else:
-                raise ValueError("Unable to refresh access token (%d) : %s" % (response.status_code, response.text))
-        return token
+_GLOBAL_LD_TOKEN_INTERNAL = None
+_GLOBAL_LD_LOCK_INTERNAL = RLock()
 
-def get_token_expired(token):
-    """
-    Returns whether or not the current token has expired
-    """
-    expiry = cache_fetch('token', 'expiry', token=md5(token.encode()).hexdigest())
-    if expiry is None:
-        try:
-            data = get_token_info(token)
-            if data is None:
-                return True
-            expiry = int(time.time() + int(data['expires_in']))
-            cache_write(str(expiry), 'token', 'expiry', token=md5(token.encode()).hexdigest())
-        except:
-            return True
-    return int(expiry) < time.time()
+def get_user_session():
+    global _GLOBAL_LD_TOKEN_INTERNAL
+    with _GLOBAL_LD_LOCK_INTERNAL:
+        if _GLOBAL_LD_TOKEN_INTERNAL is None:
+            try:
+                _GLOBAL_LD_TOKEN_INTERNAL = LapdogToken()
+            except BadDomain:
+                print("LapdogToken system does not support non-Broad emails")
+                print("Switching to legacy OAuth system")
+                _GLOBAL_LD_TOKEN_INTERNAL = lambda x:None # dummy object
+                _GLOBAL_LD_LOCK_INTERNAL.authorized_session = generate_default_session(scopes=[
+                'profile',
+                'email',
+                'openid',
+                'https://www.googleapis.com/auth/devstorage.read_write',
+            ])
+            try:
+                from hound.client import _getblob_bucket
+                for blob in _getblob_bucket(None, 'lapdog-alerts', None).list_blobs():
+                    content = json.loads(blob.download_as_string().decode())
+                    if content['type'] == 'critical':
+                        text = content['text'] if 'text' in content else content['content']
+                        print(crayons.red("Critical Alert:"), text)
+            except:
+                traceback.print_exc()
+                warnings.warn("Unable to check Lapdog global alerts during startup")
+        return _GLOBAL_LD_TOKEN_INTERNAL.authorized_session
 
 @contextlib.contextmanager
 def capture(display=True):
@@ -331,33 +289,6 @@ def resolve_project_for_namespace(namespace):
         except:
             traceback.print_exc()
     return resolution
-
-_USER_SESSION_INTERNAL = None
-
-def get_user_session():
-    global _USER_SESSION_INTERNAL
-    with _ACL_LOCK:
-        if _USER_SESSION_INTERNAL is None:
-            _USER_SESSION_INTERNAL = generate_default_session(scopes=[
-                'profile',
-                'email',
-                'openid',
-                'https://www.googleapis.com/auth/devstorage.read_write',
-                'https://www.googleapis.com/auth/userinfo.profile',
-                'https://www.googleapis.com/auth/userinfo.email'
-            ])
-            try:
-                from hound.client import _getblob_bucket
-                for blob in _getblob_bucket(None, 'lapdog-alerts', None).list_blobs():
-                    content = json.loads(blob.download_as_string().decode())
-                    if content['type'] == 'critical':
-                        text = content['text'] if 'text' in content else content['content']
-                        print(crayons.red("Critical Alert:"), text)
-            except:
-                traceback.print_exc()
-                warnings.warn("Unable to check Lapdog global alerts during startup")
-        return _USER_SESSION_INTERNAL
-
 
 class Gateway(object):
     """

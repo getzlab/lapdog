@@ -9,6 +9,7 @@ from flask import current_app
 import random
 import pandas as pd
 import lapdog
+import threading
 import os
 import json
 import base64
@@ -67,23 +68,26 @@ def readvar(obj, *args):
         current = current[arg]
     return current
 
+_CURRENT_APP_CONFIG_LOCK = threading.RLock()
+
 def get_workspace_object(namespace, name):
-    ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
-    if ws is None:
-        ws = lapdog.WorkspaceManager("{}/{}".format(namespace, name), workspace_seed_url=None)
-        if readvar(current_app.config, 'storage', 'cache') is None:
-            current_app.config['storage']['cache'] = {}
-        if readvar(current_app.config, 'storage', 'cache', namespace) is None:
-            current_app.config['storage']['cache'][namespace] = {}
-        if readvar(current_app.config, 'storage', 'cache', namespace, name) is None:
-            current_app.config['storage']['cache'][namespace][name] = {}
-        if readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager') is None:
-            current_app.config['storage']['cache'][namespace][name]['manager'] = ws
-        workspaces = readvar(current_app.config, 'storage', 'cache', 'all_workspaces')
-        if workspaces is None:
-            current_app.config['storage']['cache']['all_workspaces'] = []
-        current_app.config['storage']['cache']['all_workspaces'].append((namespace, name))
-    return ws
+    with _CURRENT_APP_CONFIG_LOCK:
+        ws = readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager')
+        if ws is None:
+            ws = lapdog.WorkspaceManager("{}/{}".format(namespace, name), workspace_seed_url=None)
+            if readvar(current_app.config, 'storage', 'cache') is None:
+                current_app.config['storage']['cache'] = {}
+            if readvar(current_app.config, 'storage', 'cache', namespace) is None:
+                current_app.config['storage']['cache'][namespace] = {}
+            if readvar(current_app.config, 'storage', 'cache', namespace, name) is None:
+                current_app.config['storage']['cache'][namespace][name] = {}
+            if readvar(current_app.config, 'storage', 'cache', namespace, name, 'manager') is None:
+                current_app.config['storage']['cache'][namespace][name]['manager'] = ws
+            workspaces = readvar(current_app.config, 'storage', 'cache', 'all_workspaces')
+            if workspaces is None:
+                current_app.config['storage']['cache']['all_workspaces'] = []
+            current_app.config['storage']['cache']['all_workspaces'].append((namespace, name))
+        return ws
 
 @cached(60)
 @controller
@@ -1134,3 +1138,45 @@ def _preview_blob_internal(path, project):
         },
         200
     )
+
+@controller
+def oauth_callback(state, code, scope):
+    print("OAuth scopes:", scope)
+    with _CURRENT_APP_CONFIG_LOCK:
+        if readvar(current_app.config, 'storage') is None:
+            current_app.config['storage'] = {}
+        if readvar(current_app.config, 'storage', 'cache') is None:
+            current_app.config['storage']['cache'] = {}
+        if readvar(current_app.config, 'storage', 'cache', 'oauth_state') is None:
+            current_app.config['storage']['cache']['oauth_state'] = {}
+        current_app.config['storage']['cache']['oauth_state'][state] = code
+        print(current_app.config['storage']['cache']['oauth_state'])
+        return """
+<!doctype html>
+<html>
+<head>
+<title>Authorization Success</title>
+</head>
+<body>
+<h2>Lapdog Authentication Complete</h2>
+<p>You may now close this tab</p>
+</body>
+</html>
+""", 200, {'Content-Type': 'text/html'}
+
+@controller
+def oauth_lookup(state):
+    if state == 'marco':
+        return 'polo', 200
+    with _CURRENT_APP_CONFIG_LOCK:
+        code = readvar(current_app.config, 'storage', 'cache', 'oauth_state', state)
+        if code is not None:
+            del current_app.config['storage']['cache']['oauth_state'][state]
+            return code, 200
+        if readvar(current_app.config, 'storage') is None:
+            current_app.config['storage'] = {}
+        if readvar(current_app.config, 'storage', 'cache') is None:
+            current_app.config['storage']['cache'] = {}
+        if readvar(current_app.config, 'storage', 'cache', 'oauth_state') is None:
+            current_app.config['storage']['cache']['oauth_state'] = {}
+    return 'No code available', 402

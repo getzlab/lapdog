@@ -20,7 +20,8 @@ __FUNCTION_MAPPING__ = {
     'query_account': 'query.py',
     'insert_resolution': 'resolution.py',
     'webhook': 'webhook.py',
-    'update': 'webhook.py'
+    'update': 'webhook.py',
+    'oauth': 'auth.py'
 }
 
 RESOLUTION_URL = "https://us-central1-a-graubert.cloudfunctions.net/resolve-" + __API_VERSION__['resolve']

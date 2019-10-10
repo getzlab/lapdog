@@ -40,6 +40,54 @@ paths:
             type: array
             items:
               type: object
+  /api/v1/auth/callback:
+    get:
+      operationId: lapdog.api.controllers.oauth_callback
+      summary: Handles incomming Google OAuth responses
+      parameters:
+        -
+          in: query
+          name: state
+          required: true
+          type: string
+          description: State code for OAuth callback
+        -
+          in: query
+          name: code
+          required: true
+          type: string
+          description: Authorization code to issue access token
+        -
+          in: query
+          name: scope
+          required: true
+          type: string
+          description: Space-separated list of scopes
+      produces:
+        - text/html
+      responses:
+        default:
+          description: Error
+        200:
+          description: Code accepted
+  /api/v1/auth/fetch:
+    get:
+      operationId: lapdog.api.controllers.oauth_lookup
+      summary: Fetches a cached Authorization code from an OAuth callback
+      parameters:
+        -
+          in: query
+          name: state
+          required: true
+          type: string
+          description: State code for OAuth callback
+      responses:
+        default:
+          description: Error
+        200:
+          description: Authorization code
+          schema:
+            type: string
   /api/v1/quotas/{namespace}:
     get:
       operationId: lapdog.api.controllers.quotas
