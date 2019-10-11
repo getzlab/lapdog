@@ -169,7 +169,7 @@ def get_application_default_account():
     Not main credentials (gcloud auth login)
     LRU-cache because response cannot change after session is generated
     """
-    return get_token_info(get_user_session())['email']
+    return get_token_info(generate_default_session())['email']
 
 _GLOBAL_LD_TOKEN_INTERNAL = None
 _GLOBAL_LD_LOCK_INTERNAL = RLock()

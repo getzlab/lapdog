@@ -42,6 +42,11 @@ class BadDomain(AuthenticationError):
 
 class LapdogToken(object):
     def __init__(self, account=None):
+        """
+        Represents a self-refreshing access token for Lapdog APIs, issued by Google.
+        Credentials are saved to disk, so each account should only need to login once.
+        Access token is valid for 1 hour, but can be refreshed with .refresh()
+        """
         self.account = account if account is not None else get_gcloud_account()
         if not self.account.endswith('@broadinstitute.org'):
             raise BadDomain("Non-broad emails are currently unsupported by the Lapdog OAuth system")
@@ -57,19 +62,20 @@ class LapdogToken(object):
         try:
             with open(path) as w:
                 data = json.load(w)
-        except (FileNotFoundError, json.decoder.JSONDecodeError):
-            return self.auto_login()
 
-        self.token = data['access_token']
-        self.refresh_token = data['refresh_token']
-        self.ident = data['id_token']
+            self.token = data['access_token']
+            self.refresh_token = data['refresh_token']
+            self.ident = data['id_token']
+
+        except (FileNotFoundError, json.decoder.JSONDecodeError):
+            self.auto_login()
 
         if not self.valid:
             print("DBG: Saved token expired, refreshing")
             return self.refresh()
 
-        if self.token_info['email'] != self.account:
-            raise AccountMismatch("{} != {}".format(self.token_info['email'], self.account))
+        if self.info['email'] != self.account:
+            raise AccountMismatch("{} != {}".format(self.info['email'], self.account))
 
     @staticmethod
     def path_for_account(account):
@@ -118,18 +124,25 @@ class LapdogToken(object):
         If token expires in less than 60s, refresh it.
         If token not logged in, raise Authentication Error
         """
-        if not (self.valid and self.token_info['expires_in'] >= 60):
+        if not (self.valid and self.info['expires_in'] >= 60):
             self.refresh()
         return self.token
 
     @property
-    def token_info(self):
+    @cached(10)
+    def info(self):
         """
         Get token info
         """
         return utils.get_token_info(self.token)
 
     def manual_login(self):
+        """
+        Manually login to the new token.
+        Opens a browser tab for authentication, but requires the user manually
+        copy-paste the authorization code into the terminal.
+        Handles second-step authentication
+        """
         pub, priv = self._generate_verifier()
         print("DBG: manual login", pub, priv)
         # refresh w/ redirect
@@ -146,6 +159,13 @@ class LapdogToken(object):
         )
 
     def browser_login(self, uri):
+        """
+        Login to the new token by passing authorization code to the provided callback uri.
+        Opens a browser tab for authentication, but code is transferred automatically.
+        Does not handle second-step authentication.
+        You must manually fetch the authorization code from the server which handled
+        the callback uri, then call .authenticate()
+        """
         pub, priv = self._generate_verifier()
         state = base64.urlsafe_b64encode(os.urandom(32)).decode()
         print("DBG: browser login", pub, priv, state)
@@ -161,31 +181,34 @@ class LapdogToken(object):
     def auto_login(self, port=4201):
         """
         Main entrypoint for token initialization.
-        Checks if Lapdog UI is running, then uses that server for authentication
+        Checks if Lapdog UI is running, then uses that server for authentication.
+        Falls back on manual copy-paste authentication
         """
         print("DBG: Automatic login")
         try:
+            fetch_url = 'http://127.0.0.1:{}/api/v1/auth/fetch?state={{}}'.format(port)
+            callback_url = 'http://127.0.0.1:{}/api/v1/auth/callback'.format(port)
             response = requests.get(
-                'http://127.0.0.1:{}/api/v1/auth/fetch?state=marco'.format(port)
+                fetch_url.format('marco')
             )
             print("DBG: marco-polo response:", response.status_code, response.text)
             if response.status_code == 200 and response.json() == 'polo':
                 priv, state = self.browser_login(
-                    'http://localhost:{}/api/v1/auth/callback'.format(port)
+                    callback_url
                 )
                 print("Waiting for user to accept browser prompt")
                 response = requests.get(
-                    'http://127.0.0.1:{}/api/v1/auth/fetch?state={}'.format(port, state)
+                    fetch_url.format(state)
                 )
                 while response.status_code == 402:
                     time.sleep(1)
                     response = requests.get(
-                        'http://127.0.0.1:{}/api/v1/auth/fetch?state={}'.format(port, state)
+                        fetch_url.format(state)
                     )
                 if response.status_code == 200:
                     return self.authenticate(
                         response.json(),
-                        'http://localhost:{}/api/v1/auth/callback'.format(port),
+                        callback_url,
                         code_verifier=priv
                     )
                 else:
@@ -229,7 +252,7 @@ class LapdogToken(object):
     def authenticate(self, code, redirect_uri, code_verifier=None):
         """
         Performs final authentication. Authorization code is exchanged for
-        authorization token and refresh token
+        access token and refresh token
         """
         print("DBG: Authenticating", code)
         data = {
@@ -271,6 +294,9 @@ class LapdogToken(object):
         """
         Refreshes a token, assuming the client already has a refresh_token
         """
+        if t is not None and self.info['expires_in'] > t:
+            # If user specifies a time, only refresh if the token expires in the given window
+            return
         print("DBG: Refreshing", self.refresh_token)
         response = requests.post(
             utils.AUTHENTICATION_URL,

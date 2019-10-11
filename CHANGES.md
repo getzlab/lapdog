@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased Changes
+
+Other changes:
+* Improved API security by switching to custom Lapdog OAuth tokens. Currently
+this is only supported by Broad accounts. Non-broad accounts will continue to use
+standard Google application-default credentials when authenticating through the Lapdog API
+
 ## 0.18.6 (Beta)
 
 Bug Fixes:

@@ -47,6 +47,16 @@ def abort_submission(request):
                 401
             )
 
+        if not utils.validate_token(token_info):
+            return (
+                {
+                    'error': 'Rejected token',
+                    'message': 'Token was valid but did not meet Lapdog security requirements. Token must have email, profile, openid, and devstorage.read_write scopes.'
+                    ' Broad users must authenticate via a LapdogToken'
+                },
+                403
+            )
+
         # 2) Validate user's permission for the bucket
 
         if 'bucket' not in data:

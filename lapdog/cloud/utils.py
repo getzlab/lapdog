@@ -106,7 +106,6 @@ def cors(*methods):
                     510
                 )
             result = list(func(request))
-            print("RESULT", result)
             if isinstance(result[0], dict):
                 result[0] = json.dumps(result[0])
             return tuple(result)
@@ -161,6 +160,26 @@ def get_token_info(token_or_session):
             "error": "Unknown Error",
             "error_description": traceback.format_exc()
         }
+
+def validate_token(token_info):
+    """
+    Checks token authenticity
+    """
+    return (
+        ('expires_in' in token_info and token_info['expires_in'] > 2)
+        and ('email' in token_info and 'audience' in token_info)
+        and (
+            not token_info['email'].endswith('@broadinstitute.org')
+            or (token_info['email'].endswith('@broadinstitute.org') and token_info['audience'] == OAUTH_CLIENT_ID)
+        )
+        and 'scope' in token_info
+        and (
+            'email' in token_info['scope']
+            and 'profile' in token_info['scope']
+            and 'openid' in token_info['scope']
+            and 'https://www.googleapis.com/auth/devstorage.read_write' in token_info['scope']
+        )
+    )
 
 def ld_acct_in_project(account, ld_project=None):
     """

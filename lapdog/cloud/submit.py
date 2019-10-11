@@ -48,6 +48,16 @@ def create_submission(request):
                 401
             )
 
+        if not utils.validate_token(token_info):
+            return (
+                {
+                    'error': 'Rejected token',
+                    'message': 'Token was valid but did not meet Lapdog security requirements. Token must have email, profile, openid, and devstorage.read_write scopes.'
+                    ' Broad users must authenticate via a LapdogToken'
+                },
+                403
+            )
+
         # 1.b) Verify the user has a pet account
         response = utils.query_service_account(
             utils.generate_default_session(scopes=['https://www.googleapis.com/auth/cloud-platform']),
