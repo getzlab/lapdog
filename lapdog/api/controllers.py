@@ -23,6 +23,7 @@ import yaml
 from .. import firecloud_status
 from ..cache import cached, cache_fetch, cache_write, cache_init, cache_path
 from ..adapters import NoSuchSubmission, Gateway, get_operation_status
+from ..auth import LapdogToken
 from ..gateway import get_application_default_account, get_proxy_account
 import re
 import contextlib
@@ -92,6 +93,7 @@ def get_workspace_object(namespace, name):
 @cached(60)
 @controller
 def get_alerts():
+    LapdogToken()
     return [
         json.loads(blob.download_as_string())
         for blob in storage.Client().bucket('lapdog-alerts').list_blobs()

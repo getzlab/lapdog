@@ -56,8 +56,6 @@ class LapdogToken(object):
         self._lock = RLock()
         self._session = None
 
-        print("DBG: Initializing new LapdogToken for account", self.account)
-
         path = LapdogToken.path_for_account(self.account)
         try:
             with open(path) as w:
@@ -71,7 +69,6 @@ class LapdogToken(object):
             self.auto_login()
 
         if not self.valid:
-            print("DBG: Saved token expired, refreshing")
             return self.refresh()
 
         if self.info['email'] != self.account:
@@ -144,11 +141,9 @@ class LapdogToken(object):
         Handles second-step authentication
         """
         pub, priv = self._generate_verifier()
-        print("DBG: manual login", pub, priv)
         # refresh w/ redirect
         self._prompt(
             'urn:ietf:wg:oauth:2.0:oob',
-            login_hint='{user}',
             code_challenge=pub
         )
         # Get user to paste code
@@ -168,11 +163,9 @@ class LapdogToken(object):
         """
         pub, priv = self._generate_verifier()
         state = base64.urlsafe_b64encode(os.urandom(32)).decode()
-        print("DBG: browser login", pub, priv, state)
         # refresh w/ redirect
         self._prompt(
             uri,
-            login_hint='{user}',
             code_challenge=pub,
             state=state
         )
@@ -184,14 +177,12 @@ class LapdogToken(object):
         Checks if Lapdog UI is running, then uses that server for authentication.
         Falls back on manual copy-paste authentication
         """
-        print("DBG: Automatic login")
         try:
             fetch_url = 'http://127.0.0.1:{}/api/v1/auth/fetch?state={{}}'.format(port)
             callback_url = 'http://127.0.0.1:{}/api/v1/auth/callback'.format(port)
             response = requests.get(
                 fetch_url.format('marco')
             )
-            print("DBG: marco-polo response:", response.status_code, response.text)
             if response.status_code == 200 and response.json() == 'polo':
                 priv, state = self.browser_login(
                     callback_url
@@ -254,7 +245,6 @@ class LapdogToken(object):
         Performs final authentication. Authorization code is exchanged for
         access token and refresh token
         """
-        print("DBG: Authenticating", code)
         data = {
             'code': code,
             'client_id': utils.OAUTH_CLIENT_ID,
@@ -264,8 +254,6 @@ class LapdogToken(object):
 
         if code_verifier is not None:
             data['code_verifier'] = code_verifier
-
-        print("DBG: AUth payload", data)
 
         response = requests.post(
             utils.AUTHENTICATION_URL,
@@ -277,7 +265,6 @@ class LapdogToken(object):
 
         if response.status_code == 200:
             auth_data = response.json()
-            print("DBG:", auth_data)
             if LapdogToken._validate(auth_data['access_token'], self.account):
                 self._save_info(
                     token=auth_data['access_token'],
@@ -297,7 +284,6 @@ class LapdogToken(object):
         if t is not None and self.info['expires_in'] > t:
             # If user specifies a time, only refresh if the token expires in the given window
             return
-        print("DBG: Refreshing", self.refresh_token)
         response = requests.post(
             utils.AUTHENTICATION_URL,
             headers={
@@ -312,7 +298,6 @@ class LapdogToken(object):
 
         if response.status_code == 200:
             auth_data = response.json()
-            print("DBG:", auth_data)
             if LapdogToken._validate(auth_data['access_token'], self.account):
                 self._save_info(
                     token=auth_data['access_token'],
@@ -358,11 +343,6 @@ class LapdogToken(object):
             raise InvalidToken("Invalid token {}".format(repr(info)))
 
         with open(LapdogToken.path_for_account(info['email']), 'w') as w:
-            print("DBG: Writing", {
-                'access_token': token,
-                'refresh_token': refresh,
-                'id_token': ident
-            })
             json.dump({
                 'access_token': token,
                 'refresh_token': refresh,
