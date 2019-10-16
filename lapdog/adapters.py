@@ -12,6 +12,7 @@ import contextlib
 import re
 import select
 from .cache import cache_fetch, cache_write, cached, cache_path
+from .cloud.utils import generate_default_session
 from dalmatian import getblob, strict_getblob
 from .gateway import Gateway
 import traceback
@@ -236,16 +237,23 @@ def get_operation_status(opid, parse=True, fmt='json'):
     """
     text = cache_fetch('operation', opid)
     if text is None:
-        text = subprocess.run(
-            'gcloud alpha genomics operations describe --format=%s %s' % (
-                fmt,
-                opid
-            ),
-            shell=True,
-            executable='/bin/bash',
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        ).stdout.decode()
+        if '/locations/' in opid:
+            text = yaml.dump(
+                generate_default_session().get(
+                    'https://lifesciences.googleapis.com/v2beta/{}'.format(opid)
+                ).json()
+            )
+        else:
+            text = subprocess.run(
+                'gcloud alpha genomics operations describe --format=%s %s' % (
+                    fmt,
+                    opid
+                ),
+                shell=True,
+                executable='/bin/bash',
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            ).stdout.decode()
         if not parse:
             return text
         try:

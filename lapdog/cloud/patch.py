@@ -11,7 +11,7 @@ This function may:
 from .utils import ld_project_for_namespace, __API_VERSION__, generate_default_session, ld_meta_bucket_for_project, update_iam_policy
 from . import _deploy, RESOLUTION_URL
 from .. import __version__
-from ..gateway import resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS, ADMIN_PERMISSIONS
+from ..gateway import resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS, ADMIN_PERMISSIONS, PET_PERMISSIONS, USER_PERMISSIONS
 from ..lapdog import WorkspaceManager
 from dalmatian import getblob
 import sys
@@ -43,7 +43,13 @@ __REDACTIONS=[
     'submit-alpha',
     'submit-beta',
     'submit-v1',
+    'submit-v2',
     'submit-v3a',
+    'submit-v3',
+    'submit-v4',
+    'submit-v5',
+    'submit-v6',
+    'submit-v7', #also redacty v8 after v9 is complete
     'abort-alpha',
     'abort-beta',
     'query-alpha',
@@ -119,6 +125,8 @@ def __project_admin_apply_patch(namespace):
     patch_role(user_session, roles_url, "Core_account", CORE_PERMISSIONS)
     patch_role(user_session, roles_url, "Functions_account", FUNCTIONS_PERMISSIONS)
     patch_role(user_session, roles_url, "Engine_Admin", ADMIN_PERMISSIONS)
+    patch_role(user_session, roles_url, "Pet_account", PET_PERMISSIONS)
+    patch_role(user_session, roles_url, "Lapdog_user", USER_PERMISSIONS)
     print(crayons.normal("Phase 3/6:", bold=True), "Checking service accounts")
     response = user_session.get(
         "https://iam.googleapis.com/v1/projects/{}/serviceAccounts".format(project)
@@ -255,7 +263,7 @@ def __project_admin_apply_patch(namespace):
         deployments = {
             f:v
             for f,v in __API_VERSION__.items()
-            if f != 'resolve'
+            if f not in {'resolve', 'oauth'}
         }
     else:
         functions = {
@@ -266,7 +274,7 @@ def __project_admin_apply_patch(namespace):
         deployments = {
             f:v
             for f,v in __API_VERSION__.items()
-            if (f+'-'+v) not in functions and f != 'resolve'
+            if (f+'-'+v) not in functions and f not in {'resolve', 'oauth'}
         }
     if len(deployments):
         print("Deploying", len(deployments), "functions")

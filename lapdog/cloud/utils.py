@@ -18,7 +18,7 @@ from functools import lru_cache, wraps
 import traceback
 
 __API_VERSION__ = {
-    'submit': 'v8',
+    'submit': 'v9',
     'abort': 'v3',
     'register': 'v4',
     'signature': 'v3',

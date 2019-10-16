@@ -32,12 +32,12 @@ def insert_resolution(request):
 
         token = utils.extract_token(request.headers, data)
 
-        token_data = utils.get_token_info(token)
-        if 'error' in token_data:
+        token_info = utils.get_token_info(token)
+        if 'error' in token_info:
             return (
                 {
                     'error': 'Invalid Token',
-                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                    'message': token_info['error_description'] if 'error_description' in token_info else 'Google rejected the client token'
                 },
                 401
             )
@@ -136,7 +136,7 @@ def insert_resolution(request):
 
         for policy in response.json()['bindings']:
             if policy['role'] == 'roles/owner':
-                if ('user:'+token_data['email']) in policy['members']:
+                if ('user:'+token_info['email']) in policy['members']:
                     blob = utils.getblob(
                         'gs://lapdog-resolutions/%s' % sha512(data['namespace'].encode()).hexdigest(),
                         credentials=utils.generate_default_session().credentials
@@ -153,7 +153,7 @@ def insert_resolution(request):
                         "Adding new resolution",
                         namespace=data['namespace'],
                         project_id=data['project'],
-                        admin=token_data['email'],
+                        admin=token_info['email'],
                         severity='NOTICE'
                     )
                     blob.upload_from_string(

@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from hashlib import sha256
 from getpass import getuser
 import requests
+import crayons
 from google.auth.transport.requests import AuthorizedSession
 from  google.oauth2.credentials import Credentials
 from .cloud import utils
@@ -236,9 +237,14 @@ class LapdogToken(object):
         if login_hint is not None:
              data['login_hint'] = login_hint
 
-        webbrowser.open_new_tab(
+        if not webbrowser.open_new_tab(
             url + urlencode(data)
-        )
+        ):
+            print(
+                crayons.red("Unable to open browser."),
+                'Please visit:',
+                crayons.normal(url + urlencode(data), bold=True)
+            )
 
     def authenticate(self, code, redirect_uri, code_verifier=None):
         """

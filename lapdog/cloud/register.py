@@ -42,12 +42,12 @@ def register(request):
                 400
             )
 
-        token_data = utils.get_token_info(token)
-        if 'error' in token_data:
+        token_info = utils.get_token_info(token)
+        if 'error' in token_info:
             return (
                 {
                     'error': 'Invalid Token',
-                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                    'message': token_info['error_description'] if 'error_description' in token_info else 'Google rejected the client token'
                 },
                 401
             )
@@ -122,13 +122,13 @@ def register(request):
         # 3) Issue worker account
 
         default_session = utils.generate_default_session(scopes=['https://www.googleapis.com/auth/cloud-platform'])
-        account_email = utils.ld_acct_in_project(token_data['email'])
+        account_email = utils.ld_acct_in_project(token_info['email'])
         response = utils.query_service_account(default_session, account_email)
         if response.status_code == 404:
             account_name = account_email.split('@')[0]
             logger.log(
                 'Issuing new pet service account',
-                user=token_data['email'],
+                user=token_info['email'],
                 service_account=account_email,
                 severity='DEBUG'
             )
@@ -140,7 +140,7 @@ def register(request):
                 json={
                     'accountId': account_name,
                     'serviceAccount': {
-                        'displayName': token_data['email']
+                        'displayName': token_info['email']
                     }
                 }
             )
@@ -218,7 +218,7 @@ def register(request):
             "Updating project-wide iam roles",
             bindings={
                 account_email: 'Pet_account',
-                token_data['email']: 'Lapdog_user'
+                token_info['email']: 'Lapdog_user'
             },
             severity="INFO"
         )
@@ -227,7 +227,7 @@ def register(request):
             default_session,
             {
                 'serviceAccount:'+account_email: 'Pet_account',
-                'user:'+token_data['email']: 'Lapdog_user'
+                'user:'+token_info['email']: 'Lapdog_user'
             }
         )
 
@@ -288,7 +288,7 @@ def register(request):
                         "firstName":"Service",
                         "lastName": "Account",
                         "title":"None",
-                        "contactEmail":token_data['email'],
+                        "contactEmail":token_info['email'],
                         "institute":"None",
                         "institutionalProgram": "None",
                         "programLocationCity": "None",
@@ -327,7 +327,7 @@ def register(request):
                 400
             )
 
-        target_group = utils.proxy_group_for_user(token_data['email'])
+        target_group = utils.proxy_group_for_user(token_info['email'])
 
         for group in response.json():
             if group['groupName'] == target_group:

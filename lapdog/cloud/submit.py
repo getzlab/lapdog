@@ -38,12 +38,12 @@ def create_submission(request):
                 400
             )
 
-        token_data = utils.get_token_info(token)
-        if 'error' in token_data:
+        token_info = utils.get_token_info(token)
+        if 'error' in token_info:
             return (
                 {
                     'error': 'Invalid Token',
-                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                    'message': token_info['error_description'] if 'error_description' in token_info else 'Google rejected the client token'
                 },
                 401
             )
@@ -61,7 +61,7 @@ def create_submission(request):
         # 1.b) Verify the user has a pet account
         response = utils.query_service_account(
             utils.generate_default_session(scopes=['https://www.googleapis.com/auth/cloud-platform']),
-            utils.ld_acct_in_project(token_data['email'])
+            utils.ld_acct_in_project(token_info['email'])
         )
         if response.status_code != 200:
             return (
@@ -236,7 +236,6 @@ def create_submission(request):
                     }
                 ],
                 'resources': {
-                    'projectId': os.environ.get("GCP_PROJECT"),
                     'regions': [region],
                     'virtualMachine': {
                         'machineType': mtype,
@@ -246,7 +245,7 @@ def create_submission(request):
                             'lapdog-submission-id': data['submission_id']
                         },
                         'serviceAccount': {
-                            'email': utils.ld_acct_in_project(token_data['email']),
+                            'email': utils.ld_acct_in_project(token_info['email']),
                             'scopes': [
                                 "https://www.googleapis.com/auth/cloud-platform",
                                 "https://www.googleapis.com/auth/compute",
@@ -258,16 +257,21 @@ def create_submission(request):
                             max(0, data['cache_size'] - 10) if 'cache_size' in data else 0
                         ),
                         'network': {
-                            'name': 'default',
+                            'network': 'default',
                             'usePrivateAddress': ('no_ip' in data and data['no_ip'])
                         }
                     }
                 },
             }
         }
+        papi_url = 'https://lifesciences.googleapis.com/v2beta/projects/{}/locations/{}/pipelines:run'.format(
+            os.environ.get('GCP_PROJECT'),
+            region
+        )
         logger.log(
-            "Launching PAPIv2 pipeline",
+            "Launching LifeSciences v2Beta pipeline",
             pipeline=pipeline['pipeline'],
+            url=papi_url,
             severity='NOTICE'
         )
         response = utils.generate_default_session(
@@ -277,7 +281,7 @@ def create_submission(request):
                 "https://www.googleapis.com/auth/genomics"
             ]
         ).post(
-            'https://genomics.googleapis.com/v2alpha1/pipelines:run',
+            papi_url,
             headers={
                 'Content-Type': 'application/json'
             },

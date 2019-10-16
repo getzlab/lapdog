@@ -47,7 +47,10 @@ CORE_PERMISSIONS = [
     "genomics.operations.cancel",
     "genomics.operations.create",
     "genomics.operations.get",
-    "genomics.operations.list"
+    "genomics.operations.list",
+    "lifesciences.operations.cancel",
+    "lifesciences.operations.get",
+    "lifesciences.operations.list",
 ]
 
 FUNCTIONS_PERMISSIONS = [
@@ -74,7 +77,11 @@ FUNCTIONS_PERMISSIONS = [
     "compute.projects.get",
     "compute.regions.get",
     "compute.subnetworks.setPrivateIpGoogleAccess",
-    "logging.logEntries.create"
+    "logging.logEntries.create",
+    "lifesciences.operations.cancel",
+    "lifesciences.operations.get",
+    "lifesciences.operations.list",
+    "lifesciences.workflows.run"
 ]
 
 ADMIN_PERMISSIONS = [
@@ -116,7 +123,7 @@ ADMIN_PERMISSIONS = [
     "storage.objects.getIamPolicy",
     "storage.objects.list",
     "serviceusage.quotas.get",
-    "serviceusage.quotas.update"
+    "serviceusage.quotas.update",
 ]
 
 PET_PERMISSIONS = [
@@ -127,7 +134,16 @@ PET_PERMISSIONS = [
     "genomics.operations.get",
     "genomics.operations.list",
     "serviceusage.services.use", # for requester pays
-    "logging.logEntries.create"
+    "logging.logEntries.create",
+    "lifesciences.operations.cancel",
+    "lifesciences.operations.get",
+    "lifesciences.operations.list",
+    "lifesciences.workflows.run"
+]
+
+USER_PERMISSIONS = [
+    "genomics.operations.get",
+    "lifesciences.operations.get",
 ]
 
 _ACL_LOCK = RLock()
@@ -592,9 +608,7 @@ class Gateway(object):
                 "roleId": "Lapdog_user",
                 "role": {
                     "title": "Lapdog_user",
-                    "includedPermissions": [
-                        "genomics.operations.get",
-                    ],
+                    "includedPermissions": USER_PERMISSIONS,
                     "stage": "GA"
                 }
             }

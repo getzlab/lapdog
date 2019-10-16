@@ -37,12 +37,12 @@ def abort_submission(request):
                 400
             )
 
-        token_data = utils.get_token_info(token)
-        if 'error' in token_data:
+        token_info = utils.get_token_info(token)
+        if 'error' in token_info:
             return (
                 {
                     'error': 'Invalid Token',
-                    'message': token_data['error_description'] if 'error_description' in token_data else 'Google rejected the client token'
+                    'message': token_info['error_description'] if 'error_description' in token_info else 'Google rejected the client token'
                 },
                 401
             )
