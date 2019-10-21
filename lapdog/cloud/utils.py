@@ -26,7 +26,7 @@ __API_VERSION__ = {
     'quotas': 'v5',
     'resolve': 'v4',
     'oauth': 'v1',
-    'update': 'v2',
+    'update': 'v3',
     'existence': 'frozen'
 }
 

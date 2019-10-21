@@ -899,7 +899,7 @@ class Gateway(object):
                 endpoint,
                 _version
             ))
-        raise ValueError("Unexpected status (%d) when checking for endpoint" % response.status_code)
+        raise ValueError("Unexpected status (%d) when checking for endpoint:" % response.status_code, response.text)
 
     @property
     def exists(self):

@@ -2,10 +2,24 @@
 
 ## Unreleased Changes
 
+Bug Fixes:
+* Fixed a bug preventing some namespaces from running jobs
+* Fixed a bug preventing automatic updates over the v2 api
+
 Other changes:
 * Improved API security by switching to custom Lapdog OAuth tokens. Currently
 this is only supported by Broad accounts. Non-broad accounts will continue to use
 standard Google application-default credentials when authenticating through the Lapdog API
+* Updated execution service to use new [LifeSciences](https://cloud.google.com/life-sciences/) api.
+Cromwell currently does not support this API, so individual workflows will still be launched using the old
+Genomics api
+
+### Patch contents
+* **Deprecation Notice:** Submit api v4-v8 are deprecated and will be removed when Google
+finalizes their transition from the Genomics api to the LifeSciences api. These versions of the
+submit endpoint were used by lapdog versions 0.14.0 - 0.18.6
+* Updated submit to v9
+* Updated update to v3
 
 ## 0.18.6 (Beta)
 

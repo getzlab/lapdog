@@ -259,7 +259,7 @@ def webhook(request):
         max_version = int(utils.__API_VERSION__['update'][1:])
         for resolution in resolutions:
             updated = False
-            for version in range(max_version, 0, -1):
+            for version in range(max_version, (data['__min_version__'] if '__min_version__' in data else 0), -1):
                 try:
                     update_url = 'https://us-central1-{project}.cloudfunctions.net/update-v{version}'.format(
                         project=resolution,
@@ -310,7 +310,7 @@ def webhook(request):
                 status['results'].append({
                     'project': resolution,
                     'status': 'Error',
-                    'message': "The target endpoint does not support and self-update endpoint versions",
+                    'message': "The target endpoint does not support any self-update endpoint versions",
                     'code': 0
                 })
 
@@ -322,7 +322,7 @@ def webhook(request):
             'message': traceback.format_exc()
         }, 500
 
-def trigger_update(ref):
+def trigger_update(ref, _minimum_version=1):
     """
     Admins: Use to easily trigger the self-update webhook
     """
@@ -332,6 +332,7 @@ def trigger_update(ref):
             'Content-Type': 'application/json',
         },
         json={
-            'ref': ref
+            'ref': ref,
+            '__min_version__': _minimum_version - 1
         }
     )

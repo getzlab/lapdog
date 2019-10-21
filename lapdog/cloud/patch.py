@@ -45,11 +45,6 @@ __REDACTIONS=[
     'submit-v1',
     'submit-v2',
     'submit-v3a',
-    'submit-v3',
-    'submit-v4',
-    'submit-v5',
-    'submit-v6',
-    'submit-v7', #also redacty v8 after v9 is complete
     'abort-alpha',
     'abort-beta',
     'query-alpha',
@@ -57,7 +52,8 @@ __REDACTIONS=[
     'quotas-alpha',
     'quotas-beta',
     'signature-alpha',
-    'signature-beta'
+    'signature-beta',
+    'update-v2'
 ]
 
 __ENDPOINTS__ = {
