@@ -14,6 +14,7 @@ standard Google application-default credentials when authenticating through the 
 Cromwell currently does not support this API, so individual workflows will still be launched using the old
 Genomics api
 * Patching process now checks that the proper services are enabled
+* Automatic updates handled by new update v3 will use the LifeSciences API
 
 ### Patch contents
 * **Deprecation Notice:** Submit api v3-v8 are deprecated and will be removed when Google

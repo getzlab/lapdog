@@ -86,7 +86,6 @@ def update(request):
                     }
                 ],
                 'resources': {
-                    'projectId': os.environ.get("GCP_PROJECT"),
                     'regions': regions,
                     'virtualMachine': {
                         'machineType': 'f1-micro',
@@ -105,7 +104,7 @@ def update(request):
                         },
                         'bootDiskSizeGb': 20,
                         'network': {
-                            'name': 'default',
+                            'network': 'default',
                             'usePrivateAddress': False
                         }
                     }
@@ -115,9 +114,14 @@ def update(request):
 
         # 3) Launch pipeline
 
+        papi_url = 'https://lifesciences.googleapis.com/v2beta/projects/{}/locations/{}/pipelines:run'.format(
+            os.environ.get('GCP_PROJECT'),
+            regions[0]
+        )
         logger.log(
             "Launching PAPIv2 pipeline",
             pipeline=pipeline['pipeline'],
+            url=papi_url,
             severity='NOTICE'
         )
         response = utils.generate_default_session(
@@ -127,7 +131,7 @@ def update(request):
                 "https://www.googleapis.com/auth/genomics"
             ]
         ).post(
-            'https://genomics.googleapis.com/v2alpha1/pipelines:run',
+            papi_url,
             headers={
                 'Content-Type': 'application/json'
             },
