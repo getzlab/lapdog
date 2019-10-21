@@ -11,7 +11,7 @@ This function may:
 from .utils import ld_project_for_namespace, __API_VERSION__, generate_default_session, ld_meta_bucket_for_project, update_iam_policy
 from . import _deploy, RESOLUTION_URL
 from .. import __version__
-from ..gateway import resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS, ADMIN_PERMISSIONS, PET_PERMISSIONS, USER_PERMISSIONS
+from ..gateway import resolve_project_for_namespace, CORE_PERMISSIONS, FUNCTIONS_PERMISSIONS, ADMIN_PERMISSIONS, PET_PERMISSIONS, USER_PERMISSIONS, LAPDOG_SERVICES
 from ..lapdog import WorkspaceManager
 from dalmatian import getblob
 import sys
@@ -20,6 +20,8 @@ import traceback
 from firecloud import api as fc
 from hashlib import sha512
 import requests
+import os
+import time
 from uuid import uuid4
 
 # Notes for creating future patches
@@ -74,7 +76,7 @@ def __project_admin_apply_patch(namespace):
     print("Patch version", __version__)
     print("Patching Namespace:", namespace)
     user_session = generate_default_session()
-    print(crayons.normal("Phase 1/6:", bold=True), "Checking resolution status")
+    print(crayons.normal("Phase 1/7:", bold=True), "Checking resolution status")
     blob = getblob(
         'gs://lapdog-resolutions/' + sha512(namespace.encode()).hexdigest()
     )
@@ -117,13 +119,40 @@ def __project_admin_apply_patch(namespace):
     roles_url = "https://iam.googleapis.com/v1/projects/{project}/roles".format(
         project=project
     )
-    print(crayons.normal("Phase 2/6:", bold=True), "Update IAM Policies")
+    print(crayons.normal("Phase 2/7:", bold=True), "Update IAM Policies")
     patch_role(user_session, roles_url, "Core_account", CORE_PERMISSIONS)
     patch_role(user_session, roles_url, "Functions_account", FUNCTIONS_PERMISSIONS)
     patch_role(user_session, roles_url, "Engine_Admin", ADMIN_PERMISSIONS)
     patch_role(user_session, roles_url, "Pet_account", PET_PERMISSIONS)
     patch_role(user_session, roles_url, "Lapdog_user", USER_PERMISSIONS)
-    print(crayons.normal("Phase 3/6:", bold=True), "Checking service accounts")
+    print(crayons.normal("Phase 3/7:", bold=True), "Checking enabled services")
+    response = user_session.get(
+        "https://serviceusage.googleapis.com/v1/projects/{}/services?filter=state:ENABLED".format(
+            project
+        )
+    )
+    if response.status_code != 200:
+        raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+    enabled_services = {
+        os.path.basename(service['name'])
+        for service in response.json()['services']
+    }
+    required_services = [service for service in LAPDOG_SERVICES if service not in enabled_services]
+    if len(required_services):
+        print("Enabling additional APIS:", required_services)
+        enable_url = "https://serviceusage.googleapis.com/v1/projects/{}/services:batchEnable".format(
+            project
+        )
+        print("POST", enable_url)
+        response = user_session.post(
+            enable_url,
+            json={'serviceIds': required_services}
+        )
+        if response.status_code != 200:
+            raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
+    else:
+        print(crayons.green("All required services enabled"))
+    print(crayons.normal("Phase 4/7:", bold=True), "Checking service accounts")
     response = user_session.get(
         "https://iam.googleapis.com/v1/projects/{}/serviceAccounts".format(project)
     )
@@ -197,7 +226,7 @@ def __project_admin_apply_patch(namespace):
                     {
                         "role": "roles/iam.serviceAccountUser",
                         "members": [
-                            # Allows the gcloud functions account to set this pet account on comwell servers
+                            # Allows the self-update account to set the functions account on new cloud functions
                             "serviceAccount:lapdog-update@{project}.iam.gserviceaccount.com".format(project=project),
                         ]
                     }
@@ -209,7 +238,7 @@ def __project_admin_apply_patch(namespace):
     if response.status_code != 200:
         print(crayons.red("Warning:", bold=True), "Unable to update lapdog-update service account permissions. The self-update system may not work")
         print("({}) : {}".format(response.status_code, response.text), file=sys.stderr)
-    print(crayons.normal("Phase 4/6:", bold=True), "Checking VPC Configuration")
+    print(crayons.normal("Phase 5/7:", bold=True), "Checking VPC Configuration")
     blob = getblob('gs://{bucket}/regions'.format(bucket=ld_meta_bucket_for_project(project)))
     regions = ['us-central1']
     try:
@@ -248,7 +277,7 @@ def __project_admin_apply_patch(namespace):
                 raise ValueError("Unexpected response from Google (%d) : %s" % (response.status_code, response.text))
         else:
             print(crayons.green("VPC Configuration Valid for region "+region))
-    print(crayons.normal("Phase 5/6:", bold=True), "Deploy Cloud API Updates")
+    print(crayons.normal("Phase 6/7:", bold=True), "Deploy Cloud API Updates")
     response = user_session.get(
         'https://cloudfunctions.googleapis.com/v1/projects/{project}/locations/us-central1/functions'.format(
             project=project
@@ -279,7 +308,7 @@ def __project_admin_apply_patch(namespace):
             _deploy(__ENDPOINTS__[func], func, functions_account, project)
     else:
         print(crayons.green("No updates"))
-    print(crayons.normal("Phase 6/6:", bold=True), "Redact Insecure Cloud API Endpoints")
+    print(crayons.normal("Phase 7/7:", bold=True), "Redact Insecure Cloud API Endpoints")
     if response.status_code != 200:
         print("Unable to query existing functions. Applying all redactions")
         redactions = __REDACTIONS

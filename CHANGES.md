@@ -13,9 +13,10 @@ standard Google application-default credentials when authenticating through the 
 * Updated execution service to use new [LifeSciences](https://cloud.google.com/life-sciences/) api.
 Cromwell currently does not support this API, so individual workflows will still be launched using the old
 Genomics api
+* Patching process now checks that the proper services are enabled
 
 ### Patch contents
-* **Deprecation Notice:** Submit api v4-v8 are deprecated and will be removed when Google
+* **Deprecation Notice:** Submit api v3-v8 are deprecated and will be removed when Google
 finalizes their transition from the Genomics api to the LifeSciences api. These versions of the
 submit endpoint were used by lapdog versions 0.14.0 - 0.18.6
 * Updated submit to v9

@@ -124,6 +124,9 @@ ADMIN_PERMISSIONS = [
     "storage.objects.list",
     "serviceusage.quotas.get",
     "serviceusage.quotas.update",
+    "serviceusage.services.enable",
+    "serviceusage.services.get",
+    "serviceusage.services.list
 ]
 
 PET_PERMISSIONS = [
@@ -144,6 +147,25 @@ PET_PERMISSIONS = [
 USER_PERMISSIONS = [
     "genomics.operations.get",
     "lifesciences.operations.get",
+]
+
+LAPDOG_SERVICES = [
+    'cloudapis.googleapis.com',
+    'clouddebugger.googleapis.com',
+    'cloudfunctions.googleapis.com',
+    'cloudkms.googleapis.com',
+    'cloudresourcemanager.googleapis.com',
+    'cloudtrace.googleapis.com',
+    'compute.googleapis.com',
+    'deploymentmanager.googleapis.com',
+    'genomics.googleapis.com',
+    'iam.googleapis.com',
+    'iamcredentials.googleapis.com',
+    'lifesciences.googleapis.com',
+    'logging.googleapis.com',
+    'servicemanagement.googleapis.com',
+    'storage-component.googleapis.com',
+    'storage-api.googleapis.com'
 ]
 
 _ACL_LOCK = RLock()
@@ -476,24 +498,7 @@ class Gateway(object):
             print("(%d) : %s" % (response.status_code, response.text), file=sys.stderr)
             raise ValueError("Error when generating resolution")
         print("Enabling servies...")
-        services = [
-            'cloudapis.googleapis.com',
-            'clouddebugger.googleapis.com',
-            'cloudfunctions.googleapis.com',
-            'cloudkms.googleapis.com',
-            'cloudresourcemanager.googleapis.com',
-            'cloudtrace.googleapis.com',
-            'compute.googleapis.com',
-            'deploymentmanager.googleapis.com',
-            'genomics.googleapis.com',
-            'iam.googleapis.com',
-            'iamcredentials.googleapis.com',
-            'logging.googleapis.com',
-            'servicemanagement.googleapis.com',
-            'storage-component.googleapis.com',
-            'storage-api.googleapis.com'
-        ]
-        for service in services:
+        for service in LAPDOG_SERVICES:
             cmd = 'gcloud --project {project} services enable {service}'.format(
                 project=custom_lapdog_project,
                 service=service
