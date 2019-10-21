@@ -126,7 +126,7 @@ ADMIN_PERMISSIONS = [
     "serviceusage.quotas.update",
     "serviceusage.services.enable",
     "serviceusage.services.get",
-    "serviceusage.services.list
+    "serviceusage.services.list"
 ]
 
 PET_PERMISSIONS = [
