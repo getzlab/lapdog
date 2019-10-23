@@ -352,7 +352,7 @@ def validate_permissions(session, bucket):
             data = response.json()
             if 'permissions' in data:
                 return (
-                    'storage.objects.list' in data['permissions'] or 'storage.objects.get' in data['permissions'],
+                    'storage.objects.list' in data['permissions'] and 'storage.objects.get' in data['permissions'],
                     'storage.objects.create' in data['permissions'] and 'storage.objects.delete' in data['permissions']
                 )
             else:

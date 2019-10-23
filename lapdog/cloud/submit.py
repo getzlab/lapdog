@@ -152,11 +152,6 @@ def create_submission(request):
                 400
             )
 
-        logger.log(
-            "Submission data",
-            json=json.loads(submission.download_as_string())
-        )
-
         # 4) Submit pipelines request
 
         region = 'us-central1'

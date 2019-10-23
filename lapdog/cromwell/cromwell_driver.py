@@ -455,6 +455,7 @@ class CromwellDriver(object):
 
 
 class CloudLogger(object):
+    MAX_PAYLOAD_SIZE = 261120
     def __init__(self, project=None, submission_id=None):
         self.logger = stackdriver.Client(project).logger('lapdog-api-logging%2Fcromwell')
         self.labels = {
@@ -485,6 +486,22 @@ class CloudLogger(object):
             **kwargs
         )
 
+    def trunate_payload(self, message, labels, severity):
+        message = repr(message)
+        if len(message) > CloudLogger.MAX_PAYLOAD_SIZE:
+            self.logger.log_struct(
+                {
+                    'message': 'Truncated payload ({} bytes total)'.format(len(message)),
+                    'json': {
+                        'message_head':  message[:130540],
+                        'message_tail': message[-130540:]
+                    }
+                },
+                labels=labels,
+                severity=severity
+            )
+            return True
+
     def log(self, text=None, json=None, severity='DEFAULT', **kwargs):
         if isinstance(severity, str):
             severity = {
@@ -512,17 +529,20 @@ class CloudLogger(object):
         if text is None:
             if json is None:
                 raise ValueError("No input provided")
-            self.logger.log_struct(json, labels=self.labels, severity=severity)
+            if not self.trunate_payload(json, labels=self.labels, severity=severity):
+                self.logger.log_struct(json, labels=self.labels, severity=severity)
         elif json is not None:
-            self.logger.log_struct(
-                {
-                    'message': text,
-                    'json': json
-                },
-                labels=self.labels,
-                severity=severity
-            )
-        else:
+            json = {
+                'message': text,
+                'json': json
+            }
+            if not self.trunate_payload(json, self.labels, severity):
+                self.logger.log_struct(
+                    json,
+                    labels=self.labels,
+                    severity=severity
+                )
+        elif not self.trunate_payload(text, self.labels, severity):
             self.logger.log_text(
                 text,
                 labels=self.labels,

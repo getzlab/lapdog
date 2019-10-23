@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.18.7 (Beta)
 
 Bug Fixes:
 * Fixed a bug preventing some namespaces from running jobs
@@ -15,6 +15,7 @@ Cromwell currently does not support this API, so individual workflows will still
 Genomics api
 * Patching process now checks that the proper services are enabled
 * Automatic updates handled by new update v3 will use the LifeSciences API
+* Fixed a bug which caused Cromwell to crash during shutdown when running large submissions
 
 ### Patch contents
 * **Deprecation Notice:** Submit api v3-v8 are deprecated and will be removed when Google
