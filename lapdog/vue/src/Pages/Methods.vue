@@ -29,11 +29,25 @@
               <div class="col s2">
                 Entity Type:
               </div>
-              <div v-if="active_cfg.config.rootEntityType" class="col s9" v-bind:class="active_cfg.config.rootEntityType.match(etype_pattern)?'':'red-text'">
-                {{active_cfg.config.rootEntityType}}
-              </div>
-              <div v-else class="col s9 red-text">
-                Not set
+              <div class="col s9">
+                <div v-if="edit_on">
+                  <div class="input-field">
+                    <select class="browser-default" id="etype-select" v-model="active_cfg.config.rootEntityType">
+                      <option value="" v-bind:selected="!active_cfg.config.rootEntityType" disabled>Select Entity Type</option>
+                      <option v-for="etype in all_entity_types" v-bind:value="etype" :key="etype" v-bind:selected="etype == active_cfg.config.rootEntityType">
+                        {{etype}}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+                <div v-else>
+                  <div v-if="active_cfg.config.rootEntityType" class="col s9" v-bind:class="active_cfg.config.rootEntityType.match(etype_pattern)?'':'red-text'">
+                    {{active_cfg.config.rootEntityType}}
+                  </div>
+                  <div v-else class="col s9 red-text">
+                    Not set
+                  </div>
+                </div>
               </div>
             </div>
             <div class="row">
@@ -291,6 +305,7 @@ export default {
       config_filepath: '',
       method_filepath: '',
       target_rendered: false,
+      all_entity_types: ['sample', 'sample_set', 'participant', 'participant_set', 'pair', 'pair_set']
     }
   },
   created() {

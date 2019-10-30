@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Other Changes:
+* Added ability to change `rootEntityType` from the methods page in the UI
+
 ## 0.18.7 (Beta)
 
 Bug Fixes:
@@ -628,7 +633,7 @@ Bug Fixes:
 * Fixed an error that was preventing Cromwell from retying queries if a previous query timed out
 
 New Features:
-* Lapdog Cloud Endpoints now use the latest cryptograpic key in the project, instead of
+* Lapdog Cloud Endpoints now use the latest cryptographic key in the project, instead of
 hard coding the 1st
 * The Cromwell driver now recognizes when Cromwell crashes and adds helpful error messages
 * Added a notice on the UI homepage when the local lapdog version is out of date
