@@ -2,8 +2,15 @@
 
 ## Unreleased Changes
 
+Bug Fixes:
+* Fixed a bug preventing Broad users from registering with new namespaces or authenticating new buckets in the Lapdog API
+
 Other Changes:
 * Added ability to change `rootEntityType` from the methods page in the UI
+
+### Patch Contents
+* Updated submit to v10
+* Updated register to v5
 
 ## 0.18.7 (Beta)
 

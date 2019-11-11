@@ -42,6 +42,13 @@ class BadDomain(AuthenticationError):
     pass
 
 class LapdogToken(object):
+    SCOPES = [
+        'email',
+        'profile',
+        'openid',
+        'https://www.googleapis.com/auth/devstorage.read_write'
+    ]
+
     def __init__(self, account=None):
         """
         Represents a self-refreshing access token for Lapdog APIs, issued by Google.
@@ -224,7 +231,7 @@ class LapdogToken(object):
             'client_id': utils.OAUTH_CLIENT_ID,
             'redirect_uri': redirect_uri,
             'response_type': 'code',
-            'scope': 'email profile openid https://www.googleapis.com/auth/devstorage.read_write',
+            'scope': ' '.join(LapdogToken.SCOPES),
         }
 
         if state is not None:
@@ -322,12 +329,7 @@ class LapdogToken(object):
         return Credentials(
             self.auto_token,
             id_token=self.ident,
-            scopes=[
-                'email',
-                'profile',
-                'openid',
-                'https://www.googleapis.com/auth/devstorage.read_write'
-            ]
+            scopes=LapdogToken.SCOPES
         )
 
     @property
@@ -338,7 +340,8 @@ class LapdogToken(object):
         with self._lock:
             if self._session is None or self._session.credentials.token != self.token or not self.valid:
                 self._session = AuthorizedSession(
-                    self._credentials()
+                    self._credentials(),
+                    refresh_status_codes=[],
                 )
             return self._session
 

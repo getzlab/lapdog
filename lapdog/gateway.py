@@ -213,6 +213,11 @@ _GLOBAL_LD_TOKEN_INTERNAL = None
 _GLOBAL_LD_LOCK_INTERNAL = RLock()
 
 def get_user_session():
+    """
+    Gets an authorized session usable for the Lapdog API.
+    Currently not sufficent for register and submit endpoints, which may require
+    additional credentials to authenticate buckets.
+    """
     global _GLOBAL_LD_TOKEN_INTERNAL
     with _GLOBAL_LD_LOCK_INTERNAL:
         if _GLOBAL_LD_TOKEN_INTERNAL is None:
@@ -768,10 +773,16 @@ class Gateway(object):
         Must provide a workspace name and the associated bucket to prove that you have access
         to at least one workspace for this namespace
         """
+        # FIXME: Identify better authorization scheme for firecloud
+        session = generate_default_session()
+        get_token_info(session)
         warnings.warn("[BETA] Gateway Register")
         response = get_user_session().post(
             self.get_endpoint('register'),
-            headers={'Content-Type': 'application/json'},
+            headers={
+                'Content-Type': 'application/json',
+                'X-Fc-Auth': session.credentials.token
+            },
             json={
                 'bucket': bucket,
                 'namespace': self.namespace,
@@ -799,6 +810,9 @@ class Gateway(object):
         The user's service account must have access to the workspace in order to
         download the input files specified in the workflow inputs.
         """
+        # FIXME: Identify better authorization scheme for firecloud
+        session = generate_default_session()
+        get_token_info(session)
         warnings.warn("[BETA] Gateway Create Submission")
         if _cache_size is None and use_cache:
             blob = getblob('gs://{}/lapdog-call-cache.sql'.format(bucket))
@@ -807,7 +821,10 @@ class Gateway(object):
                 _cache_size = blob.size
         response = get_user_session().post(
             self.get_endpoint('submit'),
-            headers={'Content-Type': 'application/json'},
+            headers={
+                'Content-Type': 'application/json',
+                'X-Fc-Auth': session.credentials.token,
+            },
             json={
                 'bucket': bucket,
                 'submission_id': submission_id,

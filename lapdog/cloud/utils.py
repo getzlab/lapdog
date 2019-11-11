@@ -18,9 +18,9 @@ from functools import lru_cache, wraps
 import traceback
 
 __API_VERSION__ = {
-    'submit': 'v9',
+    'submit': 'v10',
     'abort': 'v3',
-    'register': 'v4',
+    'register': 'v5',
     'signature': 'v3',
     'query': 'v3',
     'quotas': 'v5',
@@ -488,7 +488,7 @@ class CloudLogger(object):
                     'payload_size': request.content_length,
                     'content_type': request.content_type,
                     'headers': {
-                        k:headers.getlist(k) if k != 'Authorization' else ['****************']
+                        k:headers.getlist(k) if k not in {'Authorization', 'X-Fc-Auth'} else ['****************']
                         for k,v in headers
                     },
                     'payload': {

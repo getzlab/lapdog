@@ -62,7 +62,7 @@ def _deploy(function, endpoint, service_account=None, project=None, overload_ver
             ),
             os.path.join(tempdir, 'utils.py')
         )
-        cmd = 'gcloud {project} functions deploy {endpoint}-{version} --entry-point {function} --runtime python37 --trigger-http --source {path} {service_account}'.format(
+        cmd = 'gcloud {project} functions deploy {endpoint}-{version} --entry-point {function} --runtime python37 --trigger-http --allow-unauthenticated --source {path} {service_account}'.format(
             endpoint=endpoint,
             version=overload_version,
             function=function,

@@ -84,6 +84,15 @@ def create_submission(request):
             )
 
         session = utils.generate_user_session(token)
+        fc_auth = utils.generate_user_session(request.headers['X-Fc-Auth']) if 'X-Fc-Auth' in request.headers else None
+
+        if fc_auth is None:
+            logger.log(
+                "Missing backup Firecloud authentication",
+                token_info=token_info,
+                authorized=True if 'cloud-platform' in token_info['scope'] else False,
+                severity='DEBUG'
+            )
 
         read, write = utils.validate_permissions(session, data['bucket'])
         if read is None:
@@ -102,7 +111,7 @@ def create_submission(request):
                     'error': 'Not Authorized',
                     'message': 'User lacks read/write permissions to the requested bucket'
                 },
-                401
+                403
             )
 
         # 2.b) Verify that the bucket belongs to this project
@@ -118,13 +127,18 @@ def create_submission(request):
         core_session = utils.generate_core_session()
 
         result, message = utils.authenticate_bucket(
-            data['bucket'], data['namespace'], data['workspace'], session, core_session
+            data['bucket'], data['namespace'], data['workspace'], fc_auth if fc_auth is not None else session, core_session
         )
         if not result:
             return (
                 {
                     'error': 'Cannot Validate Bucket Signature',
-                    'message': message
+                    'message': message,
+                    'FC-Auth': (
+                        'Authorized'
+                        if fc_auth is not None or 'cloud-platform' in token_info['scope'] else
+                        'Not Authorized. Repeat request with the "X-Fc-Auth" header containing application-default credentials'
+                    )
                 },
                 400
             )

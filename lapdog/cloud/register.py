@@ -74,6 +74,20 @@ def register(request):
             )
 
         session = utils.generate_user_session(token)
+        fc_auth = utils.generate_user_session(request.headers['X-Fc-Auth']) if 'X-Fc-Auth' in request.headers else None
+        fc_auth_error = (
+            'Authorized'
+            if fc_auth is not None or 'cloud-platform' in token_info['scope'] else
+            'Not Authorized. Repeat request with the "X-Fc-Auth" header containing application-default credentials'
+        )
+
+        if fc_auth is None:
+            logger.log(
+                "Missing backup Firecloud authentication",
+                token_info=token_info,
+                authorized=True if 'cloud-platform' in token_info['scope'] else False,
+                severity='DEBUG'
+            )
 
         read, write = utils.validate_permissions(session, data['bucket'])
         if read is None:
@@ -92,7 +106,7 @@ def register(request):
                     'error': 'Not Authorized',
                     'message': 'User lacks read/write permissions to the requested bucket'
                 },
-                401
+                403
             )
 
         # 2.b) Verify that the bucket belongs to this project
@@ -108,13 +122,14 @@ def register(request):
         core_session = utils.generate_core_session()
 
         result, message = utils.authenticate_bucket(
-            data['bucket'], data['namespace'], data['workspace'], session, core_session
+            data['bucket'], data['namespace'], data['workspace'], fc_auth if fc_auth is not None else session, core_session
         )
         if not result:
             return (
                 {
                     'error': 'Cannot Validate Bucket Signature',
-                    'message': message
+                    'message': message,
+                    'FC-Auth': fc_auth_error
                 },
                 400
             )
@@ -316,13 +331,16 @@ def register(request):
         # Either add the new service account to the user's lapdog@firecloud.org group
         # Or create the group, if it doesn't exist
 
-        response = session.get('https://api.firecloud.org/api/groups', headers={'User-Agent': 'FISS/0.16.9'}, timeout=5)
+        fc_session = fc_auth if fc_auth is not None else session
+
+        response = fc_session.get('https://api.firecloud.org/api/groups', headers={'User-Agent': 'FISS/0.16.9'}, timeout=5)
 
         if response.status_code != 200:
             return (
                 {
                     'error': "Unable to enumerate user's groups",
-                    'message': response.text
+                    'message': response.text,
+                    'FC-Auth': fc_auth_error
                 },
                 400
             )
@@ -332,7 +350,7 @@ def register(request):
         for group in response.json():
             if group['groupName'] == target_group:
                 # 9) Register Account in Group
-                response = session.put(
+                response = fc_session.put(
                     'https://api.firecloud.org/api/groups/{group}/member/{email}'.format(
                         group=target_group,
                         email=quote(account_email)
@@ -346,7 +364,8 @@ def register(request):
                             'message': "Please manually add {email} to {group}".format(
                                 group=target_group,
                                 email=quote(account_email)
-                            )
+                            ),
+                            'FC-Auth': fc_auth_error
                         },
                         400
                     )
@@ -372,7 +391,7 @@ def register(request):
                 400
             )
         # 9) Register Account in Group
-        response = session.put(
+        response = fc_session.put(
             'https://api.firecloud.org/api/groups/{group}/member/{email}'.format(
                 group=target_group,
                 email=quote(account_email)
@@ -386,7 +405,8 @@ def register(request):
                     'message': "Please manually add {email} to {group}".format(
                         group=target_group+'@firecloud.org',
                         email=quote(account_email)
-                    )
+                    ),
+                    'FC-Auth': fc_auth_error
                 },
                 400
             )
