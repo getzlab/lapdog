@@ -10,6 +10,7 @@ import hmac
 import requests
 import json
 import time
+import datetime
 import traceback
 
 @utils.cors("POST")
@@ -46,12 +47,18 @@ def update(request):
             return {
                 'error': 'Bad Signature',
                 'message': "The provided signature for this update was invalid"
-            }, 401
-        if not ('tag' in data and 'url' in data and 'random' in data):
+            }, 403
+        if not ('tag' in data and 'url' in data and 'random' in data and 'timestamp' in data):
             return {
                 'error': 'Missing parameters',
-                'message': 'Missing one or more of the required parameters "tag", "url", and "random"',
+                'message': 'Missing one or more of the required parameters "tag", "url", "timestamp", and "random"',
             }, 400
+
+        if (datetime.datetime.utcnow().timestamp() - data['timestamp']) > 300:
+            return {
+                'error': 'Expired',
+                'message': 'This update signature has expired'
+            }, 403
 
         # 2) Build pipeline to boot update VM
 
@@ -201,6 +208,7 @@ def webhook(request):
 
         update_payload = {
             'random': os.urandom(16).hex(),
+            'timestamp': datetime.datetime.utcnow().timestamp(),
             'tag': data['ref'],
             'url': 'https://github.com/broadinstitute/lapdog.git'
         }

@@ -55,7 +55,9 @@ __REDACTIONS=[
     'quotas-beta',
     'signature-alpha',
     'signature-beta',
-    'update-v2'
+    'update-v1',
+    'update-v2',
+    'update-v3'
 ]
 
 __ENDPOINTS__ = {

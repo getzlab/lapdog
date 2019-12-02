@@ -18,15 +18,15 @@ from functools import lru_cache, wraps
 import traceback
 
 __API_VERSION__ = {
-    'submit': 'v10',
+    'submit': 'v11',
     'abort': 'v3',
-    'register': 'v5',
+    'register': 'v6',
     'signature': 'v3',
     'query': 'v3',
     'quotas': 'v5',
     'resolve': 'v4',
     'oauth': 'v1',
-    'update': 'v3',
+    'update': 'v4',
     'existence': 'frozen'
 }
 
@@ -351,8 +351,27 @@ def validate_permissions(session, bucket):
         if response.status_code == 200:
             data = response.json()
             if 'permissions' in data:
+                canList = 'storage.objects.list' in data['permissions']
+                canGet = 'storage.objects.get' in data['permissions']
+                if canList and not canGet:
+                    response = session.get(
+                        "https://storage.googleapis.com/storage/v1/b/{}/o?maxResuls=50&fields=items/name".format(
+                            bucket
+                        )
+                    )
+                    if response.status_code == 200:
+                        for item in response.json()['items']:
+                            test = session.get(
+                                'https://storage.googleapis.com/storage/v1/b/{}/o/{}'.format(
+                                    bucket,
+                                    quote(item['name'], safe='')
+                                )
+                            )
+                            if test.status_code == 200:
+                                canGet = True
+                                break
                 return (
-                    'storage.objects.list' in data['permissions'] and 'storage.objects.get' in data['permissions'],
+                    canList and canGet,
                     'storage.objects.create' in data['permissions'] and 'storage.objects.delete' in data['permissions']
                 )
             else:

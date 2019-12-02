@@ -3,6 +3,21 @@
 ## Unreleased Changes
 
 Bug Fixes:
+* Fixed a bug preventing workspaces created before July 18th 2019 from functioning
+with Lapdog. If you continue to experience permissions errors despite this fix,
+you should clone the workspace. New workspaces will function normally
+
+
+### Patch Contents
+* Updated submit to v11
+* Updated register to v5
+* Updated the self update endpoint to v4. This resolves a minor security issue which
+would allow individuals to update projects to the latest version of Lapdog ahead of schedule.
+* Redacted all previous versions of the self-update endpoint
+
+## 0.18.8 (Beta)
+
+Bug Fixes:
 * Fixed a bug preventing Broad users from registering with new namespaces or authenticating new buckets in the Lapdog API
 
 Other Changes:
