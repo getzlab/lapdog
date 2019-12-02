@@ -169,8 +169,8 @@ def validate_token(token_info):
         ('expires_in' in token_info and token_info['expires_in'] > 2)
         and ('email' in token_info and 'audience' in token_info)
         and (
-            not token_info['email'].endswith('@broadinstitute.org')
-            or (token_info['email'].endswith('@broadinstitute.org') and token_info['audience'] == OAUTH_CLIENT_ID)
+            (not token_info['email'].endswith('@broadinstitute.org'))
+            or token_info['audience'] == OAUTH_CLIENT_ID
         )
         and 'scope' in token_info
         and (
@@ -511,7 +511,7 @@ class CloudLogger(object):
                         for k,v in headers
                     },
                     'payload': {
-                        k:v if k != 'token' else '****************'
+                        k:v if 'token' not in k else '****************'
                         for k,v in payload.items()
                     } if isinstance(payload, dict) else None
                 }
