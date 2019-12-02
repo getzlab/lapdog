@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased Changes
+## 0.18.9 (Beta)
 
 Bug Fixes:
 * Fixed a bug preventing workspaces created before July 18th 2019 from functioning
