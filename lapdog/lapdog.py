@@ -1368,9 +1368,12 @@ class WorkspaceManager(dog.WorkspaceManager):
                 src = getblob(value)
                 destpath = 'gs://{}/{}'.format(bucket_id, src.name)
                 if not (src.bucket.name == bucket_id or destpath in seen):
-                    copyblob(src, destpath)
-                    seen.add(destpath)
-                    return destpath
+                    try:
+                        copyblob(src, destpath)
+                        seen.add(destpath)
+                        return destpath
+                    except:
+                        print("Failed to copy", value, file=sys.stderr)
             return value
 
         with self.hound.with_reason("<AUTOMATED>: Migrating files into workspace bucket"):

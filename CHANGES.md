@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+Bug Fixes:
+* Improved error handling in `WorkspaceManager.copy_data`
+
 ## 0.18.9 (Beta)
 
 Bug Fixes:
