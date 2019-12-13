@@ -2,8 +2,8 @@
 
 ## Patches
 
-Lapdog handles updates through its patching system. Currently, patches must be applied manually.
-It is imperative that administrators keep up-to-date with Lapdog and patch their namespaces regularly.
+Lapdog handles updates through its patching system. Patches are distributed automatically to all Lapdog Engine Projects
+since version 0.18.0. There are still some projects which are running older versions which cannot receive automatic updates. **It is imperative that project administrators ensure they update their projects to at least 0.18.0 so that their projects begin receiving automatic updates**
 
 ## Reporting a Vulnerability
 
