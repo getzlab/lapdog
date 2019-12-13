@@ -44,8 +44,8 @@ RUN apt-get clean && \
 # Copy Cromwell and the Cromwell conf template
 RUN mkdir /cromwell
 RUN cd /cromwell && \
-    curl -L -O https://github.com/broadinstitute/cromwell/releases/download/46/cromwell-46.jar
-RUN ln /cromwell/cromwell-46.jar /cromwell/cromwell.jar
+    curl -L -O https://github.com/broadinstitute/cromwell/releases/download/47/cromwell-47.jar
+RUN ln /cromwell/cromwell-47.jar /cromwell/cromwell.jar
 COPY jes_template.tmp.conf /cromwell/
 
 # Copy the wdl_runner python, shell script, and dependencies

@@ -1,9 +1,20 @@
 # Changelog
 
-## Unreleased Changes
+## 0.18.10 (Beta)
 
 Bug Fixes:
 * Improved error handling in `WorkspaceManager.copy_data`
+* Fixed `WorkspaceManager.update_config` not being able to also upload a WDL
+
+Other Changes:
+* Changed URL for `lapdog.cloud.utils.validate_permissions` to use new storage
+API endpoint
+* Updated some dependencies
+* Updated some dependencies in Cromwell image. This change is live and affects all
+Lapdog clients v0.17.0 and later
+* Cromwell is now supposed to upload large output files as composite objects, but
+this behavior is inconsistent. I have informed the Cromwell team of this problem.
+* Updated UI dependencies. Please re-run `lapdog ui --install` to update your UI dependencies
 
 ## 0.18.9 (Beta)
 

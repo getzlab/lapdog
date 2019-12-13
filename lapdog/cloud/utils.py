@@ -343,7 +343,7 @@ def verify_signature(blob, data, keypath=None, credentials=None, _is_blob=True):
 def validate_permissions(session, bucket):
     try:
         response = session.get(
-            "https://www.googleapis.com/storage/v1/b/{bucket}"
+            "https://storage.googleapis.com/storage/v1/b/{bucket}"
             "/iam/testPermissions?permissions=storage.objects.list&"
             "permissions=storage.objects.get&permissions=storage.objects.create&"
             "permissions=storage.objects.delete".format(bucket=quote(bucket, safe='')),

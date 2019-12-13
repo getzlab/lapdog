@@ -684,7 +684,10 @@ class WorkspaceManager(dog.WorkspaceManager):
         if 'sourceRepo' not in config['methodRepoMethod']:
             config['methodRepoMethod']['sourceRepo'] = 'agora'
         if wdl is not None:
-            self.update_method(config['methodRepoMethod'], wdl, synopsis)
+            self.upload_wdl('{}/{}'.format(
+                config['methodRepoMethod']['methodNamespace'],
+                config['methodRepoMethod']['methodName']
+            ), synopsis, wdl)
         if config['methodRepoMethod']['methodVersion'] == 'latest':
             # Autofill config version
             if config['methodRepoMethod']['sourceRepo'] == 'agora':
