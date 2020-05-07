@@ -625,7 +625,7 @@ def cmd_service_account(args):
     print("    - Your account will have administrator access to the project")
     print("    - You must grant access to any other users which need administrator access to the project")
     print("    - You (or any other administrators) will be responsible for maintaining the project")
-    print("        *", crayons.blue("https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins", bold=True))
+    print("        *", crayons.blue("https://github.com/getzlab/lapdog/wiki/Instructions-for-Admins", bold=True))
     print("    - End-Users will automatically be granted User access by demonstrating WRITER permissions to any workspace in the namespace")
     print()
     print("Press Enter to Start, or Ctrl+C to abort")
@@ -640,7 +640,7 @@ def cmd_service_account(args):
     print("==========================")
     print("Initialization complete")
     print()
-    print("Please read", crayons.normal("https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins", bold=True))
+    print("Please read", crayons.normal("https://github.com/getzlab/lapdog/wiki/Instructions-for-Admins", bold=True))
 
 
 def cmd_patch(args):

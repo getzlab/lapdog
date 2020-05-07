@@ -215,7 +215,7 @@
             Load a workspace where you have WRITER permissions to register
           </span>
           <span v-else class="red-text">
-            Not Ready. Please see <a rel="noopener" target="_blank" href="https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins">this article</a> for more information
+            Not Ready. Please see <a rel="noopener" target="_blank" href="https://github.com/getzlab/lapdog/wiki/Instructions-for-Admins">this article</a> for more information
           </span>
         </div>
       </div>

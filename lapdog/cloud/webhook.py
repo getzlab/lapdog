@@ -210,7 +210,7 @@ def webhook(request):
             'random': os.urandom(16).hex(),
             'timestamp': datetime.datetime.utcnow().timestamp(),
             'tag': data['ref'],
-            'url': 'https://github.com/broadinstitute/lapdog.git'
+            'url': 'https://github.com/getzlab/lapdog.git'
         }
 
         # 2) Get all resolved namespaces and update the iam policy for the signing key

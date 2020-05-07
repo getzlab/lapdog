@@ -37,7 +37,7 @@ setup(
         ],
     },
     description = 'A relaxed wrapper for FISS and dalmatian',
-    url = 'https://github.com/broadinstitute/lapdog',
+    url = 'https://github.com/getzlab/lapdog',
     author = 'Aaron Graubert - Broad Institute - Cancer Genome Computational Analysis',
     author_email = 'aarong@broadinstitute.org',
     long_description = readme,

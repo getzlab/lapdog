@@ -88,7 +88,7 @@ re-granting it. You can see FireCloud's response to this bug report [here](https
 
 ### Roadmap
 
-See the [milestones page](https://github.com/broadinstitute/lapdog/milestones) to
+See the [milestones page](https://github.com/getzlab/lapdog/milestones) to
 read the development roadmap.
 
 ### Pro/Con with Firecloud

@@ -489,7 +489,7 @@ Bug Fixes:
 
 New Features:
 * Users can now choose a custom compute region when submitting jobs
-  * Administrators can change the list of allowed regions. [Read more](https://github.com/broadinstitute/lapdog/wiki/Instructions-for-Admins#compute-regions)
+  * Administrators can change the list of allowed regions. [Read more](https://github.com/getzlab/lapdog/wiki/Instructions-for-Admins#compute-regions)
   * Added dropdown menu to UI to select the compute region for a job
 
 Other Changes:
@@ -814,4 +814,4 @@ Improved Cromwell's ability to handle large submissions
 
 Changes prior to 0.9.0 are not tracked. These versions, as well as all versions prior to 0.10.0,
 are deprecated. If you need to access change history, you can look at commits prior
-to [c6b1e12](https://github.com/broadinstitute/lapdog/commit/c6b1e12ffcf679e6ec3f4e88debb02a2007a2899)
+to [c6b1e12](https://github.com/getzlab/lapdog/commit/c6b1e12ffcf679e6ec3f4e88debb02a2007a2899)

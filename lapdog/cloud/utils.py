@@ -100,7 +100,7 @@ def cors(*methods):
                     (
                         "The Lapdog Master Switch has been disabled."
                         " Generally this means Lapdog has been taken offline"
-                        " for security reasons. Check https://github.com/broadinstitute/lapdog"
+                        " for security reasons. Check https://github.com/getzlab/lapdog"
                         " for updates"
                     ),
                     510
