@@ -2,7 +2,10 @@
 
 [![PyPI](https://img.shields.io/pypi/v/lapdog.svg)](https://pypi.io/project/lapdog)
 
-A relaxed wrapper for dalmatian and FISS
+~~A relaxed wrapper for dalmatian and FISS~~
+
+**Lapdog is now discontinued, thank you for all your support!**
+Lapdog's local features, such as the workspace manager will continue to work, but no new jobs can be executed.
 
 ## Prerequisites
 * Lapdog requires MacOS or Linux. Windows is not officially supported
